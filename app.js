@@ -524,6 +524,7 @@
   const reviewVer = new Map(); // 제출함에서 보고 있는 버전
   let reviewSet = '';
   let scrollToEx = null;
+  let hwFilter = null; // 숙제만 보기 (숙제 id)
 
   // 1000개씩 끊어서 전부 가져오기
   async function fetchAll(make) {
@@ -779,12 +780,13 @@
   async function pageSet(rawId) {
     const id = Number(rawId);
     const admin = isAdmin();
-    const [sr, exs, subs] = await Promise.all([
+    const [sr, exs, subs, hwr] = await Promise.all([
       sb.from('problem_sets').select('*').eq('id', id).maybeSingle(),
       fetchAll((a, b) => sb.from('exercises').select('*').eq('set_id', id).order('position').order('id').range(a, b)),
       admin ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions')
         .select('id,exercise_id,version,code,created_at,submission_comments(id,content,created_at)')
         .eq('set_id', id).eq('user_id', me.id).order('id').range(a, b)),
+      sb.from('homeworks').select('*,homework_items(exercise_id)').eq('set_id', id).order('id'),
     ]);
     if (sr.error) throw sr.error;
     const set = sr.data;
@@ -792,6 +794,25 @@
     const L = layoutEx(exs);
     const subsBy = {};
     subs.forEach((s) => { (subsBy[s.exercise_id] = subsBy[s.exercise_id] || []).push(s); });
+
+    /* 숙제 (update3.sql 전이면 그냥 없는 걸로) */
+    const hws = (hwr.error ? [] : hwr.data).map((h) => ({ ...h, ids: new Set((h.homework_items || []).map((i) => i.exercise_id)) }));
+    if (hwFilter != null && !hws.some((h) => h.id === hwFilter)) hwFilter = null;
+    const hwOf = {};
+    hws.forEach((h) => h.ids.forEach((i) => { (hwOf[i] = hwOf[i] || []).push(h); }));
+    const allEx = L.normal.concat(L.elite);
+    const hwHtml = (hws.length || admin) ? `<div class="hw-wrap">${hws.map((h) => {
+      const items = allEx.filter((e) => h.ids.has(e.id));
+      const done = items.filter((e) => subsBy[e.id]).length;
+      return `<div class="card hw">
+        <div class="hw-top"><b>📌 ${esc(h.title)}</b>${h.due_date ? ` <span class="chip">마감 ${esc(h.due_date)}</span>` : ''}</div>
+        <div class="muted small">문제 ${esc(rangeText(items)) || '(없음)'} · ${items.length}개</div>
+        ${admin ? '' : `<div class="bar"><i style="width:${items.length ? Math.round((done / items.length) * 100) : 0}%"></i></div><div class="small">제출 ${done} / ${items.length}</div>`}
+        <div class="form-actions" style="margin-top:8px">
+          <button class="ghost" data-hwfilter="${h.id}">이 숙제만 보기</button>
+          ${admin ? `<button class="ghost" data-hwstat="${h.id}">📊 제출 현황</button><button class="ghost" data-hwedit="${h.id}">✏️ 수정</button><button class="ghost" data-hwdel="${h.id}">🗑</button>` : ''}
+        </div></div>`;
+    }).join('')}${admin ? '<button class="ghost" id="addHw">＋ 숙제 만들기</button>' : ''}</div>` : '';
 
     /* 목차 */
     const toc = L.chapters.map((ch) => {
@@ -810,13 +831,14 @@
       const last = vers[vers.length - 1];
       const hasC = vers.some((s) => (s.submission_comments || []).length);
       const tags = (e.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
-      return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : ''}" id="ex-${e.id}">
+      return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : ''}" id="ex-${e.id}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
         <header class="ex-head">
           <span class="ex-no">${dispNo(e)}</span>
           <span class="dbadge d-${e.difficulty}">${e.difficulty}</span>
           ${e.label ? `<span class="chip">${esc(e.label)}</span>` : ''}
           ${e.points ? `<span class="chip pts">${e.points}점</span>` : ''}
           ${tags}
+          ${(hwOf[e.id] || []).map((h) => `<span class="chip hwchip">📌 ${esc(h.title)}</span>`).join('')}
           ${e.source ? `<span class="muted small">${esc(e.source)}</span>` : ''}
           <span class="spacer"></span>
           ${admin ? `<span class="tools">
@@ -863,9 +885,9 @@
         ${files.join('')}
         ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
       </div>
+      ${hwHtml}
       <details class="card toc" open><summary>📑 목차 <span class="muted small">(누르면 그 위치로 이동해요)</span></summary>${toc || '<p class="muted">문제가 없어요.</p>'}</details>
-      ${normalHtml}
-      ${eliteHtml}
+      <div id="exlist" class="${hwFilter != null ? 'hw-only' : ''}">${normalHtml}${eliteHtml}</div>
       <button class="to-top" id="toTop" title="맨 위(목차)로">↑</button>`,
     (v) => {
       const go = (idv) => { const el = document.getElementById(idv); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
@@ -877,7 +899,26 @@
       }));
       if (scrollToEx) { const t = scrollToEx; scrollToEx = null; setTimeout(() => go(t), 50); }
 
-      if (admin) return bindSetAdmin(v, set, exs);
+      /* 숙제만 보기 */
+      const applyHw = () => {
+        const list = $('#exlist', v);
+        list.classList.toggle('hw-only', hwFilter != null);
+        list.querySelectorAll('.ex').forEach((c) => c.classList.toggle('hw-on', hwFilter != null && (c.dataset.hws || '').split(',').includes(String(hwFilter))));
+        v.querySelectorAll('[data-hwfilter]').forEach((b) => {
+          const on = Number(b.dataset.hwfilter) === hwFilter;
+          b.textContent = on ? '✕ 필터 해제' : '이 숙제만 보기';
+          b.classList.toggle('on', on);
+        });
+      };
+      v.querySelectorAll('[data-hwfilter]').forEach((b) => (b.onclick = () => {
+        const hid = Number(b.dataset.hwfilter);
+        hwFilter = hwFilter === hid ? null : hid;
+        applyHw();
+        if (hwFilter != null) go('exlist');
+      }));
+      applyHw();
+
+      if (admin) return bindSetAdmin(v, set, exs, hws, L);
 
       /* 풀어보기 */
       const mount = (eid) => {
@@ -933,8 +974,165 @@
     }];
   }
 
+  /* ---------- 숙제 ---------- */
+  // 번호 목록을 "1–5, 12, E1" 처럼 줄여서 보여주기
+  function rangeText(list) {
+    const out = [];
+    for (let i = 0; i < list.length;) {
+      let j = i;
+      while (j + 1 < list.length && (list[j + 1].difficulty === 'ELITE') === (list[i].difficulty === 'ELITE') && list[j + 1].no === list[j].no + 1) j += 1;
+      out.push(i === j ? dispNo(list[i]) : `${dispNo(list[i])}–${dispNo(list[j])}`);
+      i = j + 1;
+    }
+    return out.join(', ');
+  }
+
+  // "1-5, 12, 20~25, E1" → 문제 고유 번호 모음
+  function parseNums(text, all) {
+    const tn = {};
+    const te = {};
+    all.forEach((e) => { (e.difficulty === 'ELITE' ? te : tn)[e.no] = e.id; });
+    const ids = new Set();
+    const bad = [];
+    String(text).split(/[,\s]+/).filter(Boolean).forEach((tok) => {
+      const m = tok.match(/^(E?)(\d+)(?:[-–~]E?(\d+))?$/i);
+      if (!m) { bad.push(tok); return; }
+      const tbl = m[1] ? te : tn;
+      const a = Number(m[2]);
+      const b = m[3] ? Number(m[3]) : a;
+      if (b < a) { bad.push(tok); return; }
+      for (let k = a; k <= b; k += 1) { if (tbl[k]) ids.add(tbl[k]); else bad.push((m[1] ? 'E' : '') + k); }
+    });
+    return { ids, bad };
+  }
+
+  async function saveHomework(set, hw, title, due, ids) {
+    let hid = hw ? hw.id : null;
+    if (hw) {
+      const { error } = await sb.from('homeworks').update({ title, due_date: due || null }).eq('id', hid);
+      if (error) return false;
+      const { error: de } = await sb.from('homework_items').delete().eq('homework_id', hid);
+      if (de) return false;
+    } else {
+      const { data, error } = await sb.from('homeworks').insert({ set_id: set.id, title, due_date: due || null }).select('id').single();
+      if (error || !data) return false;
+      hid = data.id;
+    }
+    const rows = [...ids].map((eid) => ({ homework_id: hid, exercise_id: eid }));
+    for (let i = 0; i < rows.length; i += 100) {
+      const { error } = await sb.from('homework_items').insert(rows.slice(i, i + 100));
+      if (error) return false;
+    }
+    return true;
+  }
+
+  function openHwEditor(set, L, hw, draft) {
+    const all = L.normal.concat(L.elite);
+    const cur = draft || { title: hw ? hw.title : '', due: hw ? hw.due_date || '' : '', ids: hw ? new Set(hw.ids) : new Set() };
+    const m = modal(`
+      <h3>${hw ? '숙제 수정' : '숙제 만들기'}</h3>
+      <form id="hwForm">
+        <div class="grid2">
+          <label>숙제 이름<input type="text" id="hTitle" required placeholder="예: 10/24 숙제" value="${esc(cur.title)}"></label>
+          <label>마감일 (선택)<input type="date" id="hDue" value="${esc(cur.due)}"></label>
+        </div>
+        <label>문제 번호로 입력 <span class="muted small">예: 1-5, 12, 20-25 (ELITE는 E1, E2)</span>
+          <input type="text" id="hNums" value="${esc(rangeText(all.filter((e) => cur.ids.has(e.id))))}"></label>
+        <p class="muted small" id="hInfo"></p>
+        <div class="form-actions">
+          <button class="primary" id="hSave">저장</button>
+          <button type="button" class="ghost" id="hPick">📌 문제 보면서 고르기</button>
+          <button type="button" class="ghost" id="hCancel">취소</button>
+        </div>
+      </form>`);
+    const q = (s) => $(s, m.el);
+    const info = () => {
+      const r = parseNums(q('#hNums').value, all);
+      q('#hInfo').textContent = `${r.ids.size}개 선택${r.bad.length ? ` · ⚠️ 없는 번호: ${r.bad.join(', ')}` : ''}`;
+      return r;
+    };
+    info();
+    q('#hNums').oninput = info;
+    q('#hCancel').onclick = m.close;
+    const read = () => ({ title: q('#hTitle').value.trim(), due: q('#hDue').value, ids: info().ids });
+    q('#hPick').onclick = () => { const d = read(); m.close(); startPick(set, L, hw, d); };
+    q('#hwForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const d = read();
+      const r = info();
+      if (r.bad.length && !confirm(`없는 번호(${r.bad.join(', ')})는 빼고 저장할까요?`)) return;
+      if (!d.ids.size) return toast('문제를 하나 이상 골라주세요', true);
+      q('#hSave').disabled = true;
+      if (!(await saveHomework(set, hw, d.title, d.due, d.ids))) { q('#hSave').disabled = false; return toast('저장하지 못했어요', true); }
+      m.close();
+      toast('숙제를 저장했어요');
+      route(true);
+    };
+  }
+
+  // 문제 카드 위에 체크박스를 띄워서 직접 고르기
+  function startPick(set, L, hw, draft) {
+    const ids = new Set(draft.ids);
+    const cards = Array.from(document.querySelectorAll('#exlist .ex'));
+    const bar = document.createElement('div');
+    bar.className = 'pickbar';
+    document.body.appendChild(bar);
+    const upd = () => { $('.pn', bar).textContent = ids.size; };
+    bar.innerHTML = `<span>📌 ${esc(draft.title || '새 숙제')} · <b class="pn">0</b>개 선택</span>
+      <button class="primary" id="pkSave">저장</button><button class="ghost" id="pkCancel">취소</button>`;
+    cards.forEach((c) => {
+      const eid = Number(c.id.replace('ex-', ''));
+      const lab = document.createElement('label');
+      lab.className = 'pick';
+      lab.innerHTML = `<input type="checkbox" ${ids.has(eid) ? 'checked' : ''}>`;
+      c.classList.toggle('picked', ids.has(eid));
+      $('input', lab).onchange = (e) => {
+        if (e.target.checked) ids.add(eid); else ids.delete(eid);
+        c.classList.toggle('picked', e.target.checked);
+        upd();
+      };
+      c.querySelector('.ex-head').prepend(lab);
+    });
+    upd();
+    const end = () => {
+      bar.remove();
+      cards.forEach((c) => { c.classList.remove('picked'); const l = $('.pick', c); if (l) l.remove(); });
+    };
+    $('#pkCancel', bar).onclick = () => { end(); openHwEditor(set, L, hw, { ...draft, ids }); };
+    $('#pkSave', bar).onclick = async () => {
+      if (!draft.title) { end(); return openHwEditor(set, L, hw, { ...draft, ids }); }
+      if (!ids.size) return toast('문제를 하나 이상 골라주세요', true);
+      $('#pkSave', bar).disabled = true;
+      if (!(await saveHomework(set, hw, draft.title, draft.due, ids))) { $('#pkSave', bar).disabled = false; return toast('저장하지 못했어요', true); }
+      end();
+      toast('숙제를 저장했어요');
+      route(true);
+    };
+  }
+
+  async function openHwStat(set, L, hw) {
+    const all = L.normal.concat(L.elite).filter((e) => hw.ids.has(e.id));
+    const [subs, pr] = await Promise.all([
+      fetchAll((a, b) => sb.from('submissions').select('id,exercise_id,user_id').eq('set_id', set.id).order('id').range(a, b)),
+      sb.from('profiles').select('id,username,role,status').eq('status', 'approved').neq('role', 'admin').order('username'),
+    ]);
+    if (pr.error) return toast('불러오지 못했어요', true);
+    const by = {};
+    subs.forEach((s) => { (by[s.user_id] = by[s.user_id] || new Set()).add(s.exercise_id); });
+    const rows = pr.data.map((p) => {
+      const have = by[p.id] || new Set();
+      const miss = all.filter((e) => !have.has(e.id));
+      const done = all.length - miss.length;
+      return `<tr><td><b>${esc(p.username)}</b></td><td>${done} / ${all.length}</td>
+        <td>${miss.length ? `<span class="muted small">안 푼 문제: ${esc(rangeText(miss))}</span>` : '✅ 완료'}</td></tr>`;
+    }).join('');
+    modal(`<h3>📊 ${esc(hw.title)} 제출 현황</h3>
+      <div class="mk-tablewrap"><table class="mk-table stat"><thead><tr><th>학생</th><th>제출</th><th>상태</th></tr></thead><tbody>${rows || '<tr><td colspan="3">학생이 없어요.</td></tr>'}</tbody></table></div>
+      <p class="muted small">한 번이라도 제출한 문제는 푼 걸로 세요.</p>`);
+  }
+
   /* ---------- 문제집 : 선생님 도구 (추가/수정/삭제/순서/설정) ---------- */
-  function bindSetAdmin(v, set, exs) {
+  function bindSetAdmin(v, set, exs, hws, L) {
     const byId = (i) => exs.find((e) => e.id === Number(i));
     const lastNormal = exs.filter((e) => e.difficulty !== 'ELITE').pop();
     const maxPos = exs.reduce((m, e) => Math.max(m, e.position), 0);
@@ -946,6 +1144,18 @@
     const ae = $('#addElite', v);
     if (ae) ae.onclick = () => openExEditor(set, exs, null, { position: maxPos + 1000, difficulty: 'ELITE', chapter: '', section: '' });
     $('#setCfg', v).onclick = () => openSetCfg(set);
+    const ah = $('#addHw', v);
+    if (ah) ah.onclick = () => openHwEditor(set, L, null);
+    const hwById = (i) => hws.find((h) => h.id === Number(i));
+    v.querySelectorAll('[data-hwedit]').forEach((b) => (b.onclick = () => openHwEditor(set, L, hwById(b.dataset.hwedit))));
+    v.querySelectorAll('[data-hwstat]').forEach((b) => (b.onclick = () => openHwStat(set, L, hwById(b.dataset.hwstat))));
+    v.querySelectorAll('[data-hwdel]').forEach((b) => (b.onclick = async () => {
+      const h = hwById(b.dataset.hwdel);
+      if (!confirm(`"${h.title}" 숙제를 삭제할까요? (문제와 학생 풀이는 그대로 남아요)`)) return;
+      const { error } = await sb.from('homeworks').delete().eq('id', h.id);
+      if (error) return toast('삭제하지 못했어요', true);
+      route(true);
+    }));
     $('#expSet', v).onclick = () => exportSet(set, exs);
 
     v.querySelectorAll('[data-edit]').forEach((b) => (b.onclick = () => openExEditor(set, exs, byId(b.dataset.edit), null)));

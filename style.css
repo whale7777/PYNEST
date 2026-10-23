@@ -262,3 +262,19 @@ code.ic { background: var(--code); border: 1px solid var(--border); border-radiu
 .elite-zone .done { color: #9bffd9; }
 @media (prefers-reduced-motion: reduce) { .elite-zone, .elite-zone::before, .elite-zone::after, .elite-title { animation: none; } }
 @media (max-width: 560px) { .ex { padding: 14px; } .sets { grid-template-columns: 1fr; } }
+
+/* ===== 숙제 ===== */
+.hw-wrap { display: grid; gap: 10px; margin-bottom: 14px; }
+.hw { margin: 0; border-left: 5px solid #e5222b; }
+.hw-top { margin-bottom: 2px; }
+.hwchip { background: #ffe1e3; color: #b3141b; font-weight: 700; }
+[data-theme="dark"] .hwchip { background: #4a1a1d; color: #ff9aa0; }
+.ghost.on { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.hw-only .ex:not(.hw-on) { display: none; }
+.hw-only .ch-h, .hw-only .sec-h, .hw-only .elite-sub { display: none; }
+.hw-only .elite-zone:not(:has(.hw-on)) { display: none; }
+.pick { margin: 0; display: inline-flex; align-items: center; }
+.pick input { width: 22px; height: 22px; margin: 0; accent-color: #e5222b; }
+.ex.picked { outline: 3px solid #e5222b; outline-offset: -2px; }
+.pickbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 45; display: flex; gap: 10px; align-items: center; background: var(--card); border: 2px solid #e5222b; border-radius: 14px; padding: 10px 16px; box-shadow: 0 8px 28px rgba(0,0,0,.35); max-width: 94vw; flex-wrap: wrap; }
+.mk-table.stat td, .mk-table.stat th { white-space: normal; font-family: inherit; }
