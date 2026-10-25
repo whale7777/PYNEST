@@ -1260,6 +1260,7 @@ onmessage = (ev) => {
   const ST_TEXT = { WA: '틀렸어요', RE: '실행 오류', TLE: '시간 초과 (3초)', SKIP: '실행 안 함' };
   const judgeBadge = (j) => {
     if (!j) return '';
+    if (j.teacher) return j.teacher === 'ok' ? '<span class="badge ok">✅ 선생님 확인 · 통과</span>' : '<span class="badge bad">❌ 선생님 확인 · 오답</span>';
     if (j.status === 'MANUAL') return '<span class="badge">✍️ 선생님 확인 대기</span>';
     const man = j.manual ? ` <span class="badge">✍️ 서술 ${j.manual}개 확인 대기</span>` : '';
     return (j.status === 'AC' ? `<span class="badge ok">✅ 통과 ${j.passed}/${j.total}</span>` : `<span class="badge bad">❌ ${j.passed}/${j.total}</span>`) + man;
@@ -1961,7 +1962,7 @@ onmessage = (ev) => {
     return `<div class="pg ${done ? 'done' : ''}"><div class="pg-bar"><i style="width:${pct}%"></i></div><div class="pg-t"><b>${pct}%</b> · ${i} / ${n}건${note ? ` · <span class="muted">${note}</span>` : ''}</div></div>`;
   };
   async function bulkGrade(subs, exMap, statusEl, force = false, names = {}) {
-    const todo = subs.filter((s) => (force || !s.judge) && gradable(exMap[s.exercise_id]));
+    const todo = subs.filter((s) => (force || !s.judge) && !(s.judge && s.judge.teacher) && gradable(exMap[s.exercise_id])); // 선생님이 직접 판정한 건 다시 채점하지 않아요
     if (!todo.length) { toast('채점할 제출이 없어요'); if (statusEl) statusEl.innerHTML = ''; return null; }
     if (statusEl) statusEl.innerHTML = pgHTML(0, todo.length, '준비 중…');
     const out = { ok: 0, ac: 0, fail: 0, man: 0, total: todo.length };
@@ -2046,6 +2047,14 @@ onmessage = (ev) => {
     return { sets: sr.data, subs: subs.filter((s) => setMap[s.set_id]), names, setMap, exMap };
   }
   const pendingOf = (subs, exMap) => subs.filter((s) => !s.judge && gradable(exMap[s.exercise_id]));
+  // 선생님이 직접 봐야 하는 제출: 서술형(채점 없음)이거나 자동 채점이 확인 대기로 남긴 것
+  const waitingOf = (s, exMap) => {
+    const j = s.judge;
+    if (j && j.teacher) return false;
+    if (!j) return !gradable(exMap[s.exercise_id]);
+    return j.status === 'MANUAL' || j.manual > 0;
+  };
+  const waitBadge = (n) => (n ? ` <span class="badge wait">✍️ 확인 대기 ${n}</span>` : '');
   const pendBadge = (n) => (n ? ` <span class="badge warn">미채점 ${n}</span>` : '');
   const bulkBar = (n, label) => `<div class="card bulkbar"><div><b>${label}</b> <span class="muted small">테스트/자동 채점 답이 있는 문제만 채점해요. 서술형은 건너뛰어요.</span></div>
     <div class="form-actions"><button class="primary" data-bulkgrade="pending" ${n ? '' : 'disabled'}>⚖️ 미채점 ${n}건 일괄 채점</button><button class="ghost" data-bulkgrade="all" title="이미 채점된 것도 다시 채점해요">전체 다시 채점</button></div>
@@ -2063,12 +2072,13 @@ onmessage = (ev) => {
       g.sets.add(s.set_id); g.ex.add(s.exercise_id); g.n += 1;
       if (s.created_at > g.last) g.last = s.created_at;
       if (!s.judge && gradable(exMap[s.exercise_id])) g.pend += 1;
+      if (waitingOf(s, exMap)) g.wait = (g.wait || 0) + 1;
     });
     const list = Object.values(stu).sort((a, b) => (names[a.id] || '').localeCompare(names[b.id] || ''));
     const pend = pendingOf(subs, exMap).length;
     const rows = list.length ? list.map((g) => `
       <a class="row" data-nm="${esc((names[g.id] || '').toLowerCase())}" href="#/review/u/${g.id}">
-        <div class="row-main"><b>👤 ${esc(names[g.id] || '(알 수 없음)')}</b>${pendBadge(g.pend)}
+        <div class="row-main"><b>👤 ${esc(names[g.id] || '(알 수 없음)')}</b>${pendBadge(g.pend)}${waitBadge(g.wait)}
           <span class="muted small"> 문제집 ${g.sets.size}개 · 푼 문제 ${g.ex.size}개 · 제출 ${g.n}회</span></div>
         <div class="muted small meta">최근 ${fmt(g.last)}</div>
       </a>`).join('') : '<p class="muted center pad">아직 제출된 풀이가 없어요.</p>';
@@ -2096,12 +2106,13 @@ onmessage = (ev) => {
       g.ex.add(s.exercise_id); g.n += 1;
       if (s.created_at > g.last) g.last = s.created_at;
       if (!s.judge && gradable(exMap[s.exercise_id])) g.pend += 1;
+      if (waitingOf(s, exMap)) g.wait = (g.wait || 0) + 1;
     });
     const list = Object.values(groups).sort((a, b) => setMap[a.set_id].order - setMap[b.set_id].order);
     const pend = pendingOf(subs, exMap).length;
     const rows = list.length ? list.map((g) => `
       <a class="row" href="#/review/${g.set_id}/${userId}">
-        <div class="row-main"><b>📄 ${esc(shortOf(setMap[g.set_id]))}</b> <span class="muted small">${esc(setMap[g.set_id].title)}</span>${pendBadge(g.pend)}
+        <div class="row-main"><b>📄 ${esc(shortOf(setMap[g.set_id]))}</b> <span class="muted small">${esc(setMap[g.set_id].title)}</span>${pendBadge(g.pend)}${waitBadge(g.wait)}
           <span class="muted small"> 푼 문제 ${g.ex.size}개 · 제출 ${g.n}회</span></div>
         <div class="muted small meta">최근 ${fmt(g.last)}</div>
       </a>`).join('') : '<p class="muted center pad">이 학생이 제출한 풀이가 없어요.</p>';
@@ -2143,6 +2154,9 @@ onmessage = (ev) => {
         return `<div class="vpane" data-vp="${e.id}:${s.id}" ${s.id === sel.id ? '' : 'hidden'}>
           <div class="muted small">v${s.version} · ${fmt(s.created_at)} ${judgeBadge(s.judge)} <button class="link danger" data-delsub="${s.id}">이 제출 삭제</button></div>
           <pre><code>${esc(s.code)}</code></pre>
+          <div class="tverdict"><span class="muted small">👩‍🏫 선생님 판정</span>
+            <button class="ghost sm okb" data-verdict="${s.id}:ok">✅ 맞음</button><button class="ghost sm badb" data-verdict="${s.id}:bad">❌ 틀림</button>
+            ${s.judge ? `<button class="link" data-verdict="${s.id}:reset" title="판정·채점 결과를 지우고 미채점으로 돌려요">↩ 지우기</button>` : ''}</div>
           ${cs.map((c) => `<div class="tcomment"><span class="badge">선생님</span> <span class="muted small">${fmt(c.created_at)}</span> <button class="link danger" data-delcm="${c.id}">삭제</button><div class="txt">${esc(c.content)}</div></div>`).join('')}
           <form data-cform="${s.id}"><textarea style="min-height:70px" placeholder="이 풀이에 댓글 (학생이 볼 수 있어요)" required></textarea>
             <div class="form-actions"><button class="primary">댓글 달기</button></div></form>
@@ -2188,6 +2202,20 @@ onmessage = (ev) => {
         const { error } = await sb.from('submission_comments').insert({ submission_id: Number(f.dataset.cform), author_id: me.id, content: text });
         if (error) { btn.disabled = false; return toast('댓글을 달지 못했어요', true); }
         toast('댓글을 달았어요');
+        route(true);
+      }));
+      v.querySelectorAll('[data-verdict]').forEach((b) => (b.onclick = async () => {
+        const [sid, kind] = b.dataset.verdict.split(':');
+        const sub = subs.find((x) => String(x.id) === sid);
+        if (!sub) return;
+        const base = sub.judge || { passed: 0, total: 0, manual: 0 };
+        let judge = null;
+        if (kind === 'ok') judge = { status: 'AC', passed: base.total > 0 ? base.total : 1, total: base.total > 0 ? base.total : 1, manual: 0, teacher: 'ok' };
+        else if (kind === 'bad') { const t = base.total > 0 ? base.total : 1; judge = { status: 'WA', passed: Math.min(base.passed || 0, t - 1), total: t, manual: 0, teacher: 'bad' }; }
+        b.disabled = true;
+        const { data, error } = await sb.from('submissions').update({ judge }).eq('id', sub.id).select('id');
+        if (error || !data || !data.length) { b.disabled = false; return toast('저장하지 못했어요 (관리자 권한 SQL 확인)', true); }
+        toast(kind === 'ok' ? '맞음으로 판정했어요' : kind === 'bad' ? '틀림으로 판정했어요' : '판정을 지웠어요');
         route(true);
       }));
       v.querySelectorAll('[data-delcm]').forEach((b) => (b.onclick = async () => {

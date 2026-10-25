@@ -339,3 +339,8 @@ a.icon.shop:hover { background: var(--hover); }
 .pg-bar i { display: block; height: 100%; background: var(--primary); border-radius: 99px; transition: width .2s; }
 .pg.done .pg-bar i { background: #16a34a; }
 .pg-t { margin-top: 6px; font-size: 13px; }
+
+.badge.wait { background: #0ea5e9; color: #fff; }
+.tverdict { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; }
+.tverdict .okb:hover { border-color: #16a34a; color: #16a34a; }
+.tverdict .badb:hover { border-color: #dc2626; color: #dc2626; }
