@@ -1863,6 +1863,40 @@ onmessage = (ev) => {
   /* ---------- 제출함 (선생님 전용): 학생별 → 문제집별 ---------- */
   const SQL_REGRADE = 'grant update (judge) on public.submissions to authenticated;\ncreate policy "submissions admin update" on public.submissions for update to authenticated using (public.is_admin()) with check (public.is_admin());';
 
+  // 예전(칸이 나뉘기 전)에 낸 제출은 답이 통째로 한 덩어리 글로 저장돼 있어요. 칸별로 안전하게 나눌 수 있을 때만 나누고, 못 나누면 null.
+  function legacyVals(text, answers) {
+    const t = String(text ?? '').replace(/\r/g, '');
+    const n = answers.length;
+    if (n === 1) return [t.trim()];
+    const lines = t.split('\n');
+    // 1) "(가) 큼" 처럼 칸 이름으로 시작하는 줄 기준 (칸 이름의 첫 단어가 서로 달라야 안전해요)
+    const norm = (x) => String(x).replace(/[()\[\]\s.:：]/g, '');
+    const tok = answers.map((a) => norm(String(a.label || '').trim().split(/\s+/)[0] || ''));
+    if (tok.every((x) => x && x.length <= 6) && new Set(tok).size === n) {
+      const at = [];
+      let from = 0;
+      for (let i = 0; i < n; i += 1) {
+        let k = -1;
+        for (let j = from; j < lines.length; j += 1) {
+          const m = lines[j].match(/^\s*[(\[]?\s*([^\s)\]:：.]{1,6})\s*[)\]:：.]?\s?(.*)$/);
+          if (m && norm(m[1]) === tok[i]) { k = j; break; }
+        }
+        if (k < 0) { at.length = 0; break; }
+        at.push(k); from = k + 1;
+      }
+      if (at.length === n) {
+        return at.map((k, i) => {
+          const first = lines[k].replace(/^\s*[(\[]?\s*[^\s)\]:：.]{1,6}\s*[)\]:：.]?\s?/, '');
+          return [first, ...lines.slice(k + 1, i + 1 < n ? at[i + 1] : lines.length)].join('\n').trim();
+        });
+      }
+    }
+    // 2) 칸 수와 비어 있지 않은 줄 수가 같으면 한 줄에 한 칸
+    const ne = lines.map((l) => l.trim()).filter(Boolean);
+    if (ne.length === n) return ne;
+    return null;
+  }
+
   // 채점할 수 있는 문제인가? (테스트 또는 자동 채점 답칸이 있어야 해요. 서술형만 있으면 건너뛰어요)
   const gradable = (ex) => !!ex && ((ex.tests || []).length > 0 || (ex.answers || []).some((a) => a.type !== 'm'));
 
@@ -1870,14 +1904,29 @@ onmessage = (ev) => {
   async function bulkGrade(subs, exMap, statusEl, force = false) {
     const todo = subs.filter((s) => (force || !s.judge) && gradable(exMap[s.exercise_id]));
     if (!todo.length) { toast('채점할 제출이 없어요'); return null; }
-    const out = { ok: 0, ac: 0, fail: 0, err: 0 };
+    const out = { ok: 0, ac: 0, fail: 0, man: 0 };
     for (let i = 0; i < todo.length; i += 1) {
       const sub = todo[i];
       const ex = exMap[sub.exercise_id];
       const tests = ex.tests || [];
       const answers = ex.answers || [];
       if (statusEl) statusEl.innerHTML = `<span class="muted">⏳ 채점 중… ${i + 1} / ${todo.length}${i === 0 ? ' (처음엔 파이썬을 준비하느라 몇 초 걸려요)' : ''}</span>`;
-      const u = unpackSubmission(sub.code, answers.length);
+      let u = unpackSubmission(sub.code, answers.length);
+      let useParts = answers.length > 0;
+      if (answers.length && !String(sub.code).includes(PART_MARK)) { // 예전 형식
+        if (tests.length) useParts = false; // 코드 문제는 코드 테스트만
+        else {
+          const lv = legacyVals(sub.code, answers);
+          if (!lv) { // 칸을 나눌 수 없는 자유 서술 → 선생님 확인 대기로 표시 (틀림으로 처리하지 않아요)
+            const judge = { status: 'MANUAL', passed: 0, total: 0, manual: answers.length };
+            const { data, error } = await sb.from('submissions').update({ judge }).eq('id', sub.id).select('id');
+            if (error || !data || !data.length) { if (statusEl) statusEl.innerHTML = `<div class="bad-t">⚠️ 채점 결과를 저장하지 못했어요. (${esc(error ? error.message : '권한 없음')})</div>`; return out; }
+            sub.judge = judge; out.man = (out.man || 0) + 1; out.ok += 1;
+            continue;
+          }
+          u = { code: '', vals: lv };
+        }
+      }
       let res = null;
       if (tests.length) {
         if (!u.code.trim()) res = { status: 'WA', passed: 0, total: tests.length, cases: [] };
@@ -1886,7 +1935,7 @@ onmessage = (ev) => {
           catch (e) { if (statusEl) statusEl.innerHTML = `<span class="bad-t">⚠️ 파이썬 실행 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러주세요. (${esc(e.message || e)})</span>`; return out; }
         }
       }
-      const parts = answers.length ? gradeParts(answers, u.vals) : null;
+      const parts = useParts ? gradeParts(answers, u.vals) : null;
       const judge = summarize(res, parts);
       const { data, error } = await sb.from('submissions').update({ judge }).eq('id', sub.id).select('id');
       if (error || !data || !data.length) {
@@ -1895,7 +1944,7 @@ onmessage = (ev) => {
       }
       sub.judge = judge;
       out.ok += 1;
-      if (judge.status === 'AC') out.ac += 1; else out.fail += 1;
+      if (judge.status === 'AC') out.ac += 1; else if (judge.status === 'MANUAL') out.man += 1; else out.fail += 1;
     }
     return out;
   }
@@ -1912,7 +1961,7 @@ onmessage = (ev) => {
       const r = await bulkGrade(getSubs(), exMap, st, force);
       btn.disabled = false;
       if (!r || !r.ok) return;
-      toast(`채점 완료: ${r.ok}건 (통과 ${r.ac} · 미통과 ${r.fail})`);
+      toast(`채점 완료: ${r.ok}건 (통과 ${r.ac} · 미통과 ${r.fail}${r.man ? ` · 선생님 확인 대기 ${r.man}` : ''})`);
       route(true);
     };
   }
