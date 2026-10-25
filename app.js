@@ -1145,10 +1145,64 @@ onmessage = (ev) => {
     return p;
   }
 
+  // input( ... ) 안에 뭘 적었든 상관없게: 괄호 안(안내 문구)을 비우고 input() 으로 실행해요.
+  // 따옴표 없이 쓴 input(점수써라) 같은 코드도 NameError/문법 오류 없이 돌아가요. 줄 번호는 그대로 유지돼요.
+  function relaxInput(code) {
+    const src = String(code ?? '');
+    const isId = (c) => /[A-Za-z0-9_À-￿]/.test(c || '');
+    let out = '';
+    let i = 0;
+    const n = src.length;
+    // 따옴표 문자열 하나를 끝까지 건너뛴 끝 위치(없으면 -1)
+    const skipStr = (p) => {
+      const q = src[p];
+      const tri = src.startsWith(q.repeat(3), p);
+      let k = p + (tri ? 3 : 1);
+      while (k < n) {
+        if (src[k] === '\\') { k += 2; continue; }
+        if (tri ? src.startsWith(q.repeat(3), k) : src[k] === q) return k + (tri ? 3 : 1);
+        if (!tri && src[k] === '\n') return -1;
+        k += 1;
+      }
+      return -1;
+    };
+    while (i < n) {
+      const c = src[i];
+      if (c === '#') { const e = src.indexOf('\n', i); const end = e < 0 ? n : e; out += src.slice(i, end); i = end; continue; }
+      if (c === '"' || c === "'") { const e = skipStr(i); if (e < 0) { out += c; i += 1; continue; } out += src.slice(i, e); i = e; continue; }
+      if (src.startsWith('input', i) && !isId(src[i - 1]) && src[i - 1] !== '.' && !isId(src[i + 5])) {
+        let j = i + 5;
+        while (src[j] === ' ' || src[j] === '\t') j += 1;
+        if (src[j] === '(') {
+          // 짝이 맞는 닫는 괄호 찾기 (문자열 안의 괄호는 무시)
+          let depth = 1;
+          let k = j + 1;
+          while (k < n && depth > 0) {
+            const d = src[k];
+            if (d === '"' || d === "'") { const e = skipStr(k); if (e > 0) { k = e; continue; } }
+            if (d === '(') depth += 1;
+            else if (d === ')') depth -= 1;
+            k += 1;
+          }
+          if (depth === 0) {
+            const inner = src.slice(j + 1, k - 1);
+            out += 'input(' + inner.replace(/[^\n]/g, '') + ')';
+            i = k;
+            continue;
+          }
+        }
+      }
+      out += c;
+      i += 1;
+    }
+    return out;
+  }
+
   // 코드를 한 번 실행 → {status: OK | RE | TLE | LOAD, out, err}
   async function runOnce(code, input, limit = 3000) {
     let w;
     try { w = await jworker(); } catch (e) { return { status: 'LOAD', out: '', err: String(e.message || e) }; }
+    code = relaxInput(code);
     return new Promise((resolve) => {
       const id = ++jseq;
       const on = (ev) => {
