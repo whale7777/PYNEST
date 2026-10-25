@@ -179,7 +179,7 @@
     ['home', '🏠', '홈'], ['lectures', '🎬', '강의'], ['sets', '📄', '문제'],
     ['board/notice', '📢', '공지'], ['board/qna', '❓', '질문'], ['board/assignment', '📝', '과제'],
     ['board/free', '💬', '자유'],
-    ['judge', '⚖️', '온라인 저지', true], ['live', '📡', '라이브', true],
+    ['golive/', '📡', '라이브 · 저지', 'ext'],
   ];
 
   function renderShell() {
@@ -195,7 +195,7 @@
         <button class="ghost" id="logoutBtn">로그아웃</button>
       </header>
       <nav class="menu" id="menu">
-        ${items.map(([k, ic, name, soon]) => `<a href="#/${k}" data-k="${k}" class="${soon ? 'soon' : ''}">${ic} ${name}</a>`).join('')}
+        ${items.map(([k, ic, name, soon]) => (soon === 'ext' ? `<a href="${k}" data-k="${k}">${ic} ${name}</a>` : `<a href="#/${k}" data-k="${k}" class="${soon ? 'soon' : ''}">${ic} ${name}</a>`)).join('')}
       </nav>
       <main id="view"></main>`;
     setTheme(document.documentElement.dataset.theme || 'light');
