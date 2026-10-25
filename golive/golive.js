@@ -18,7 +18,7 @@
   let LIVE = null; // 진행 중인 사이트 방송 (다른 페이지로 이동해도 유지돼요)
   let liveUi = null; // 지금 열려 있는 방송 콘솔이 화면을 다시 그리는 함수
   let timers = [];
-  const isAdmin = () => me && me.role === 'admin';
+  const isAdmin = () => !!me && (me.role === 'admin' || me.staff === 'admin'); // OWNER / ADMIN (직원 역할은 staff_roles.sql)
   const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
   const every = (fn, ms) => { timers.push(setInterval(fn, ms)); };
   let cleanups = [];
@@ -1154,6 +1154,10 @@
     const { data, error } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     if (error || !data) { await sb.auth.signOut(); return renderAuth(); }
     me = data;
+    me.staff = null;
+    if (me.status === 'approved' && me.role !== 'admin') {
+      try { const { data: r, error: re } = await sb.rpc('staff_role'); me.staff = re || !r ? null : String(r); } catch (e) { me.staff = null; }
+    }
     if (me.status === 'pending') return renderStatus(true);
     if (me.status === 'rejected') return renderStatus(false);
     renderShell();

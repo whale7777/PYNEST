@@ -35,7 +35,22 @@
   let adminTab = 'members';
   let lecEdit = null; // 수정 중인 강의 id
 
-  const isAdmin = () => me && me.role === 'admin';
+  /* ---------- 직원 권한 (OWNER / ADMIN / TEACHER / MOD) ----------
+     staff_roles.sql 의 staff_can() 과 같은 표예요. 바꾸면 SQL 도 같이 바꿔요.
+     content 강의·문제집·문제·숙제 · notice 공지 · members 회원 승인/중지 · moderate 글·댓글 삭제
+     review 제출함·채점 · live 라이브 · reset_pw 비밀번호 초기화 · roles_basic TEACHER/MOD 임명 · roles_admin ADMIN 임명 */
+  const ROLE_NAME = { owner: 'OWNER', admin: 'ADMIN', teacher: 'TEACHER', mod: 'MOD' };
+  const ROLE_DESC = { owner: '최상위 · 모든 권한', admin: '모든 관리 (ADMIN 임명 제외)', teacher: '강의·문제집·문제·숙제', mod: '관리만 (회원·글·댓글)' };
+  const PERMS = {
+    owner: () => true,
+    admin: (p) => p !== 'roles_admin',
+    teacher: (p) => p === 'content',
+    mod: (p) => ['notice', 'pass', 'charge', 'finance_read', 'members', 'moderate'].includes(p),
+  };
+  const staffRole = () => (me && me.role === 'admin' ? 'owner' : (me && me.staff) || null);
+  const can = (perm) => { const r = staffRole(); return !!(r && PERMS[r](perm)); };
+  const isAdmin = () => ['owner', 'admin'].includes(staffRole()); // 모든 관리 기능 (OWNER / ADMIN)
+  const staffTag = () => { const r = staffRole(); return r ? ` (${r === 'owner' ? '선생님' : ROLE_NAME[r]})` : ''; };
 
   function toast(msg, bad = false) {
     const t = document.createElement('div');
@@ -184,12 +199,13 @@
 
   function renderShell() {
     const items = NAV.slice();
-    if (isAdmin()) items.push(['review', '📥', '제출함'], ['admin', '🛠️', '관리자']);
+    if (can('review')) items.push(['review', '📥', '제출함']);
+    if (staffRole()) items.push(['admin', '🛠️', '관리자']);
     app.innerHTML = `
       <header class="top">
         <a class="brand" href="#/home">${esc(ICON)} ${esc(SITE)}</a>
         <div class="spacer"></div>
-        <span class="who">${esc(me.username)}${isAdmin() ? ' (선생님)' : ''}</span>
+        <span class="who">${esc(me.username)}${staffTag()}</span>
         ${CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
         <a class="icon" href="#/settings" title="설정">⚙️</a>
@@ -288,7 +304,7 @@
       ? `<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/${vid}" title="${esc(x.title)}" allow="accelerometer; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>`
       : '<div class="card pad center">영상 주소를 읽을 수 없어요. 선생님께 알려주세요.</div>';
     return [`
-      <p><a href="#/lectures">← 강의 목록</a>${isAdmin() ? ' <button class="link" id="editLec">✏️ 수정</button>' : ''}</p>
+      <p><a href="#/lectures">← 강의 목록</a>${can('content') ? ' <button class="link" id="editLec">✏️ 수정</button>' : ''}</p>
       <h2><span class="week">${x.week}주차</span>${esc(x.title)}</h2>
       ${player}
       ${x.description ? `<div class="card">${renderContent(x.description)}</div>` : ''}`,
@@ -300,8 +316,8 @@
 
   /* ---------- 게시판 ---------- */
   const BOARDS = {
-    notice: { name: '공지사항', icon: '📢', adminOnly: true, anon: false, week: false, desc: '' },
-    problem: { name: '문제', icon: '📄', adminOnly: true, anon: false, week: true, desc: '주차별 문제 파일이에요. 궁금한 점은 댓글로 물어보세요.' },
+    notice: { name: '공지사항', icon: '📢', adminOnly: true, perm: 'notice', anon: false, week: false, desc: '' },
+    problem: { name: '문제', icon: '📄', adminOnly: true, perm: 'content', anon: false, week: true, desc: '주차별 문제 파일이에요. 궁금한 점은 댓글로 물어보세요.' },
     qna: { name: '질문 게시판', icon: '❓', adminOnly: false, anon: true, week: false, desc: '모르는 건 편하게 물어보세요. 익명으로도 쓸 수 있어요.' },
     assignment: { name: '과제 제출', icon: '📝', adminOnly: false, anon: false, week: false, desc: '내가 낸 과제는 나와 선생님만 볼 수 있어요. 코드는 ``` 로 감싸서 붙여넣거나 파일로 첨부하세요.' },
     free: { name: '자유게시판', icon: '💬', adminOnly: false, anon: true, week: false, desc: '자유롭게 이야기해요. 익명으로도 쓸 수 있어요.' },
@@ -315,11 +331,11 @@
     if (B.week) q = q.order('week', { ascending: false, nullsFirst: false });
     const { data, error } = await q.order('created_at', { ascending: false });
     if (error) throw error;
-    const canWrite = !B.adminOnly || isAdmin();
+    const canWrite = !B.adminOnly || can(B.perm);
     const rows = data.length ? data.map((p) => `
       <a class="row" href="#/post/${p.id}">
         <div class="row-main">${p.week ? `<span class="week">${p.week}주차</span>` : ''}<b>${esc(p.title)}</b>${(p.files || []).length ? ` <span title="첨부파일 ${(p.files || []).length}개">📎${(p.files || []).length}</span>` : ''}</div>
-        <div class="muted small meta">${esc(p.author_name)}${p.anonymous && isAdmin() ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}</div>
+        <div class="muted small meta">${esc(p.author_name)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}</div>
       </a>`).join('') : '<p class="muted center pad">아직 글이 없어요.</p>';
     return [`
       <div class="page-head"><h2>${B.icon} ${B.name}</h2>${canWrite ? `<a class="btn" href="#/write/${key}">글쓰기</a>` : ''}</div>
@@ -340,7 +356,7 @@
       <div class="comment">
         <div class="c-head"><b>${esc(c.author_name)}</b>${c.by_admin ? ' <span class="badge">선생님</span>' : ''}
           <span class="muted small"> · ${fmt(c.created_at)}</span>
-          ${c.is_mine || isAdmin() ? ` <button class="link danger" data-delc="${c.id}">삭제</button>` : ''}</div>
+          ${c.is_mine || can('moderate') ? ` <button class="link danger" data-delc="${c.id}">삭제</button>` : ''}</div>
         <div class="txt">${esc(c.content)}</div>
       </div>`).join('');
 
@@ -357,9 +373,9 @@
       <p><a href="#/board/${p.board}">← ${B.name}</a></p>
       <div class="card">
         <h2 class="post-title">${p.week ? `<span class="week">${p.week}주차</span>` : ''}${esc(p.title)}</h2>
-        <p class="muted small">${esc(p.author_name)}${p.anonymous && isAdmin() ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}${p.updated_at ? ' (수정됨)' : ''}
+        <p class="muted small">${esc(p.author_name)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}${p.updated_at ? ' (수정됨)' : ''}
           ${p.is_mine ? ` <a href="#/edit/${p.id}">수정</a>` : ''}
-          ${p.is_mine || isAdmin() ? ' <button class="link danger" id="delPost">글 삭제</button>' : ''}</p>
+          ${p.is_mine || can('moderate') ? ' <button class="link danger" id="delPost">글 삭제</button>' : ''}</p>
         ${renderContent(p.content)}
         ${files.length ? `<div class="attach">${files.map((f, i) => `<div class="file-row">📎 <button class="link" data-file="${i}">${esc(f.name || '첨부파일')}</button></div>`).join('')}</div>` : ''}
       </div>
@@ -406,7 +422,7 @@
   async function pageWrite(key, post = null) {
     const B = BOARDS[key];
     const editing = !!post;
-    if (B.adminOnly && !isAdmin()) return ['<div class="card pad center">선생님만 쓸 수 있는 게시판이에요.</div>'];
+    if (B.adminOnly && !can(B.perm)) return ['<div class="card pad center">선생님만 쓸 수 있는 게시판이에요.</div>'];
     const old = editing ? (post.files || []) : [];
     return [`
       <p><a href="#/${editing ? 'post/' + post.id : 'board/' + key}">← ${editing ? '글로 돌아가기' : B.name}</a></p>
@@ -687,7 +703,7 @@
     const [sr, ex, mine] = await Promise.all([
       sb.from('problem_sets').select('*').order('week', { ascending: true, nullsFirst: false }).order('id'),
       fetchAll((a, b) => sb.from('exercises').select('id,set_id').order('id').range(a, b)),
-      isAdmin() ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions').select('id,exercise_id,set_id').eq('user_id', me.id).order('id').range(a, b)),
+      can('content') ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions').select('id,exercise_id,set_id').eq('user_id', me.id).order('id').range(a, b)),
     ]);
     if (sr.error) throw sr.error;
     const total = {};
@@ -702,13 +718,13 @@
       return `<a class="card set-card" href="#/set/${s.id}">
         <div class="set-top">${s.week ? `<span class="week">${s.week}주차</span>` : ''}<h3>${esc(s.title)}</h3></div>
         ${s.description ? `<p class="muted small">${esc(s.description)}</p>` : ''}
-        <div class="muted small">문제 ${t}개${isAdmin() ? '' : ` · 내가 푼 문제 ${d}개`}</div>
-        ${isAdmin() ? '' : `<div class="bar"><i style="width:${t ? Math.round((d / t) * 100) : 0}%"></i></div>`}
+        <div class="muted small">문제 ${t}개${can('content') ? '' : ` · 내가 푼 문제 ${d}개`}</div>
+        ${can('content') ? '' : `<div class="bar"><i style="width:${t ? Math.round((d / t) * 100) : 0}%"></i></div>`}
       </a>`;
     }).join('') : '<div class="card pad center muted">아직 올라온 문제집이 없어요.</div>';
 
     return [`
-      <div class="page-head"><h2>📄 문제</h2>${isAdmin() ? '<button class="primary" id="newSet">＋ 새 문제집</button>' : ''}</div>
+      <div class="page-head"><h2>📄 문제</h2>${can('content') ? '<button class="primary" id="newSet">＋ 새 문제집</button>' : ''}</div>
       <p class="muted">문제를 하나씩 보고, <b class="redtxt">풀어보기</b>로 코드를 제출해요. 제출한 풀이는 선생님만 볼 수 있어요.</p>
       <div class="sets">${cards}</div>
       <p class="muted small"><a href="#/board/problem">📁 예전에 올린 문제 파일 보기</a></p>`,
@@ -791,7 +807,7 @@
   /* ---------- 문제집 화면 ---------- */
   async function pageSet(rawId) {
     const id = Number(rawId);
-    const admin = isAdmin();
+    const admin = can('content');
     const [sr, exs, subs, hwr] = await Promise.all([
       sb.from('problem_sets').select('*').eq('id', id).maybeSingle(),
       fetchAll((a, b) => sb.from('exercises').select('*').eq('set_id', id).order('position').order('id').range(a, b)),
@@ -823,7 +839,7 @@
         ${admin ? '' : `<div class="bar"><i style="width:${items.length ? Math.round((done / items.length) * 100) : 0}%"></i></div><div class="small">제출 ${done} / ${items.length}</div>`}
         <div class="form-actions" style="margin-top:8px">
           <button class="ghost" data-hwfilter="${h.id}">이 숙제만 보기</button>
-          ${admin ? `<button class="ghost" data-hwstat="${h.id}">📊 제출 현황</button><button class="ghost" data-hwedit="${h.id}">✏️ 수정</button><button class="ghost" data-hwdel="${h.id}">🗑</button>` : ''}
+          ${admin ? `${can('review') ? `<button class="ghost" data-hwstat="${h.id}">📊 제출 현황</button>` : ''}<button class="ghost" data-hwedit="${h.id}">✏️ 수정</button><button class="ghost" data-hwdel="${h.id}">🗑</button>` : ''}
         </div></div>`;
     }).join('')}${admin ? '<button class="ghost" id="addHw">＋ 숙제 만들기</button>' : ''}</div>` : '';
 
@@ -2061,7 +2077,7 @@ onmessage = (ev) => {
     <div id="bgStatus" class="small">${lastBulk}</div></div>`;
 
   async function pageReview(setId, userId) {
-    if (!isAdmin()) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
+    if (!can('review')) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (setId === 'u' && userId) return reviewStudent(userId);
     if (setId && userId) return reviewDetail(Number(setId), userId);
 
@@ -2263,15 +2279,19 @@ onmessage = (ev) => {
 
   /* ---------- 관리자 ---------- */
   async function pageAdmin() {
-    if (!isAdmin()) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
-    const tabs = [['members', '👥 회원'], ['lectures', '🎬 강의']];
-    if (!tabs.some(([k]) => k === adminTab)) adminTab = 'members';
-    const sub = { members: adminMembers, lectures: adminLectures }[adminTab];
+    const tabs = [];
+    if (can('members')) tabs.push(['members', '👥 회원']);
+    if (can('content')) tabs.push(['lectures', '🎬 강의']);
+    if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
+    if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
+    if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
+    const sub = { members: adminMembers, lectures: adminLectures, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
+    const r = staffRole();
     return [`
-      <div class="page-head"><h2>🛠️ 관리자</h2></div>
+      <div class="page-head"><h2>🛠️ 관리자 <span class="chip">${esc(ROLE_NAME[r])}</span></h2></div>
       <div class="tabs">${tabs.map(([k, n]) => `<button data-atab="${k}" class="${adminTab === k ? 'on' : ''}">${n}</button>`).join('')}</div>
-      <p class="muted small">문제집 만들기·문제 추가/수정은 <a href="#/sets">📄 문제</a> 메뉴에서, 학생 풀이는 <a href="#/review">📥 제출함</a>에서 봐요.</p>
+      <p class="muted small">${can('content') ? '문제집 만들기·문제 추가/수정은 <a href="#/sets">📄 문제</a> 메뉴에서' : ''}${can('content') && can('review') ? ', ' : ''}${can('review') ? '학생 풀이는 <a href="#/review">📥 제출함</a>에서' : ''}${can('content') || can('review') ? ' 봐요.' : `내 역할: ${esc(ROLE_DESC[r])}`}</p>
       ${body}`,
     (v) => {
       v.querySelectorAll('[data-atab]').forEach((b) => (b.onclick = () => { adminTab = b.dataset.atab; lecEdit = null; route(); }));
@@ -2285,11 +2305,17 @@ onmessage = (ev) => {
     const pending = data.filter((x) => x.status === 'pending');
     const approved = data.filter((x) => x.status === 'approved' && x.id !== me.id);
     const rejected = data.filter((x) => x.status === 'rejected');
-    const line = (x, btns) => `<div class="row"><div class="row-main"><b>${esc(x.username)}</b> <span class="muted small">${fmt(x.created_at)}${x.role === 'admin' ? ' · 관리자' : ''}</span></div><div>${btns}</div></div>`;
+    // 직원 역할 표시 (OWNER / ADMIN 만 목록을 볼 수 있어요)
+    const staffBy = {};
+    if (can('roles_basic')) { const { data: st } = await sb.rpc('staff_list'); (st || []).forEach((t) => { staffBy[t.uname] = t.urole; }); }
+    const rankOf = (x) => (x.role === 'admin' ? 4 : { admin: 3, teacher: 2, mod: 1 }[staffBy[x.username]] || 0);
+    const myRank = { owner: 4, admin: 3, teacher: 2, mod: 1 }[staffRole()] || 0;
+    const tagOf = (x) => (x.role === 'admin' ? ' · OWNER' : staffBy[x.username] ? ` · ${ROLE_NAME[staffBy[x.username]]}` : '');
+    const line = (x, btns) => `<div class="row"><div class="row-main"><b>${esc(x.username)}</b> <span class="muted small">${fmt(x.created_at)}${tagOf(x)}</span></div><div>${btns}</div></div>`;
     const block = (title, arr, btns) => `<h3>${title} (${arr.length})</h3><div class="card list">${arr.length ? arr.map((x) => line(x, btns(x))).join('') : '<p class="muted center pad">없어요.</p>'}</div>`;
     return [
       block('가입 신청 대기', pending, (x) => `<button class="primary" data-act="approve" data-id="${x.id}">승인</button> <button class="ghost" data-act="reject" data-id="${x.id}">거절</button>`)
-      + block('승인된 학생', approved, (x) => `<button class="ghost" data-act="reset" data-name="${esc(x.username)}">비밀번호 초기화</button> <button class="ghost" data-act="reject" data-id="${x.id}">사용 중지</button>`)
+      + block('승인된 학생', approved, (x) => (rankOf(x) >= myRank ? '<span class="muted small">상위/동급 계정</span>' : `${can('reset_pw') ? `<button class="ghost" data-act="reset" data-name="${esc(x.username)}">비밀번호 초기화</button> ` : ''}<button class="ghost" data-act="reject" data-id="${x.id}">사용 중지</button>`))
       + block('거절/중지', rejected, (x) => `<button class="ghost" data-act="approve" data-id="${x.id}">다시 승인</button>`),
       (v) => {
         v.querySelectorAll('[data-act]').forEach((b) => (b.onclick = async () => {
@@ -2308,6 +2334,51 @@ onmessage = (ev) => {
           route(true);
         }));
       }];
+  }
+
+  async function adminStaff() {
+    const { data, error } = await sb.rpc('staff_list');
+    if (error) return [`<div class="card pad center">권한 표가 아직 없어요.<br><span class="muted small">Supabase SQL Editor 에서 <b>staff_roles.sql</b> 을 한 번 실행해주세요.</span></div>`];
+    const order = { owner: 0, admin: 1, teacher: 2, mod: 3 };
+    const rows = [...data].sort((a, b) => (order[a.urole] ?? 9) - (order[b.urole] ?? 9) || a.uname.localeCompare(b.uname));
+    const opts = [['teacher', 'TEACHER · 강의·문제집·문제·숙제'], ['mod', 'MOD · 관리만']];
+    if (can('roles_admin')) opts.unshift(['admin', 'ADMIN · 모든 관리']);
+    const line = (x) => {
+      const fixed = x.urole === 'owner' || x.uname === me.username;
+      const editable = !fixed && (x.urole !== 'admin' || can('roles_admin'));
+      const sw = (r, label) => (x.urole !== r && (r !== 'admin' || can('roles_admin')) ? `<button class="ghost" data-srole="${esc(x.uname)}|${r}">${label}</button> ` : '');
+      return `<div class="row"><div class="row-main"><span class="badge">${ROLE_NAME[x.urole] || esc(x.urole)}</span> <b>${esc(x.uname)}</b> <span class="muted small">${esc(ROLE_DESC[x.urole] || '')}${x.uname === me.username ? ' · 나' : ''}</span></div>
+        <div>${editable ? `${sw('admin', 'ADMIN으로')}${sw('teacher', 'TEACHER로')}${sw('mod', 'MOD로')}<button class="ghost" data-srole="${esc(x.uname)}|none">해임</button>` : ''}</div></div>`;
+    };
+    return [`
+      <div class="card">
+        <h3>역할 부여</h3>
+        <p class="muted small">민혁닷컴과 <b>같은 권한</b>이에요. 여기서 정하면 두 사이트에 모두 적용돼요. (가입된 ID만 가능)</p>
+        <div class="muted small" style="margin-bottom:8px">OWNER 최상위 · ADMIN 모든 관리 · TEACHER 강의·문제집·문제·숙제 · MOD 회원·글·댓글 관리</div>
+        <form id="sForm"><div class="grid2">
+          <label>ID<input type="text" id="sName" maxlength="20" autocapitalize="none" placeholder="student01" required></label>
+          <label>역할<select id="sRole">${opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+        </div><div class="form-actions"><button class="primary">역할 부여</button></div></form>
+      </div>
+      <h3>직원 (${rows.length})</h3><div class="card list">${rows.map(line).join('') || '<p class="muted center pad">없어요.</p>'}</div>`,
+    (v) => {
+      const setRole = async (name, role) => {
+        if (role === 'none' && !confirm(`${name} 님의 직원 권한을 해임할까요?`)) return;
+        const { data: r, error: er } = await sb.rpc('staff_set_role', { p_username: name, p_role: role });
+        if (er) return toast('처리하지 못했어요: ' + er.message, true);
+        const msg = { not_found: '가입된 ID가 아니에요', self: '자기 자신의 역할은 바꿀 수 없어요', is_owner: 'OWNER 는 바꿀 수 없어요', forbidden: 'ADMIN 임명·해임은 OWNER 만 할 수 있어요', invalid: '역할이 올바르지 않아요' };
+        if (r !== 'ok') return toast(msg[r] || '처리하지 못했어요', true);
+        toast(role === 'none' ? '해임했어요' : `${ROLE_NAME[role]} 로 지정했어요`);
+        route(true);
+      };
+      $('#sForm', v).onsubmit = (e) => {
+        e.preventDefault();
+        const name = $('#sName', v).value.trim().toLowerCase();
+        if (!ID_RE.test(name)) return toast('ID 형식이 이상해요', true);
+        setRole(name, $('#sRole', v).value);
+      };
+      v.querySelectorAll('[data-srole]').forEach((b) => (b.onclick = () => { const [n, r] = b.dataset.srole.split('|'); setRole(n, r); }));
+    }];
   }
 
   async function adminLectures() {
@@ -2370,6 +2441,10 @@ onmessage = (ev) => {
     const { data, error } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     if (error || !data) { await sb.auth.signOut(); return renderAuth(); }
     me = data;
+    me.staff = null;
+    if (me.status === 'approved' && me.role !== 'admin') { // 직원 역할 (staff_roles.sql 전이면 조용히 없음)
+      try { const { data: r, error: re } = await sb.rpc('staff_role'); me.staff = re || !r ? null : String(r); } catch (e) { me.staff = null; }
+    }
     if (me.status === 'pending') return renderStatus('pending');
     if (me.status === 'rejected') return renderStatus('rejected');
     renderShell();
