@@ -40,11 +40,11 @@
      content 강의·문제집·문제·숙제 · notice 공지 · members 회원 승인/중지 · moderate 글·댓글 삭제
      review 제출함·채점 · live 라이브 · reset_pw 비밀번호 초기화 · roles_basic TEACHER/MOD 임명 · roles_admin ADMIN 임명 */
   const ROLE_NAME = { owner: 'OWNER', admin: 'ADMIN', teacher: 'TEACHER', mod: 'MOD' };
-  const ROLE_DESC = { owner: '최상위 · 모든 권한', admin: '모든 관리 (ADMIN 임명 제외)', teacher: '강의·문제집·문제·숙제', mod: '관리만 (회원·글·댓글)' };
+  const ROLE_DESC = { owner: '최상위 · 모든 권한', admin: '모든 관리 (ADMIN 임명 제외)', teacher: '강의·문제집·문제·숙제·제출함', mod: '관리만 (회원·글·댓글)' };
   const PERMS = {
     owner: () => true,
     admin: (p) => p !== 'roles_admin',
-    teacher: (p) => p === 'content',
+    teacher: (p) => p === 'content' || p === 'review',
     mod: (p) => ['notice', 'pass', 'charge', 'finance_read', 'members', 'moderate'].includes(p),
   };
   const staffRole = () => (me && me.role === 'admin' ? 'owner' : (me && me.staff) || null);
@@ -2341,7 +2341,7 @@ onmessage = (ev) => {
     if (error) return [`<div class="card pad center">권한 표가 아직 없어요.<br><span class="muted small">Supabase SQL Editor 에서 <b>staff_roles.sql</b> 을 한 번 실행해주세요.</span></div>`];
     const order = { owner: 0, admin: 1, teacher: 2, mod: 3 };
     const rows = [...data].sort((a, b) => (order[a.urole] ?? 9) - (order[b.urole] ?? 9) || a.uname.localeCompare(b.uname));
-    const opts = [['teacher', 'TEACHER · 강의·문제집·문제·숙제'], ['mod', 'MOD · 관리만']];
+    const opts = [['teacher', 'TEACHER · 강의·문제집·문제·숙제·제출함'], ['mod', 'MOD · 관리만']];
     if (can('roles_admin')) opts.unshift(['admin', 'ADMIN · 모든 관리']);
     const line = (x) => {
       const fixed = x.urole === 'owner' || x.uname === me.username;

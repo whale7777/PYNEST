@@ -70,7 +70,7 @@ $$;
 --   finance_read 포인트·내역 보기 (읽기 전용)
 --   members      회원 승인/중지
 --   moderate     게시글·댓글 삭제
---   review       제출함·채점, 비공개(과제) 글 보기
+--   review       제출함·채점, 비공개(과제) 글 보기 (ADMIN 이상 + TEACHER)
 --   live         라이브 방송·저지 관리
 --   reset_pw     비밀번호 초기화 (자기보다 낮은 순위만)
 --   roles_basic  TEACHER / MOD 임명·해임
@@ -82,7 +82,7 @@ as $$
   select coalesce(case public.staff_role()
     when 'owner' then true
     when 'admin' then p_perm <> 'roles_admin'
-    when 'teacher' then p_perm = any (array['content'])
+    when 'teacher' then p_perm = any (array['content', 'review'])
     when 'mod' then p_perm = any (array['notice', 'pass', 'charge', 'finance_read', 'members', 'moderate'])
     else false
   end, false)
@@ -399,7 +399,7 @@ create policy staff_attach_insert on storage.objects for insert to authenticated
     and (((storage.foldername(name))[1] = 'notice' and public.staff_can('notice'))
       or ((storage.foldername(name))[1] = 'problem' and public.staff_can('content'))));
 
--- 비공개(과제) 글과 익명 작성자 표시는 "review" 권한(OWNER/ADMIN)에게만 — 기존 is_admin() 자리에 staff_can('review')
+-- 비공개(과제) 글과 익명 작성자 표시는 "review" 권한(OWNER/ADMIN/TEACHER)에게만 — 기존 is_admin() 자리에 staff_can('review')
 create or replace function public.can_comment(pid bigint)
 returns boolean
 language sql stable security definer set search_path = public

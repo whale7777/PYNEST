@@ -61,5 +61,5 @@
 ## 직원 권한 (OWNER / ADMIN / TEACHER / MOD)
 - **`staff_roles.sql`** 을 Supabase SQL Editor 에서 한 번 실행하세요 (민혁닷컴 저장소의 같은 파일이에요). 기존 데이터·정책은 그대로 두고 "추가"만 해요.
 - 원래 관리자(imadmin)는 자동으로 OWNER 예요. 🛠️ 관리자 › **🎖️ 권한** 탭에서 PyNest ID 로 역할을 부여해요 (민혁닷컴과 공유).
-- OWNER 전부 · ADMIN 전부(ADMIN 임명 제외) · TEACHER 강의·문제집·문제·숙제 · MOD 회원 승인/중지·글·댓글 삭제
-- 제출함·채점·라이브는 OWNER/ADMIN 만 볼 수 있어요.
+- OWNER 전부 · ADMIN 전부(ADMIN 임명 제외) · TEACHER 강의·문제집·문제·숙제·제출함 · MOD 회원 승인/중지·글·댓글 삭제
+- 제출함·채점은 OWNER/ADMIN/TEACHER, 라이브는 OWNER/ADMIN 만 볼 수 있어요.
