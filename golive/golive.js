@@ -15,6 +15,8 @@
   const emailOf = (id) => `${id.toLowerCase()}@pyclass.site`;
   let me = null;
   let navTok = 0;
+  let LIVE = null; // 진행 중인 사이트 방송 (다른 페이지로 이동해도 유지돼요)
+  let liveUi = null; // 지금 열려 있는 방송 콘솔이 화면을 다시 그리는 함수
   let timers = [];
   const isAdmin = () => me && me.role === 'admin';
   const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
@@ -742,7 +744,7 @@
       await patchSes({ is_live: false, ended_at: new Date().toISOString(), replay_url: ses.replay_url || (ses.stream_url === WEBRTC ? null : ses.stream_url) }, '방송을 종료했어요');
       refresh();
     }
-    let bc = null;
+    let bc = LIVE && LIVE.sesId === ses.id ? LIVE : null;
     const drawCfg = () => {
       const key = JSON.stringify([ses.title, ses.stream_url, ses.replay_url, ses.is_live, ses.ended_at]);
       if (drawn.cfg === key) return;
@@ -791,7 +793,7 @@
       const on = !!bc;
       $('#bc', v).innerHTML = `
         <div class="live-head"><h2>📹 사이트에서 바로 방송하기</h2>${on ? '<span class="badge live">● 송출 중</span>' : ''}</div>
-        <p class="muted small" style="margin-top:0">유튜브 없이 이 화면에서 바로 방송해요. <b>방송하는 동안 이 탭을 닫거나 다른 페이지로 이동하지 마세요.</b> (다른 창을 공유해도 이 탭은 열어 두면 돼요)</p>
+        <p class="muted small" style="margin-top:0">유튜브 없이 이 화면에서 바로 방송해요. <b>방송하는 동안 이 탭을 닫거나 새로고침하지 마세요.</b> 라이브 사이트 안에서 다른 메뉴로 가는 건 괜찮아요. 다른 일은 <b>새 탭·새 창</b>에서 하세요. (폰은 화면 공유가 안 되고 백그라운드에서 멈출 수 있어서 컴퓨터를 권해요)</p>
         <div class="grid2">
           <div>
             <label style="margin:0"><input type="radio" name="bcSrc" value="screen" checked ${on ? 'disabled' : ''} style="width:auto"> 🖥 화면 공유 <span class="muted small">(화면·창·탭 선택)</span></label>
@@ -834,6 +836,7 @@
     };
 
     async function startBroadcast() {
+      if (LIVE) return toast('이미 사이트 방송이 진행 중이에요', true);
       if (!navigator.mediaDevices || !window.RTCPeerConnection) return toast('이 브라우저는 방송을 지원하지 않아요. 최신 크롬을 쓰세요', true);
       const q = (x) => $(x, $('#bc', v));
       const src = q('input[name="bcSrc"]:checked').value;
@@ -890,6 +893,9 @@
       let wl = null;
       const lock = async () => { try { if (navigator.wakeLock && !done) wl = await navigator.wakeLock.request('screen'); } catch (e) { /* 무시 */ } };
       const onVis = () => { if (document.visibilityState === 'visible') lock(); };
+      const sid = ses.id;
+      const sTitle = ses.title;
+      const rpl = ses.replay_url || null;
       let done = false;
       lock();
       document.addEventListener('visibilitychange', onVis);
@@ -907,7 +913,7 @@
         if (chunks.length) {
           const blob = new Blob(chunks, { type: 'video/webm' });
           const url = URL.createObjectURL(blob);
-          const name = `${(ses.title || 'live').replace(/[\\/:*?"<>|\s]+/g, '_')}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.webm`;
+          const name = `${(sTitle || 'live').replace(/[\\/:*?"<>|\s]+/g, '_')}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.webm`;
           const a = document.createElement('a');
           a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
           link = `<div class="card" style="margin:10px 0 0"><b>⏺ 녹화 파일</b> <span class="muted small">(${(blob.size / 1048576).toFixed(0)}MB · 자동으로 내려받지 않았다면 눌러 주세요)</span><br><a class="primary btnlike" href="${url}" download="${esc(name)}" style="margin-top:6px">💾 ${esc(name)}</a></div>`;
@@ -915,16 +921,32 @@
         opened.forEach((st) => st.getTracks().forEach((t) => t.stop()));
         stream.getTracks().forEach((t) => t.stop());
         if (actx) actx.close().catch(() => {});
-        bc = null;
-        if ($('#bc', v)) drawBc(link);
-        await endAll();
+        LIVE = null;
+        // 콘솔을 닫았거나 다른 페이지에 있어도 끝낼 수 있게 화면과 무관하게 직접 저장해요
+        await sb.from('live_problems').update({ status: 'closed' }).eq('session_id', sid).eq('status', 'open');
+        await sb.from('live_sessions').update({ is_live: false, ended_at: new Date().toISOString(), replay_url: rpl }).eq('id', sid);
+        toast('방송을 종료했어요');
+        if (liveUi) liveUi(link);
       };
-      bc = { stream, stop };
+      bc = { sesId: sid, stream, stop };
+      LIVE = bc;
       vtrack.addEventListener('ended', stop);
       window.onbeforeunload = () => '방송 중이에요. 나가면 방송이 끊겨요.';
       drawBc();
     }
-    cleanups.push(() => { if (bc) bc.stop(); });
+    // 방송은 다른 페이지로 옮겨 가도 끊기지 않아요 (탭을 닫거나 새로고침하면 끊겨요)
+    const ui = async (link = '') => {
+      if (tok !== navTok) return;
+      bc = LIVE && LIVE.sesId === ses.id ? LIVE : null;
+      const { data } = await sb.from('live_sessions').select('*').eq('id', ses.id).maybeSingle();
+      if (data) ses = data;
+      drawn.cfg = '';
+      drawCfg();
+      drawBc(link);
+      refresh();
+    };
+    liveUi = ui;
+    cleanups.push(() => { if (liveUi === ui) liveUi = null; });
     drawBc();
 
     /* --- 문제 목록 --- */
