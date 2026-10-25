@@ -1,0 +1,55 @@
+/* PyNest Live (golive) 전용 스타일. 기본 스타일은 ../style.css 를 같이 써요. */
+main#view.live { max-width: 1320px; }
+.live-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.vwrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+.vwrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.vwrap .vph { position: absolute; inset: 0; display: grid; place-items: center; color: #cbd5e1; text-align: center; padding: 16px; }
+.live-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.live-head h2 { margin: 0; font-size: 18px; }
+.badge.live { background: #dc2626; color: #fff; animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.ptabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.ptabs button { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; position: relative; }
+.ptabs button.on { background: var(--primary); color: var(--primary-text); border-color: var(--primary); font-weight: 700; }
+.ptabs button.closed { opacity: .65; }
+.ptabs .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 5px; background: #94a3b8; }
+.ptabs .dot.open { background: #22c55e; }
+.ptabs .dot.ok { background: #3b82f6; }
+.ptabs .dot.bad { background: #ef4444; }
+.live-prob h3 { margin: 0 0 6px; }
+.live-prob .ex-body { margin-top: 8px; }
+.live-prob textarea.code { min-height: 200px; }
+.sessrow { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.sessrow:last-child { border-bottom: 0; }
+.mon-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.mon-col { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; min-height: 120px; }
+.mon-col h4 { margin: 0 0 8px; font-size: 15px; }
+.mon-col.ok { background: #f0fdf4; border-color: #bbf7d0; }
+.mon-col.bad { background: #fef2f2; border-color: #fecaca; }
+.mon-col.wait { background: #f8fafc; }
+[data-theme="dark"] .mon-col.ok { background: #12301f; border-color: #1f5a37; }
+[data-theme="dark"] .mon-col.bad { background: #3a1818; border-color: #6b2a2a; }
+[data-theme="dark"] .mon-col.wait { background: #1b2133; }
+.mon-col button.who { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px dashed var(--border); padding: 5px 2px; color: var(--text); cursor: pointer; }
+.mon-col button.who:last-child { border-bottom: 0; }
+.mon-col button.who:hover { background: var(--hover); }
+.mon-stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.prow-admin { display: flex; gap: 8px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.prow-admin .t { flex: 1; min-width: 140px; }
+.help-steps li { margin: 4px 0; }
+.help-steps code { background: var(--code); padding: 1px 5px; border-radius: 5px; }
+@media (max-width: 900px) {
+  .live-grid { grid-template-columns: 1fr; }
+  .mon-cols { grid-template-columns: 1fr; }
+}
+.vwrap .vph[hidden] { display: none; }
+
+.vwrap video{position:absolute;inset:0;width:100%;height:100%;background:#000;object-fit:contain}
+.vwrap #rv{z-index:1}
+.vwrap .vph{z-index:2}
+.vwrap #rv[hidden]{display:none}
+.dvr{margin-top:8px;display:grid;gap:8px}
+.dvr-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.dvr-row input[type=range]{flex:1;min-width:140px;padding:0}
+.dvr .qsel{margin:0 0 0 auto;display:flex;align-items:center;gap:6px;font-size:.85rem}
+.dvr .qsel select{width:auto;padding:6px 8px}
