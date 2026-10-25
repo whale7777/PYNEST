@@ -333,3 +333,9 @@ a.icon.shop:hover { background: var(--hover); }
 .bulkbar #bgStatus:empty { display: none; }
 .bad-t { color: #dc2626; }
 .bad-t pre { white-space: pre-wrap; font-size: 12px; }
+
+.pg { width: 100%; }
+.pg-bar { height: 12px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.pg-bar i { display: block; height: 100%; background: var(--primary); border-radius: 99px; transition: width .2s; }
+.pg.done .pg-bar i { background: #16a34a; }
+.pg-t { margin-top: 6px; font-size: 13px; }

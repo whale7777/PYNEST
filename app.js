@@ -1901,16 +1901,23 @@ onmessage = (ev) => {
   const gradable = (ex) => !!ex && ((ex.tests || []).length > 0 || (ex.answers || []).some((a) => a.type !== 'm'));
 
   // 채점 안 된 제출(judge 없음)을 한꺼번에 채점해서 저장. force=true 면 이미 채점된 것도 다시.
-  async function bulkGrade(subs, exMap, statusEl, force = false) {
+  let lastBulk = ''; // 채점이 끝난 뒤 화면을 새로 그려도 결과를 보여주기 위해
+  const pgHTML = (i, n, note, done) => {
+    const pct = n ? Math.round((i / n) * 100) : 0;
+    return `<div class="pg ${done ? 'done' : ''}"><div class="pg-bar"><i style="width:${pct}%"></i></div><div class="pg-t"><b>${pct}%</b> · ${i} / ${n}건${note ? ` · <span class="muted">${note}</span>` : ''}</div></div>`;
+  };
+  async function bulkGrade(subs, exMap, statusEl, force = false, names = {}) {
     const todo = subs.filter((s) => (force || !s.judge) && gradable(exMap[s.exercise_id]));
-    if (!todo.length) { toast('채점할 제출이 없어요'); return null; }
-    const out = { ok: 0, ac: 0, fail: 0, man: 0 };
+    if (!todo.length) { toast('채점할 제출이 없어요'); if (statusEl) statusEl.innerHTML = ''; return null; }
+    if (statusEl) statusEl.innerHTML = pgHTML(0, todo.length, '준비 중…');
+    const out = { ok: 0, ac: 0, fail: 0, man: 0, total: todo.length };
     for (let i = 0; i < todo.length; i += 1) {
       const sub = todo[i];
       const ex = exMap[sub.exercise_id];
       const tests = ex.tests || [];
       const answers = ex.answers || [];
-      if (statusEl) statusEl.innerHTML = `<span class="muted">⏳ 채점 중… ${i + 1} / ${todo.length}${i === 0 ? ' (처음엔 파이썬을 준비하느라 몇 초 걸려요)' : ''}</span>`;
+      if (statusEl) statusEl.innerHTML = pgHTML(i, todo.length, `${esc(names[sub.user_id] || '')} 채점 중…${i === 0 ? ' (처음엔 파이썬을 준비하느라 몇 초 걸려요)' : ''}`);
+      await new Promise((r) => setTimeout(r, 0)); // 화면이 갱신되도록 잠깐 양보
       let u = unpackSubmission(sub.code, answers.length);
       let useParts = answers.length > 0;
       if (answers.length && !String(sub.code).includes(PART_MARK)) { // 예전 형식
@@ -1950,20 +1957,21 @@ onmessage = (ev) => {
   }
 
   // 일괄 채점 버튼 연결: sel = 버튼, getSubs = 대상 제출들, exMap
-  function bindBulk(v, getSubs, exMap) {
-    const btn = $('[data-bulkgrade]', v);
-    if (!btn) return;
+  function bindBulk(v, getSubs, exMap, names = {}) {
     const st = $('#bgStatus', v);
-    btn.onclick = async () => {
+    lastBulk = '';
+    v.querySelectorAll('[data-bulkgrade]').forEach((btn) => (btn.onclick = async () => {
       const force = btn.dataset.bulkgrade === 'all';
       if (force && !confirm('이미 채점된 제출까지 모두 다시 채점할까요?')) return;
       btn.disabled = true;
-      const r = await bulkGrade(getSubs(), exMap, st, force);
-      btn.disabled = false;
+      document.querySelectorAll('[data-bulkgrade]').forEach((b) => { b.disabled = true; });
+      const r = await bulkGrade(getSubs(), exMap, st, force, names);
+      document.querySelectorAll('[data-bulkgrade]').forEach((b) => { b.disabled = false; });
       if (!r || !r.ok) return;
+      lastBulk = pgHTML(r.total, r.total, `완료 · 통과 ${r.ac} · 미통과 ${r.fail}${r.man ? ` · 선생님 확인 대기 ${r.man}` : ''}`, true);
       toast(`채점 완료: ${r.ok}건 (통과 ${r.ac} · 미통과 ${r.fail}${r.man ? ` · 선생님 확인 대기 ${r.man}` : ''})`);
       route(true);
-    };
+    }));
   }
 
   async function loadReviewData() {
@@ -1987,7 +1995,7 @@ onmessage = (ev) => {
   const pendBadge = (n) => (n ? ` <span class="badge warn">미채점 ${n}</span>` : '');
   const bulkBar = (n, label) => `<div class="card bulkbar"><div><b>${label}</b> <span class="muted small">테스트/자동 채점 답이 있는 문제만 채점해요. 서술형은 건너뛰어요.</span></div>
     <div class="form-actions"><button class="primary" data-bulkgrade="pending" ${n ? '' : 'disabled'}>⚖️ 미채점 ${n}건 일괄 채점</button><button class="ghost" data-bulkgrade="all" title="이미 채점된 것도 다시 채점해요">전체 다시 채점</button></div>
-    <div id="bgStatus" class="small"></div></div>`;
+    <div id="bgStatus" class="small">${lastBulk}</div></div>`;
 
   async function pageReview(setId, userId) {
     if (!isAdmin()) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
@@ -2020,7 +2028,7 @@ onmessage = (ev) => {
         const q = e.target.value.trim().toLowerCase();
         v.querySelectorAll('#rvList .row').forEach((r) => { r.style.display = q && !r.dataset.nm.includes(q) ? 'none' : ''; });
       };
-      bindBulk(v, () => subs, exMap);
+      bindBulk(v, () => subs, exMap, names);
     }];
   }
 
@@ -2049,7 +2057,7 @@ onmessage = (ev) => {
       <p class="muted">푼 문제집 ${list.length}개 · 문제집을 누르면 푼 문제들이 나와요.</p>
       ${bulkBar(pend, `${esc(names[userId])} 학생`)}
       <div class="card list">${rows}</div>`,
-    (v) => bindBulk(v, () => subs, exMap)];
+    (v) => bindBulk(v, () => subs, exMap, names)];
   }
 
   async function reviewDetail(setId, userId) {
