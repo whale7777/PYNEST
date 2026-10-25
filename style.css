@@ -304,3 +304,22 @@ code.ic { background: var(--code); border: 1px solid var(--border); border-radiu
 @media (max-width: 640px) { .jgrid { grid-template-columns: 1fr; } }
 .elite-zone .jsum.ok { background: rgba(34,197,94,.2); color: #bbf7d0; }
 .elite-zone .jsum.bad { background: rgba(239,68,68,.2); color: #fecaca; }
+
+/* ---- 정답 칸 / 채점 결과 ---- */
+.parts { display: grid; gap: 8px; margin-top: 10px; }
+.part { display: block; }
+.plabel { display: block; font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+.part textarea { min-height: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.parts-res { margin: 6px 0; display: grid; gap: 4px; }
+.prow { padding: 6px 10px; border-radius: 10px; border: 1px solid var(--border); }
+.prow.ok { background: #f0fdf4; border-color: #bbf7d0; }
+.prow.bad { background: #fef2f2; border-color: #fecaca; }
+.prow.man { background: #fffbeb; border-color: #fde68a; }
+[data-theme="dark"] .prow.ok { background: #12301f; border-color: #1f5a37; }
+[data-theme="dark"] .prow.bad { background: #3a1818; border-color: #6b2a2a; }
+[data-theme="dark"] .prow.man { background: #33290f; border-color: #6b5a1e; }
+.prow details { margin-top: 4px; }
+.prow pre { margin: 4px 0 0; white-space: pre-wrap; }
+.keybox { margin-top: 6px; }
+.keybox summary { cursor: pointer; font-size: 14px; }
+.keybox pre { white-space: pre-wrap; overflow-wrap: anywhere; }
