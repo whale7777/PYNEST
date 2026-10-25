@@ -179,7 +179,7 @@
     ['home', '🏠', '홈'], ['lectures', '🎬', '강의'], ['sets', '📄', '문제'],
     ['board/notice', '📢', '공지'], ['board/qna', '❓', '질문'], ['board/assignment', '📝', '과제'],
     ['board/free', '💬', '자유'],
-    ['judge', '⚖️', '온라인 저지', true], ['live', '📡', '라이브', true],
+    ['golive/', '📡', '라이브 · 저지', 'ext'],
   ];
 
   function renderShell() {
@@ -196,7 +196,7 @@
         <button class="ghost" id="logoutBtn">로그아웃</button>
       </header>
       <nav class="menu" id="menu">
-        ${items.map(([k, ic, name, soon]) => `<a href="#/${k}" data-k="${k}" class="${soon ? 'soon' : ''}">${ic} ${name}</a>`).join('')}
+        ${items.map(([k, ic, name, soon]) => (soon === 'ext' ? `<a href="${k}" data-k="${k}">${ic} ${name}</a>` : `<a href="#/${k}" data-k="${k}" class="${soon ? 'soon' : ''}">${ic} ${name}</a>`)).join('')}
       </nav>
       <main id="view"></main>`;
     setTheme(document.documentElement.dataset.theme || 'light');
@@ -526,6 +526,9 @@
   let reviewSet = '';
   let scrollToEx = null;
   let hwFilter = null; // 숙제만 보기 (숙제 id)
+  let testsColumn = null; // exercises.tests 열이 있는지 (update4.sql)
+  let answersColumn = null; // exercises.answers 열이 있는지 (update5.sql)
+  const gradeMemo = new Map(); // 문제별 마지막 채점 결과(화면 다시 그려도 유지)
 
   // 1000개씩 끊어서 전부 가져오기
   async function fetchAll(make) {
@@ -643,6 +646,7 @@
         label: p.label || null, points: Number.isFinite(pts) ? pts : null,
         tags: Array.isArray(p.tags) ? p.tags.map(String) : [],
         source: p.source || null, body, check_point: p.check || p.check_point || null,
+        tests: normTests(p.tests), answers: normAnswers(p.answers),
       });
     };
     (d.chapters || []).forEach((ch) => {
@@ -661,7 +665,7 @@
 
   function exportSet(set, list) {
     const L = layoutEx(list.map((e) => ({ ...e })));
-    const prob = (e) => ({ difficulty: e.difficulty, label: e.label || '', points: e.points, tags: e.tags || [], source: e.source || '', body: e.body, check: e.check_point || '' });
+    const prob = (e) => ({ difficulty: e.difficulty, label: e.label || '', points: e.points, tags: e.tags || [], source: e.source || '', body: e.body, check: e.check_point || '', tests: e.tests || [], answers: e.answers || [] });
     const out = {
       format: 'pynest-problemset-v1', title: set.title, short_name: set.short_name || '', week: set.week, description: set.description || '',
       chapters: L.chapters.map((ch) => {
@@ -763,7 +767,14 @@
       if (parsed) {
         const rows = parsed.rows.map((r) => ({ ...r, set_id: s.id }));
         for (let i = 0; i < rows.length; i += 100) {
-          const { error: ie } = await sb.from('exercises').insert(rows.slice(i, i + 100));
+          let { error: ie } = await sb.from('exercises').insert(rows.slice(i, i + 100));
+          if (ie && /tests|answers/.test(ie.message || '')) {
+            const chunk = rows.slice(i, i + 100);
+            const strip = (omit) => chunk.map((r) => { const c = { ...r }; omit.forEach((k) => delete c[k]); return c; });
+            ({ error: ie } = await sb.from('exercises').insert(strip(['answers'])));
+            if (ie && /tests/.test(ie.message || '')) ({ error: ie } = await sb.from('exercises').insert(strip(['answers', 'tests'])));
+            if (!ie && i === 0) toast('자동 채점 정보는 update4.sql, update5.sql을 실행한 뒤에 저장돼요', true);
+          }
           if (ie) {
             await sb.from('problem_sets').delete().eq('id', s.id);
             btn.disabled = false;
@@ -785,13 +796,14 @@
       sb.from('problem_sets').select('*').eq('id', id).maybeSingle(),
       fetchAll((a, b) => sb.from('exercises').select('*').eq('set_id', id).order('position').order('id').range(a, b)),
       admin ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions')
-        .select('id,exercise_id,version,code,created_at,submission_comments(id,content,created_at)')
+        .select('*,submission_comments(id,content,created_at)')
         .eq('set_id', id).eq('user_id', me.id).order('id').range(a, b)),
       sb.from('homeworks').select('*,homework_items(exercise_id)').eq('set_id', id).order('id'),
     ]);
     if (sr.error) throw sr.error;
     const set = sr.data;
     if (!set) return notFound();
+    if (exs.length) { testsColumn = 'tests' in exs[0]; answersColumn = 'answers' in exs[0]; }
     const L = layoutEx(exs);
     const subsBy = {};
     subs.forEach((s) => { (subsBy[s.exercise_id] = subsBy[s.exercise_id] || []).push(s); });
@@ -838,6 +850,7 @@
           <span class="dbadge d-${e.difficulty}">${e.difficulty}</span>
           ${e.label ? `<span class="chip">${esc(e.label)}</span>` : ''}
           ${e.points ? `<span class="chip pts">${e.points}점</span>` : ''}
+          ${(e.tests || []).length || (e.answers || []).some((x) => x.type !== 'm') ? '<span class="chip judgechip" title="제출하면 자동으로 채점돼요">⚖️ 자동 채점</span>' : (e.answers || []).length ? '<span class="chip judgechip" title="선생님이 확인해요">✍️ 서술</span>' : ''}
           ${tags}
           ${(hwOf[e.id] || []).map((h) => `<span class="chip hwchip">📌 ${esc(h.title)}</span>`).join('')}
           ${e.source ? `<span class="muted small">${esc(e.source)}</span>` : ''}
@@ -849,10 +862,11 @@
         </header>
         <div class="ex-body">${renderMarkup(e.body)}</div>
         ${e.check_point ? `<div class="ex-check">💡 <b>확인 포인트</b> ${inline(e.check_point)}</div>` : ''}
-        ${admin ? `<div class="muted small">고유 번호 ${e.id}</div>` : `
+        ${admin ? `<div class="muted small">고유 번호 ${e.id}${(e.tests || []).length ? ` · 테스트 ${e.tests.length}개` : ''}${(e.answers || []).length ? ` · 정답 칸 ${e.answers.length}개` : ''}</div>
+        ${(e.answers || []).length ? `<details class="keybox"><summary>🔑 정답 보기</summary><pre><code>${esc(answersToText(e.answers))}</code></pre></details>` : ''}` : `
         <div class="ex-foot">
           <button class="solve" data-solve="${e.id}">✍️ 풀어보기</button>
-          ${last ? `<span class="done">✅ 제출함 · v${last.version}${hasC ? ' · 💬 선생님 댓글' : ''}</span>` : ''}
+          ${last ? `<span class="done">✅ 제출함 · v${last.version}</span> ${judgeBadge(last.judge)}${hasC ? ' <span class="badge">💬 선생님 댓글</span>' : ''}` : ''}
         </div>
         <div class="ex-panel" id="panel-${e.id}" hidden></div>`}
       </article>`;
@@ -884,7 +898,7 @@
       ${set.description ? `<p class="muted">${esc(set.description)}</p>` : ''}
       <div class="form-actions" style="margin:0 0 12px">
         ${files.join('')}
-        ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
+        ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><button class="ghost" id="autoTests" title="입출력 예시가 있는 문제에 채점 테스트를 한꺼번에 만들어요">⚖️ 예시로 채점 만들기</button><button class="ghost" id="impKey" title="JSON 파일의 정답·채점 테스트를 같은 문제에 덮어써요 (학생 제출물은 그대로)">🔑 정답·채점 가져오기</button><input type="file" id="impKeyFile" accept=".json,application/json" hidden><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
       </div>
       ${hwHtml}
       <details class="card toc" open><summary>📑 목차 <span class="muted small">(누르면 그 위치로 이동해요)</span></summary>${toc || '<p class="muted">문제가 없어요.</p>'}</details>
@@ -922,44 +936,132 @@
       if (admin) return bindSetAdmin(v, set, exs, hws, L);
 
       /* 풀어보기 */
+      const exMap = {};
+      exs.forEach((x) => { exMap[x.id] = x; });
+      const reveal = !!set.answer_public;
       const mount = (eid) => {
         const p = document.getElementById('panel-' + eid);
         if (!p || p.dataset.ready) return p;
+        const ex = exMap[eid];
+        const tests = ex.tests || [];
+        const answers = ex.answers || [];
+        const autoParts = answers.some((a) => a.type !== 'm');
+        const showCode = tests.length > 0 || !answers.length;
+        const canRun = tests.length > 0 || (!answers.length && /작성하시오|작성하여라|출력하여라|만드시오|구현하시오/.test(ex.body));
+        const canGrade = tests.length > 0 || autoParts;
         const vers = subsBy[eid] || [];
         const last = vers[vers.length - 1];
+        const lastU = last ? unpackSubmission(last.code, answers.length) : { code: '', vals: [] };
         const hist = vers.slice().reverse().map((s, i) => {
-          const cs = (s.submission_comments || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+          const cs = (s.submission_comments || []).slice().sort((x, y) => x.created_at.localeCompare(y.created_at));
           return `<details class="ver" ${i === 0 && cs.length ? 'open' : ''}>
-            <summary><b>v${s.version}</b> <span class="muted small">${fmt(s.created_at)}</span>${cs.length ? ` <span class="badge">💬 ${cs.length}</span>` : ''}</summary>
+            <summary><b>v${s.version}</b> <span class="muted small">${fmt(s.created_at)}</span> ${judgeBadge(s.judge)}${cs.length ? ` <span class="badge">💬 ${cs.length}</span>` : ''}</summary>
             <pre><code>${esc(s.code)}</code></pre>
             ${cs.map((c) => `<div class="tcomment"><span class="badge">선생님</span> <span class="muted small">${fmt(c.created_at)}</span><div class="txt">${esc(c.content)}</div></div>`).join('')}
           </details>`;
         }).join('');
+        const sample = tests.find((t) => !t.hidden);
+        const partsInputs = answers.map((a, i) => {
+          const lines = a.type === 'm' ? 4 : Math.min(6, Math.max(1, a.value.split('\n').length));
+          const hint = a.type === 'c' ? '번호를 써요 (예: 2 또는 1, 3)' : a.type === 'm' ? '서술형은 선생님이 확인해요' : a.type === 'x' ? '코드 한 줄' : '';
+          return `<label class="part"><span class="plabel">${esc(a.label || i + 1)}${a.type === 'm' ? ' <span class="badge">서술</span>' : ''}</span>
+            <textarea class="pans code" data-i="${i}" rows="${lines}" spellcheck="false" placeholder="${esc(hint)}">${esc(lastU.vals[i] || '')}</textarea></label>`;
+        }).join('');
+        const nAuto = tests.length + answers.filter((a) => a.type !== 'm').length;
         p.innerHTML = `
-          <textarea class="code" rows="10" spellcheck="false" placeholder="여기에 완성한 코드(또는 답)를 쓰세요. 서술형 답도 여기에 써요.">${esc(last ? last.code : '')}</textarea>
+          ${showCode ? `<textarea class="code" rows="10" spellcheck="false" placeholder="여기에 완성한 코드(또는 답)를 쓰세요. 서술형 답도 여기에 써요.">${esc(lastU.code)}</textarea>` : ''}
+          ${canRun ? `<details class="stdin-box"><summary>⌨️ 입력값 <span class="muted small">(실행해보기에서 input()에 들어갈 값 · 한 줄에 하나씩)</span></summary>
+            <textarea class="stdin" rows="3" spellcheck="false">${esc(sample ? sample.input : '')}</textarea></details>` : ''}
+          ${answers.length ? `<div class="parts">${showCode ? '<div class="muted small">아래 칸에도 답을 써 주세요</div>' : ''}${partsInputs}</div>` : ''}
           <div class="form-actions">
-            <button class="solve" data-send="${eid}">제출하기${last ? ` (v${last.version + 1})` : ''}</button>
-            <span class="muted small">${last ? '다시 내면 새 버전으로 쌓이고, 이전 풀이도 그대로 남아요.' : '제출한 풀이는 선생님만 볼 수 있어요.'}</span>
+            ${canRun ? '<button class="ghost" data-run>▶ 실행해보기</button>' : ''}
+            ${canGrade ? `<button class="ghost" data-grade>✅ 채점하기 <span class="muted small">(${nAuto}개 항목)</span></button>` : ''}
+            <button class="solve" data-send>제출하기${last ? ` (v${last.version + 1})` : ''}</button>
           </div>
+          <p class="muted small" style="margin:4px 0">${canGrade ? '제출하면 자동으로 채점돼요. 채점 결과는 선생님도 볼 수 있어요. ' : ''}${answers.some((a) => a.type === 'm') ? '서술형 답은 선생님이 확인해요. ' : ''}${last ? '다시 내면 새 버전으로 쌓이고, 이전 풀이도 그대로 남아요.' : '제출한 풀이는 선생님만 볼 수 있어요.'}</p>
+          <div class="judge-out" hidden></div>
           ${hist ? `<div class="vers"><div class="muted small">내가 낸 풀이</div>${hist}</div>` : ''}`;
         p.dataset.ready = '1';
-        const ta = $('textarea', p);
-        ta.onkeydown = (ev) => {
-          if (ev.key === 'Tab') {
-            ev.preventDefault();
-            const s = ta.selectionStart;
-            ta.value = ta.value.slice(0, s) + '    ' + ta.value.slice(ta.selectionEnd);
-            ta.selectionStart = ta.selectionEnd = s + 4;
-          }
+        const ta = $('textarea.code:not(.pans)', p);
+        const partEls = [...p.querySelectorAll('textarea.pans')];
+        const getCode = () => (ta ? ta.value : '');
+        const getVals = () => partEls.map((t) => t.value);
+        const tabKey = (el) => {
+          el.onkeydown = (ev) => {
+            if (ev.key === 'Tab') {
+              ev.preventDefault();
+              const st = el.selectionStart;
+              el.value = el.value.slice(0, st) + '    ' + el.value.slice(el.selectionEnd);
+              el.selectionStart = el.selectionEnd = st + 4;
+            }
+          };
         };
-        $('[data-send]', p).onclick = async (ev) => {
-          const code = ta.value;
-          if (!code.trim()) return toast('내용을 입력하세요', true);
+        if (ta) tabKey(ta);
+        partEls.forEach(tabKey);
+        const jo = $('.judge-out', p);
+        const showJ = (html) => { jo.hidden = false; jo.innerHTML = html; };
+        if (gradeMemo.has(eid)) showJ(gradeMemo.get(eid));
+        let busy = false;
+        const lock = (on) => { busy = on; p.querySelectorAll('[data-run],[data-grade],[data-send]').forEach((b) => { b.disabled = on; }); };
+        const prep = '⏳ 파이썬을 준비하는 중… (처음 한 번은 몇 초 걸려요)';
+        const empty = () => !getCode().trim() && !getVals().some((x) => x.trim());
+        const sig = () => getCode() + '\u0000' + JSON.stringify(getVals());
+        // 코드 테스트 + 답 칸 채점 → { res, parts, judge }
+        const doGrade = async () => {
+          const parts = answers.length ? gradeParts(answers, getVals()) : null;
+          let res = null;
+          if (tests.length) {
+            if (!getCode().trim()) res = { status: 'WA', passed: 0, total: tests.length, cases: tests.map((t) => ({ ok: false, st: 'WA', mode: t.mode || '', hidden: !!t.hidden, input: t.input || '', expected: t.output || '', got: '', err: '' })) };
+            else {
+              showJ(`<span class="muted">${prep}</span>`);
+              res = await gradeAll(getCode(), tests, (i, n) => showJ(`<span class="muted">⏳ 채점 중… ${i + 1} / ${n}</span>`));
+            }
+          }
+          return { res, parts, judge: summarize(res, parts) };
+        };
+
+        const runBtn = $('[data-run]', p);
+        if (runBtn) runBtn.onclick = async () => {
+          if (!getCode().trim()) return toast('코드를 입력하세요', true);
+          lock(true);
+          showJ(`<span class="muted">${prep}</span>`);
+          const r = await runOnce(getCode(), ($('.stdin', p) || { value: '' }).value.replace(/\n?$/, '\n'));
+          showJ(renderRun(r));
+          lock(false);
+        };
+        const gradeBtn = $('[data-grade]', p);
+        if (gradeBtn) gradeBtn.onclick = async () => {
+          if (empty()) return toast('답을 입력하세요', true);
+          lock(true);
+          try {
+            const g = await doGrade();
+            p._graded = { sig: sig(), g };
+            gradeMemo.set(eid, renderGrade(g.res, g.parts, answers, reveal));
+            showJ(gradeMemo.get(eid));
+          } catch (err) {
+            showJ(renderRun({ status: 'LOAD', err: String(err.message || err) }));
+          }
+          lock(false);
+        };
+        $('[data-send]', p).onclick = async () => {
+          if (empty()) return toast('내용을 입력하세요', true);
+          const code = answers.length ? packSubmission(getCode(), answers, getVals()) : getCode();
           if (code.length > 30000) return toast('너무 길어요 (3만 자 이하)', true);
-          ev.target.disabled = true;
-          const { error } = await sb.from('submissions').insert({ exercise_id: eid, user_id: me.id, code });
-          if (error) { ev.target.disabled = false; return toast('제출하지 못했어요: ' + error.message, true); }
-          toast('제출했어요! 👍');
+          if (busy) return;
+          lock(true);
+          let judge = null;
+          if (canGrade || answers.length) {
+            try {
+              const g = p._graded && p._graded.sig === sig() ? p._graded.g : await doGrade();
+              judge = g.judge;
+              gradeMemo.set(eid, renderGrade(g.res, g.parts, answers, reveal));
+              showJ(gradeMemo.get(eid));
+            } catch (err) { toast('채점 도구를 불러오지 못해서 채점 없이 제출해요', true); }
+          }
+          let { error } = await sb.from('submissions').insert({ exercise_id: eid, user_id: me.id, code, judge });
+          if (error && /judge/.test(error.message || '')) ({ error } = await sb.from('submissions').insert({ exercise_id: eid, user_id: me.id, code }));
+          if (error) { lock(false); return toast('제출하지 못했어요: ' + error.message, true); }
+          toast(!judge ? '제출했어요! 👍' : judge.status === 'MANUAL' ? '제출했어요. 선생님이 확인할 거예요 👍' : judge.status === 'AC' ? '제출했어요! 자동 채점을 모두 통과했어요 🎉' : `제출했어요. 채점 결과는 ${judge.passed}/${judge.total} 통과예요`);
           route(true);
         };
         return p;
@@ -969,10 +1071,339 @@
         const p = mount(eid);
         if (!p) return;
         p.hidden = !p.hidden;
-        if (p.hidden) openPanels.delete(eid); else { openPanels.add(eid); $('textarea', p).focus(); }
+        if (p.hidden) openPanels.delete(eid); else { openPanels.add(eid); const f = $('textarea', p); if (f) f.focus(); }
       }));
       openPanels.forEach((eid) => { const p = mount(eid); if (p) p.hidden = false; });
     }];
+  }
+
+  /* ---------- 자동 채점 (학생 브라우저에서 파이썬 실행: Pyodide) ---------- */
+  const PY_URL = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
+  const PY_BOOT = [
+    'import sys, io, json, builtins',
+    'def _inp(prompt=""):',
+    '    s = sys.stdin.readline()',
+    '    if s == "":',
+    '        raise EOFError("EOF when reading a line")',
+    '    return s.rstrip("\\n")',
+    'builtins.input = _inp',
+    'def judge_run(code, inp):',
+    '    so, si, se = sys.stdout, sys.stdin, sys.stderr',
+    '    out = io.StringIO()',
+    '    sys.stdin = io.StringIO(inp)',
+    '    sys.stdout = out',
+    '    sys.stderr = io.StringIO()',
+    '    err = None',
+    '    try:',
+    '        exec(compile(code, "main.py", "exec"), {"__name__": "__main__"})',
+    '    except SystemExit:',
+    '        pass',
+    '    except BaseException as e:',
+    '        line = getattr(e, "lineno", None) if isinstance(e, SyntaxError) else None',
+    '        tb = e.__traceback__',
+    '        while tb is not None:',
+    '            if tb.tb_frame.f_code.co_filename == "main.py":',
+    '                line = tb.tb_lineno',
+    '            tb = tb.tb_next',
+    '        msg = e.msg if isinstance(e, SyntaxError) else str(e)',
+    '        err = (str(line) + "번째 줄 · " if line else "") + type(e).__name__ + (": " + msg if msg else "")',
+    '    finally:',
+    '        sys.stdout, sys.stdin, sys.stderr = so, si, se',
+    '    return json.dumps({"ok": err is None, "out": out.getvalue()[:20000], "err": err})',
+  ].join('\n');
+  const WORKER_SRC = `importScripts(${JSON.stringify(PY_URL + 'pyodide.js')});
+const PY = ${JSON.stringify(PY_BOOT)};
+let run = null;
+(async () => {
+  try {
+    const py = await loadPyodide({ indexURL: ${JSON.stringify(PY_URL)} });
+    py.runPython(PY);
+    run = py.globals.get('judge_run');
+    postMessage({ ready: true });
+  } catch (e) { postMessage({ fatal: String(e) }); }
+})();
+onmessage = (ev) => {
+  const d = ev.data;
+  try { postMessage(Object.assign({ id: d.id }, JSON.parse(run(d.code, d.input)))); }
+  catch (e) { postMessage({ id: d.id, ok: false, out: '', err: String(e) }); }
+};`;
+  let jw = null;
+  let jseq = 0;
+
+  function jworker() {
+    if (jw) return jw.p;
+    const w = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' })));
+    const p = new Promise((res, rej) => {
+      const to = setTimeout(() => rej(new Error('불러오기 시간 초과')), 90000);
+      w.addEventListener('message', (ev) => {
+        if (ev.data.ready) { clearTimeout(to); res(w); } else if (ev.data.fatal) { clearTimeout(to); rej(new Error(ev.data.fatal)); }
+      });
+      w.addEventListener('error', () => { clearTimeout(to); rej(new Error('실행 도구 오류')); });
+    });
+    jw = { w, p };
+    p.catch(() => { if (jw && jw.w === w) { w.terminate(); jw = null; } });
+    return p;
+  }
+
+  // 코드를 한 번 실행 → {status: OK | RE | TLE | LOAD, out, err}
+  async function runOnce(code, input, limit = 3000) {
+    let w;
+    try { w = await jworker(); } catch (e) { return { status: 'LOAD', out: '', err: String(e.message || e) }; }
+    return new Promise((resolve) => {
+      const id = ++jseq;
+      const on = (ev) => {
+        if (ev.data.id !== id) return;
+        clearTimeout(timer);
+        w.removeEventListener('message', on);
+        resolve(ev.data.ok ? { status: 'OK', out: ev.data.out } : { status: 'RE', out: ev.data.out, err: ev.data.err });
+      };
+      const timer = setTimeout(() => {
+        w.removeEventListener('message', on);
+        w.terminate();
+        jw = null;
+        resolve({ status: 'TLE', out: '' });
+      }, limit);
+      w.addEventListener('message', on);
+      w.postMessage({ id, code, input });
+    });
+  }
+
+  const normOut = (t) => String(t ?? '').replace(/\r/g, '').split('\n').map((l) => l.replace(/\s+$/, '')).join('\n').replace(/\n+$/, '');
+
+  const NUMRE = /-?\d+(?:\.\d+)?/g;
+  const TEST_MODES = { contains: '포함', nums: '숫자', nospace: '공백무시' };
+  function cmpOut(mode, got, exp) {
+    if (mode === 'contains') return normOut(got).includes(normOut(exp));
+    if (mode === 'nospace') return String(got ?? '').replace(/\s+/g, '') === String(exp ?? '').replace(/\s+/g, '');
+    if (mode === 'nums') {
+      const a = String(got ?? '').match(NUMRE) || [];
+      const b = String(exp ?? '').match(NUMRE) || [];
+      return a.length === b.length && b.every((x, i) => Math.abs(Number(a[i]) - Number(x)) <= 1e-6 * Math.max(1, Math.abs(Number(x))));
+    }
+    return normOut(got) === normOut(exp);
+  }
+
+  async function gradeAll(code, tests, onStep) {
+    const cases = [];
+    let passed = 0;
+    let status = 'AC';
+    for (let i = 0; i < tests.length; i += 1) {
+      if (onStep) onStep(i, tests.length);
+      const t = tests[i];
+      const r = await runOnce(code, t.input || '');
+      if (r.status === 'LOAD') throw new Error(r.err);
+      const st = r.status === 'OK' ? (cmpOut(t.mode, r.out, t.output) ? 'AC' : 'WA') : r.status;
+      cases.push({ ok: st === 'AC', st, mode: t.mode || '', hidden: !!t.hidden, input: t.input || '', expected: t.output || '', got: r.out || '', err: r.err || '' });
+      if (st === 'AC') passed += 1; else if (status === 'AC') status = st;
+      if (st === 'TLE') {
+        for (let k = i + 1; k < tests.length; k += 1) cases.push({ ok: false, st: 'SKIP', hidden: !!tests[k].hidden, input: '', expected: '', got: '', err: '' });
+        break;
+      }
+    }
+    return { status, passed, total: tests.length, cases };
+  }
+
+  const ST_TEXT = { WA: '틀렸어요', RE: '실행 오류', TLE: '시간 초과 (3초)', SKIP: '실행 안 함' };
+  const judgeBadge = (j) => {
+    if (!j) return '';
+    if (j.status === 'MANUAL') return '<span class="badge">✍️ 선생님 확인 대기</span>';
+    const man = j.manual ? ` <span class="badge">✍️ 서술 ${j.manual}개 확인 대기</span>` : '';
+    return (j.status === 'AC' ? `<span class="badge ok">✅ 통과 ${j.passed}/${j.total}</span>` : `<span class="badge bad">❌ ${j.passed}/${j.total}</span>`) + man;
+  };
+
+  function renderRun(r) {
+    if (r.status === 'LOAD') return `<div class="jsum bad">⚠️ 파이썬 실행 도구를 불러오지 못했어요.<br><span class="small">인터넷 연결을 확인해 보세요. (${esc(r.err)})</span></div>`;
+    if (r.status === 'TLE') return '<div class="jsum bad">⏱ 시간 초과 (3초) — 무한 반복이 아닌지 확인해 보세요.</div>';
+    return `<div class="muted small">출력</div><pre class="jout"><code>${esc(r.out) || '(출력 없음)'}</code></pre>${r.status === 'RE' ? `<div class="jsum bad">❌ ${esc(r.err)}</div>` : ''}`;
+  }
+
+  const MODE_HINT = { contains: ' (이 내용이 출력에 들어 있으면 통과)', nums: ' (숫자만 비교해요)', nospace: ' (공백은 무시해요)' };
+
+  function summarize(res, parts) {
+    const passed = (res ? res.passed : 0) + (parts ? parts.passed : 0);
+    const total = (res ? res.total : 0) + (parts ? parts.total : 0);
+    const manual = parts ? parts.manual : 0;
+    let status = 'AC';
+    if (total === 0) status = 'MANUAL';
+    else if (passed !== total) status = res && res.status !== 'AC' && res.status !== 'WA' ? res.status : 'WA';
+    return { status, passed, total, manual };
+  }
+
+  function casesHtml(res) {
+    let opened = false;
+    return res.cases.map((c, i) => {
+      const open = !c.ok && c.st !== 'SKIP' && !opened;
+      if (open) opened = true;
+      let inner;
+      if (c.st === 'SKIP') inner = '';
+      else if (c.hidden) inner = `<p class="muted small">숨겨진 테스트라 입력과 정답은 보여주지 않아요.</p>${c.st === 'RE' ? `<div class="jsum bad">${esc(c.err)}</div>` : ''}`;
+      else {
+        inner = `<div class="jgrid"><div><b>입력</b><pre><code>${esc(c.input) || '(없음)'}</code></pre></div>
+          <div><b>기대 출력${MODE_HINT[c.mode] || ''}</b><pre><code>${esc(c.expected) || '(없음)'}</code></pre></div>
+          <div><b>내 출력</b><pre><code>${esc(c.got) || '(없음)'}</code></pre></div></div>${c.st === 'RE' ? `<div class="jsum bad">${esc(c.err)}</div>` : ''}`;
+      }
+      return `<details class="jcase ${c.ok ? 'ok' : 'bad'}" ${open ? 'open' : ''}><summary>${c.ok ? '✅' : c.st === 'SKIP' ? '⏭' : '❌'} 테스트 ${i + 1}${c.hidden ? ' (숨김)' : ''}${c.ok ? '' : ` · ${ST_TEXT[c.st] || ''}`}</summary>${inner}</details>`;
+    }).join('');
+  }
+
+  function partsHtml(parts, answers, reveal) {
+    return `<div class="parts-res">${parts.items.map((it, i) => {
+      const a = answers[i];
+      const icon = it.manual ? '✍️' : it.ok ? '✅' : '❌';
+      const cls = it.manual ? 'man' : it.ok ? 'ok' : 'bad';
+      const right = reveal && (it.manual || !it.ok)
+        ? `<details class="small"><summary>${it.manual ? '모범 답안 보기' : '정답 보기'}</summary><pre><code>${esc(a.value)}${(a.alts || []).length && !it.manual ? '\n\n(다른 정답) ' + esc(a.alts.join('  /  ')) : ''}</code></pre></details>` : '';
+      return `<div class="prow ${cls}">${icon} <b>${esc(a.label || i + 1)}</b>${it.manual ? ' <span class="muted small">선생님이 확인해요</span>' : it.ok ? '' : ' <span class="muted small">다시 확인해 보세요</span>'}${right}</div>`;
+    }).join('')}</div>`;
+  }
+
+  function renderGrade(res, parts, answers, reveal) {
+    const s = summarize(res, parts);
+    const man = s.manual ? ` · ✍️ 서술 ${s.manual}개는 선생님이 확인해요` : '';
+    const head = s.status === 'MANUAL' ? '<div class="jsum">✍️ 서술형 문제예요. 제출하면 선생님이 확인해요.</div>'
+      : s.status === 'AC' ? `<div class="jsum ok">✅ 자동 채점은 모두 통과했어요! (${s.passed}/${s.total})${man}</div>`
+        : `<div class="jsum bad">❌ ${s.passed} / ${s.total} 통과${man}</div>`;
+    return head + (parts ? partsHtml(parts, answers, reveal) : '') + (res ? casesHtml(res) : '');
+  }
+
+  /* ---------- 정답 (결과 예측 · 빈칸 · 객관식 · 서술) ---------- */
+  const ANS_TYPES = { t: '글자 그대로', c: '번호 선택', k: '키워드 포함', x: '식·코드 한 줄', m: '서술(선생님 확인)' };
+  const normAnswers = (arr) => (Array.isArray(arr) ? arr : []).filter((a) => a && a.value != null && ANS_TYPES[a.type])
+    .map((a) => ({ label: String(a.label ?? ''), type: a.type, value: String(a.value), alts: Array.isArray(a.alts) ? a.alts.map(String) : [] }));
+
+  const CHOICE_MAP = { '①': 1, '②': 2, '③': 3, '④': 4, '⑤': 5, '가': 1, '나': 2, '다': 3, '라': 4, '마': 5, 'ㄱ': 1, 'ㄴ': 2, 'ㄷ': 3, 'ㄹ': 4, 'ㅁ': 5 };
+  const normChoice = (t) => [...new Set([...String(t ?? '')].map((ch) => CHOICE_MAP[ch] || (/[1-9]/.test(ch) ? Number(ch) : 0)).filter(Boolean))].sort().join('');
+  const normLines = (t) => String(t ?? '').replace(/\r/g, '').split('\n').map((l) => l.trim().replace(/\s+/g, ' ')).join('\n').replace(/^\n+|\n+$/g, '');
+  const normFlat = (t) => String(t ?? '').replace(/\s+/g, ' ').trim();
+  function normExpr(t) {
+    let out = '';
+    let q = '';
+    for (const ch of String(t ?? '').replace(/\r/g, '').trim()) {
+      if (q) { if (ch === q) { out += '"'; q = ''; } else out += ch; }
+      else if (ch === '"' || ch === "'") { q = ch; out += '"'; }
+      else if (!/\s/.test(ch)) out += ch;
+    }
+    return out;
+  }
+
+  // 한 칸 채점 → true / false / null(서술: 선생님이 확인)
+  function checkPart(a, val) {
+    if (a.type === 'm') return null;
+    const v = String(val ?? '');
+    if (!v.trim()) return false;
+    const all = [a.value, ...(a.alts || [])];
+    if (a.type === 't') return all.some((x) => normLines(x) === normLines(v) || normFlat(x) === normFlat(v));
+    if (a.type === 'c') { const g = normChoice(v); return !!g && all.some((x) => normChoice(x) === g); }
+    if (a.type === 'k') {
+      const lv = v.toLowerCase().replace(/\s+/g, '');
+      return all.some((x) => x.split(';').map((k) => k.trim().toLowerCase().replace(/\s+/g, '')).filter(Boolean).every((k) => lv.includes(k)));
+    }
+    if (a.type === 'x') return all.some((x) => normExpr(x) === normExpr(v));
+    return false;
+  }
+
+  function gradeParts(answers, vals) {
+    const items = answers.map((a, i) => {
+      const r = checkPart(a, vals[i]);
+      return { ok: r === true, manual: r === null };
+    });
+    const auto = items.filter((x) => !x.manual);
+    return { items, passed: auto.filter((x) => x.ok).length, total: auto.length, manual: items.length - auto.length };
+  }
+
+  const PART_MARK = '#### 답안 ####';
+  function packSubmission(code, answers, vals) {
+    const body = answers.map((a, i) => `### ${a.label || i + 1}\n${vals[i] || ''}`).join('\n\n');
+    return (code.trim() ? code.replace(/\s+$/, '') + '\n\n' : '') + PART_MARK + '\n' + body;
+  }
+  function unpackSubmission(text, n) {
+    const t = String(text ?? '');
+    const i = t.indexOf(PART_MARK);
+    const vals = Array(n).fill('');
+    if (i < 0) return { code: t, vals };
+    t.slice(i + PART_MARK.length).split(/^### /m).slice(1).forEach((sec, k) => {
+      if (k < n) { const nl = sec.indexOf('\n'); vals[k] = nl < 0 ? '' : sec.slice(nl + 1).replace(/\n+$/, ''); }
+    });
+    return { code: t.slice(0, i).replace(/\s+$/, ''), vals };
+  }
+
+  function answersToText(answers) {
+    return answers.map((a) => [`@ ${a.label} | ${a.type}`, a.value, ...(a.alts || []).map((x) => '~ ' + x)].join('\n')).join('\n');
+  }
+  function textToAnswers(text) {
+    const out = [];
+    let cur = null;
+    String(text ?? '').replace(/\r/g, '').split('\n').forEach((l) => {
+      const m = l.match(/^@\s*(.*?)\s*\|\s*([tckxm])\s*$/);
+      if (m) { cur = { label: m[1], type: m[2], vl: [], alts: [] }; out.push(cur); return; }
+      if (!cur) return;
+      if (l.startsWith('~ ')) cur.alts.push(l.slice(2)); else cur.vl.push(l);
+    });
+    return out.map((c) => {
+      while (c.vl.length && c.vl[c.vl.length - 1] === '') c.vl.pop();
+      return { label: c.label, type: c.type, value: c.vl.join('\n'), alts: c.alts };
+    }).filter((a) => a.value !== '');
+  }
+
+  /* ---------- 테스트 케이스 글자 ↔ 데이터 ---------- */
+  const normTests = (arr) => (Array.isArray(arr) ? arr : []).filter((t) => t && (t.input != null || t.output != null))
+    .map((t) => ({ input: String(t.input ?? ''), output: String(t.output ?? ''), hidden: !!t.hidden, ...(TEST_MODES[t.mode] ? { mode: t.mode } : {}) }));
+
+  function testsToText(tests) {
+    return tests.map((t) => {
+      const ins = t.input === '' ? [] : t.input.replace(/\n$/, '').split('\n').map((l) => '>>> ' + l);
+      const outs = t.output === '' ? [] : t.output.split('\n');
+      return [`---${t.hidden ? ' 숨김' : ''}${TEST_MODES[t.mode] ? ' ' + TEST_MODES[t.mode] : ''}`, ...ins, ...outs].join('\n');
+    }).join('\n');
+  }
+
+  function textToTests(text) {
+    const cases = [];
+    let cur = null;
+    String(text ?? '').replace(/\r/g, '').split('\n').forEach((l) => {
+      const m = l.match(/^---((?:\s+(?:숨김|포함|숫자|공백무시))*)\s*$/);
+      if (m) {
+        const tk = m[1].split(/\s+/).filter(Boolean);
+        cur = { hidden: tk.includes('숨김'), mode: tk.includes('포함') ? 'contains' : tk.includes('숫자') ? 'nums' : tk.includes('공백무시') ? 'nospace' : '', ins: [], outs: [] };
+        cases.push(cur);
+        return;
+      }
+      if (!cur) { if (!l.trim()) return; cur = { hidden: false, mode: '', ins: [], outs: [] }; cases.push(cur); }
+      if (l.startsWith('>>>')) cur.ins.push(l.slice(3).replace(/^ /, '')); else cur.outs.push(l);
+    });
+    return cases.map((c) => {
+      while (c.outs.length && c.outs[c.outs.length - 1] === '') c.outs.pop();
+      return { input: c.ins.length ? c.ins.join('\n') + '\n' : '', output: c.outs.join('\n'), hidden: c.hidden, ...(c.mode ? { mode: c.mode } : {}) };
+    }).filter((t) => t.input || t.output);
+  }
+
+  // 문제 본문의 입출력 예시(io/out 블록)에서 테스트 만들기
+  function testsFromBody(body) {
+    const bl = parseBlocks(body);
+    const io = bl.filter((b) => b.t === 'io');
+    const tests = [];
+    if (io.length) {
+      io.forEach((b) => {
+        const ls = b.text.split('\n').filter((l) => l.trim());
+        if (ls.length && ls.every((l) => l.includes('→'))) {
+          ls.forEach((l) => { const [a, o] = l.replace(/^>>> ?/, '').split('→'); tests.push({ input: a.trim() + '\n', output: o.trim(), hidden: false }); });
+          return;
+        }
+        let cur = null;
+        b.text.split('\n').forEach((l) => {
+          if (l.startsWith('>>>')) {
+            if (!cur || cur.outs.length) { cur = { ins: [], outs: [] }; tests.push(cur); }
+            cur.ins.push(l.replace(/^>>> ?/, ''));
+          } else { if (!cur) { cur = { ins: [], outs: [] }; tests.push(cur); } cur.outs.push(l); }
+        });
+      });
+      return tests.map((c) => (c.ins ? {
+        input: c.ins.length ? c.ins.join('\n') + '\n' : '', output: c.outs.filter((l) => l.trim() !== '(출력 없음)').join('\n').replace(/\n+$/, ''), hidden: false,
+      } : c));
+    }
+    const out = bl.filter((b) => b.t === 'out');
+    if (out.length === 1 && !body.includes('입력')) return [{ input: '', output: out[0].text.replace(/\n+$/, ''), hidden: false }];
+    return [];
   }
 
   /* ---------- 숙제 ---------- */
@@ -1158,6 +1589,49 @@
       route(true);
     }));
     $('#expSet', v).onclick = () => exportSet(set, exs);
+    $('#impKey', v).onclick = () => {
+      if (testsColumn === false || answersColumn === false) return toast('먼저 update4.sql, update5.sql을 실행해 주세요', true);
+      $('#impKeyFile', v).click();
+    };
+    $('#impKeyFile', v).onchange = async (ev) => {
+      const f = ev.target.files[0];
+      ev.target.value = '';
+      if (!f) return;
+      let parsed;
+      try { parsed = parseSetJson(await f.text()); } catch (e) { return toast(e.message, true); }
+      const pool = new Map();
+      parsed.rows.forEach((r) => { const k = normFlat(r.body); if (!pool.has(k)) pool.set(k, []); pool.get(k).push(r); });
+      const todo = [];
+      exs.forEach((e) => {
+        const list = pool.get(normFlat(e.body));
+        const r = list && list.shift();
+        if (r && (r.tests.length || r.answers.length)) todo.push({ e, r });
+      });
+      if (!todo.length) return toast('이 문제집과 내용이 같은 문제를 찾지 못했어요. 문제집을 지우고 JSON으로 다시 가져와 보세요.', true);
+      const miss = exs.length - todo.length;
+      if (!confirm(`${todo.length}문제의 채점 테스트와 정답을 덮어쓸까요?\n(문제 내용과 학생 제출물은 그대로예요${miss ? ` · 내용이 달라 건너뛰는 문제 ${miss}개` : ''})`)) return;
+      const btn = $('#impKey', v);
+      btn.disabled = true;
+      for (let i = 0; i < todo.length; i += 10) {
+        const res = await Promise.all(todo.slice(i, i + 10).map((x) => sb.from('exercises').update({ tests: x.r.tests, answers: x.r.answers }).eq('id', x.e.id)));
+        if (res.some((r) => r.error)) { btn.disabled = false; return toast('저장하지 못했어요 (update4.sql, update5.sql을 실행했나요?)', true); }
+      }
+      toast(`${todo.length}문제에 정답·채점을 넣었어요${miss ? ` (건너뜀 ${miss})` : ''}`);
+      route(true);
+    };
+    $('#autoTests', v).onclick = async (ev) => {
+      if (testsColumn === false) return toast('먼저 update4.sql을 실행해 주세요', true);
+      const todo = exs.map((e) => ({ e, t: (e.tests || []).length ? [] : testsFromBody(e.body) })).filter((x) => x.t.length);
+      if (!todo.length) return toast('새로 만들 테스트가 없어요 (이미 있거나 입출력 예시가 없어요)');
+      if (!confirm(`입출력 예시가 있는 ${todo.length}문제에 자동 채점 테스트를 만들까요?\n(이미 테스트가 있는 문제는 그대로 둬요)`)) return;
+      ev.target.disabled = true;
+      for (let i = 0; i < todo.length; i += 10) {
+        const res = await Promise.all(todo.slice(i, i + 10).map((x) => sb.from('exercises').update({ tests: x.t }).eq('id', x.e.id)));
+        if (res.some((r) => r.error)) { ev.target.disabled = false; return toast('저장하지 못했어요 (update4.sql을 실행했나요?)', true); }
+      }
+      toast(`${todo.length}문제에 채점 테스트를 만들었어요`);
+      route(true);
+    };
 
     v.querySelectorAll('[data-edit]').forEach((b) => (b.onclick = () => openExEditor(set, exs, byId(b.dataset.edit), null)));
     v.querySelectorAll('[data-add]').forEach((b) => (b.onclick = () => {
@@ -1204,7 +1678,7 @@
   };
 
   function openExEditor(set, list, ex, base) {
-    const cur = ex || { ...base, label: '', points: null, tags: [], source: '', body: '', check_point: '' };
+    const cur = ex || { ...base, label: '', points: null, tags: [], source: '', body: '', check_point: '', answers: [] };
     const uniq = (k) => [...new Set(list.map((e) => e[k]).filter(Boolean))];
     const m = modal(`
       <h3>${ex ? `문제 수정 <span class="muted small">(고유 번호 ${ex.id})</span>` : '문제 추가'}</h3>
@@ -1228,6 +1702,21 @@
         <div class="snips">${Object.keys(SNIPS).map((k) => `<button type="button" class="ghost" data-snip="${esc(k)}">${esc(k)}</button>`).join('')}</div>
         <textarea id="fBody" class="code" style="min-height:220px" required>${esc(cur.body)}</textarea>
         <label>미리보기</label><div id="fPrev" class="ex-body prev"></div>
+        <label>자동 채점 테스트 (선택) <span class="muted small">— 비워 두면 채점 없이 제출만 받아요</span></label>
+        <div class="snips">
+          <button type="button" class="ghost" id="tFromBody">문제의 입출력 예시 가져오기</button>
+          <button type="button" class="ghost" id="tFill">정답 코드로 기대 출력 채우기</button>
+        </div>
+        <textarea id="fTests" class="code" style="min-height:130px" spellcheck="false" placeholder="---&#10;>>> 5&#10;25&#10;--- 숨김&#10;>>> 7&#10;49">${esc(testsToText(cur.tests || []))}</textarea>
+        <p class="muted small" style="margin:2px 0">한 테스트는 <b>---</b> 줄로 시작해요. <b>&gt;&gt;&gt;</b> 로 시작하는 줄은 입력(input() 한 번에 한 줄), 나머지 줄은 기대 출력이에요. <b>--- 숨김</b> 은 학생에게 입력·정답을 안 보여주는 테스트예요.</p>
+        <div id="tRefBox" hidden>
+          <label>정답 코드 <span class="muted small">(저장되지 않아요. 기대 출력이 빈 테스트의 출력을 이 코드로 채워요)</span></label>
+          <textarea id="fRef" class="code" style="min-height:110px" spellcheck="false"></textarea>
+          <div class="form-actions"><button type="button" class="ghost" id="tRun">▶ 실행해서 채우기</button></div>
+        </div>
+        <label>정답 칸 (선택) <span class="muted small">— 결과 예측·빈칸·객관식·서술형 답을 적어 두면 학생 화면에 답 칸이 생기고 채점돼요</span></label>
+        <textarea id="fAns" class="code" style="min-height:110px" spellcheck="false" placeholder="@ (가) | t&#10;실행 결과&#10;~ 다른 정답&#10;@ 객관식 | c&#10;3">${esc(answersToText(cur.answers || []))}</textarea>
+        <p class="muted small" style="margin:2px 0"><b>@ 이름 | 유형</b> 줄로 칸을 만들고, 아래 줄이 정답이에요. <b>~ </b> 로 시작하는 줄은 다른 정답이에요. 유형: <b>t</b> 글자 그대로(공백 정리) · <b>c</b> 번호 선택(①②, 1,2, 가나) · <b>k</b> 키워드 포함(<b>;</b> 로 여러 개) · <b>x</b> 코드 한 줄(공백·따옴표 무시) · <b>m</b> 서술(선생님이 확인)</p>
         <label>확인 포인트 (선택)<textarea id="fCheck" style="min-height:60px">${esc(cur.check_point || '')}</textarea></label>
         <div class="form-actions"><button class="primary" id="fSave">저장</button><button type="button" class="ghost" id="fCancel">취소</button></div>
       </form>`);
@@ -1236,6 +1725,29 @@
     prev();
     q('#fBody').oninput = prev;
     q('#fCancel').onclick = m.close;
+    q('#tFromBody').onclick = () => {
+      const t = testsFromBody(q('#fBody').value);
+      if (!t.length) return toast('본문에서 입출력 예시를 찾지 못했어요', true);
+      q('#fTests').value = testsToText(t);
+    };
+    q('#tFill').onclick = () => { q('#tRefBox').hidden = !q('#tRefBox').hidden; };
+    q('#tRun').onclick = async () => {
+      const ref = q('#fRef').value;
+      if (!ref.trim()) return toast('정답 코드를 입력하세요', true);
+      const tests = textToTests(q('#fTests').value);
+      const btn = q('#tRun');
+      btn.disabled = true;
+      btn.textContent = '⏳ 실행 중…';
+      for (const t of tests) {
+        if (t.output) continue;
+        const r = await runOnce(ref, t.input);
+        if (r.status !== 'OK') { toast(r.status === 'LOAD' ? '실행 도구를 불러오지 못했어요' : `정답 코드 실행 실패: ${r.err || r.status}`, true); break; }
+        t.output = r.out.replace(/\s+$/, '');
+      }
+      q('#fTests').value = testsToText(tests);
+      btn.disabled = false;
+      btn.textContent = '▶ 실행해서 채우기';
+    };
     m.el.querySelectorAll('[data-snip]').forEach((b) => (b.onclick = () => {
       const t = q('#fBody');
       const s = t.selectionStart;
@@ -1256,6 +1768,12 @@
         chapter: q('#fCh').value.trim() || null, section: q('#fSec').value.trim() || null,
         body, check_point: q('#fCheck').value.trim() || null,
       };
+      const tests = textToTests(q('#fTests').value);
+      if (testsColumn !== false) row.tests = tests;
+      else if (tests.length) toast('테스트는 update4.sql을 실행한 뒤에 저장돼요', true);
+      const answers = textToAnswers(q('#fAns').value);
+      if (answersColumn !== false) row.answers = answers;
+      else if (answers.length) toast('정답은 update5.sql을 실행한 뒤에 저장돼요', true);
       const btn = q('#fSave');
       btn.disabled = true;
       let id = ex ? ex.id : null;
@@ -1342,15 +1860,69 @@
     };
   }
 
-  /* ---------- 제출함 (선생님 전용) ---------- */
-  async function pageReview(setId, userId) {
-    if (!isAdmin()) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
-    if (setId && userId) return reviewDetail(Number(setId), userId);
+  /* ---------- 제출함 (선생님 전용): 학생별 → 문제집별 ---------- */
+  const SQL_REGRADE = 'grant update (judge) on public.submissions to authenticated;\ncreate policy "submissions admin update" on public.submissions for update to authenticated using (public.is_admin()) with check (public.is_admin());';
 
-    const [sr, subs, pr] = await Promise.all([
+  // 채점할 수 있는 문제인가? (테스트 또는 자동 채점 답칸이 있어야 해요. 서술형만 있으면 건너뛰어요)
+  const gradable = (ex) => !!ex && ((ex.tests || []).length > 0 || (ex.answers || []).some((a) => a.type !== 'm'));
+
+  // 채점 안 된 제출(judge 없음)을 한꺼번에 채점해서 저장. force=true 면 이미 채점된 것도 다시.
+  async function bulkGrade(subs, exMap, statusEl, force = false) {
+    const todo = subs.filter((s) => (force || !s.judge) && gradable(exMap[s.exercise_id]));
+    if (!todo.length) { toast('채점할 제출이 없어요'); return null; }
+    const out = { ok: 0, ac: 0, fail: 0, err: 0 };
+    for (let i = 0; i < todo.length; i += 1) {
+      const sub = todo[i];
+      const ex = exMap[sub.exercise_id];
+      const tests = ex.tests || [];
+      const answers = ex.answers || [];
+      if (statusEl) statusEl.innerHTML = `<span class="muted">⏳ 채점 중… ${i + 1} / ${todo.length}${i === 0 ? ' (처음엔 파이썬을 준비하느라 몇 초 걸려요)' : ''}</span>`;
+      const u = unpackSubmission(sub.code, answers.length);
+      let res = null;
+      if (tests.length) {
+        if (!u.code.trim()) res = { status: 'WA', passed: 0, total: tests.length, cases: [] };
+        else {
+          try { res = await gradeAll(u.code, tests); }
+          catch (e) { if (statusEl) statusEl.innerHTML = `<span class="bad-t">⚠️ 파이썬 실행 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러주세요. (${esc(e.message || e)})</span>`; return out; }
+        }
+      }
+      const parts = answers.length ? gradeParts(answers, u.vals) : null;
+      const judge = summarize(res, parts);
+      const { data, error } = await sb.from('submissions').update({ judge }).eq('id', sub.id).select('id');
+      if (error || !data || !data.length) {
+        if (statusEl) statusEl.innerHTML = `<div class="bad-t">⚠️ 채점 결과를 저장하지 못했어요. Supabase SQL Editor에서 아래를 한 번만 실행해 주세요.<pre><code>${esc(SQL_REGRADE)}</code></pre></div>`;
+        return out;
+      }
+      sub.judge = judge;
+      out.ok += 1;
+      if (judge.status === 'AC') out.ac += 1; else out.fail += 1;
+    }
+    return out;
+  }
+
+  // 일괄 채점 버튼 연결: sel = 버튼, getSubs = 대상 제출들, exMap
+  function bindBulk(v, getSubs, exMap) {
+    const btn = $('[data-bulkgrade]', v);
+    if (!btn) return;
+    const st = $('#bgStatus', v);
+    btn.onclick = async () => {
+      const force = btn.dataset.bulkgrade === 'all';
+      if (force && !confirm('이미 채점된 제출까지 모두 다시 채점할까요?')) return;
+      btn.disabled = true;
+      const r = await bulkGrade(getSubs(), exMap, st, force);
+      btn.disabled = false;
+      if (!r || !r.ok) return;
+      toast(`채점 완료: ${r.ok}건 (통과 ${r.ac} · 미통과 ${r.fail})`);
+      route(true);
+    };
+  }
+
+  async function loadReviewData() {
+    const [sr, subs, pr, exs] = await Promise.all([
       sb.from('problem_sets').select('id,title,short_name,week').order('week', { ascending: true, nullsFirst: false }).order('id'),
-      fetchAll((a, b) => sb.from('submissions').select('id,set_id,user_id,exercise_id,created_at').order('id').range(a, b)),
+      fetchAll((a, b) => sb.from('submissions').select('id,set_id,user_id,exercise_id,created_at,judge,code').order('id').range(a, b)),
       sb.from('profiles').select('id,username'),
+      fetchAll((a, b) => sb.from('exercises').select('id,set_id,tests,answers').order('id').range(a, b)),
     ]);
     if (sr.error) throw sr.error;
     if (pr.error) throw pr.error;
@@ -1358,32 +1930,77 @@
     pr.data.forEach((p) => { names[p.id] = p.username; });
     const setMap = {};
     sr.data.forEach((s, i) => { setMap[s.id] = { ...s, order: i }; });
+    const exMap = {};
+    exs.forEach((e) => { exMap[e.id] = e; });
+    return { sets: sr.data, subs: subs.filter((s) => setMap[s.set_id]), names, setMap, exMap };
+  }
+  const pendingOf = (subs, exMap) => subs.filter((s) => !s.judge && gradable(exMap[s.exercise_id]));
+  const pendBadge = (n) => (n ? ` <span class="badge warn">미채점 ${n}</span>` : '');
+  const bulkBar = (n, label) => `<div class="card bulkbar"><div><b>${label}</b> <span class="muted small">테스트/자동 채점 답이 있는 문제만 채점해요. 서술형은 건너뛰어요.</span></div>
+    <div class="form-actions"><button class="primary" data-bulkgrade="pending" ${n ? '' : 'disabled'}>⚖️ 미채점 ${n}건 일괄 채점</button><button class="ghost" data-bulkgrade="all" title="이미 채점된 것도 다시 채점해요">전체 다시 채점</button></div>
+    <div id="bgStatus" class="small"></div></div>`;
 
-    const groups = {};
+  async function pageReview(setId, userId) {
+    if (!isAdmin()) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
+    if (setId === 'u' && userId) return reviewStudent(userId);
+    if (setId && userId) return reviewDetail(Number(setId), userId);
+
+    const { subs, names, exMap } = await loadReviewData();
+    const stu = {};
     subs.forEach((s) => {
-      if (reviewSet && String(s.set_id) !== reviewSet) return;
-      const k = `${s.set_id}:${s.user_id}`;
-      const g = groups[k] || (groups[k] = { set_id: s.set_id, user_id: s.user_id, ex: new Set(), n: 0, last: s.created_at });
-      g.ex.add(s.exercise_id);
-      g.n += 1;
+      const g = stu[s.user_id] || (stu[s.user_id] = { id: s.user_id, sets: new Set(), ex: new Set(), n: 0, last: s.created_at, pend: 0 });
+      g.sets.add(s.set_id); g.ex.add(s.exercise_id); g.n += 1;
       if (s.created_at > g.last) g.last = s.created_at;
+      if (!s.judge && gradable(exMap[s.exercise_id])) g.pend += 1;
     });
-    const list = Object.values(groups).filter((g) => setMap[g.set_id]).sort((a, b) =>
-      (names[a.user_id] || '').localeCompare(names[b.user_id] || '') || setMap[a.set_id].order - setMap[b.set_id].order);
-
+    const list = Object.values(stu).sort((a, b) => (names[a.id] || '').localeCompare(names[b.id] || ''));
+    const pend = pendingOf(subs, exMap).length;
     const rows = list.length ? list.map((g) => `
-      <a class="row" href="#/review/${g.set_id}/${g.user_id}">
-        <div class="row-main"><b>${esc(names[g.user_id] || '(알 수 없음)')} - ${esc(shortOf(setMap[g.set_id]))}</b>
-          <span class="muted small"> 푼 문제 ${g.ex.size}개 · 제출 ${g.n}회</span></div>
+      <a class="row" data-nm="${esc((names[g.id] || '').toLowerCase())}" href="#/review/u/${g.id}">
+        <div class="row-main"><b>👤 ${esc(names[g.id] || '(알 수 없음)')}</b>${pendBadge(g.pend)}
+          <span class="muted small"> 문제집 ${g.sets.size}개 · 푼 문제 ${g.ex.size}개 · 제출 ${g.n}회</span></div>
         <div class="muted small meta">최근 ${fmt(g.last)}</div>
       </a>`).join('') : '<p class="muted center pad">아직 제출된 풀이가 없어요.</p>';
-
     return [`
-      <div class="page-head"><h2>📥 제출함</h2>
-        <select id="rvSet" style="width:auto"><option value="">전체 문제집</option>${sr.data.map((s) => `<option value="${s.id}" ${String(s.id) === reviewSet ? 'selected' : ''}>${esc(shortOf(s))}</option>`).join('')}</select></div>
-      <p class="muted">학생별·문제집별로 모아 두었어요. 누르면 푼 문제들이 나와요. 이 목록은 선생님만 볼 수 있어요.</p>
+      <div class="page-head"><h2>📥 제출함</h2><input type="search" id="rvQ" placeholder="학생 이름 검색" style="width:auto;min-width:160px"></div>
+      <p class="muted">학생별로 모아 두었어요. 학생을 누르면 그 학생이 푼 문제집이 나와요. 이 목록은 선생님만 볼 수 있어요.</p>
+      ${bulkBar(pend, '전체 학생')}
+      <div class="card list" id="rvList">${rows}</div>`,
+    (v) => {
+      $('#rvQ', v).oninput = (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        v.querySelectorAll('#rvList .row').forEach((r) => { r.style.display = q && !r.dataset.nm.includes(q) ? 'none' : ''; });
+      };
+      bindBulk(v, () => subs, exMap);
+    }];
+  }
+
+  async function reviewStudent(userId) {
+    const { sets, subs: all, names, setMap, exMap } = await loadReviewData();
+    if (!names[userId]) return notFound();
+    const subs = all.filter((s) => s.user_id === userId);
+    const groups = {};
+    subs.forEach((s) => {
+      const g = groups[s.set_id] || (groups[s.set_id] = { set_id: s.set_id, ex: new Set(), n: 0, last: s.created_at, pend: 0, ac: 0, judged: 0 });
+      g.ex.add(s.exercise_id); g.n += 1;
+      if (s.created_at > g.last) g.last = s.created_at;
+      if (!s.judge && gradable(exMap[s.exercise_id])) g.pend += 1;
+    });
+    const list = Object.values(groups).sort((a, b) => setMap[a.set_id].order - setMap[b.set_id].order);
+    const pend = pendingOf(subs, exMap).length;
+    const rows = list.length ? list.map((g) => `
+      <a class="row" href="#/review/${g.set_id}/${userId}">
+        <div class="row-main"><b>📄 ${esc(shortOf(setMap[g.set_id]))}</b> <span class="muted small">${esc(setMap[g.set_id].title)}</span>${pendBadge(g.pend)}
+          <span class="muted small"> 푼 문제 ${g.ex.size}개 · 제출 ${g.n}회</span></div>
+        <div class="muted small meta">최근 ${fmt(g.last)}</div>
+      </a>`).join('') : '<p class="muted center pad">이 학생이 제출한 풀이가 없어요.</p>';
+    return [`
+      <p><a href="#/review">← 제출함</a></p>
+      <div class="page-head"><h2>👤 ${esc(names[userId])}</h2></div>
+      <p class="muted">푼 문제집 ${list.length}개 · 문제집을 누르면 푼 문제들이 나와요.</p>
+      ${bulkBar(pend, `${esc(names[userId])} 학생`)}
       <div class="card list">${rows}</div>`,
-    (v) => { $('#rvSet', v).onchange = (e) => { reviewSet = e.target.value; route(); }; }];
+    (v) => bindBulk(v, () => subs, exMap)];
   }
 
   async function reviewDetail(setId, userId) {
@@ -1392,7 +2009,7 @@
       sb.from('profiles').select('id,username').eq('id', userId).maybeSingle(),
       fetchAll((a, b) => sb.from('exercises').select('*').eq('set_id', setId).order('position').order('id').range(a, b)),
       fetchAll((a, b) => sb.from('submissions')
-        .select('id,exercise_id,version,code,created_at,submission_comments(id,content,created_at)')
+        .select('*,submission_comments(id,content,created_at)')
         .eq('set_id', setId).eq('user_id', userId).order('id').range(a, b)),
     ]);
     if (sr.error) throw sr.error;
@@ -1400,17 +2017,20 @@
     const L = layoutEx(exs);
     const subsBy = {};
     subs.forEach((s) => { (subsBy[s.exercise_id] = subsBy[s.exercise_id] || []).push(s); });
+    const exMapD = {};
+    exs.forEach((e) => { exMapD[e.id] = e; });
+    const pendD = pendingOf(subs, exMapD).length;
     const title = `${pr.data.username} - ${shortOf(sr.data)}`;
     const solved = L.normal.concat(L.elite).filter((e) => subsBy[e.id]);
 
     const item = (e) => {
       const vers = subsBy[e.id];
       const sel = vers.find((s) => s.id === reviewVer.get(e.id)) || vers[vers.length - 1];
-      const tabs = vers.map((s) => `<button class="${s.id === sel.id ? 'on' : ''}" data-vt="${e.id}:${s.id}">v${s.version}</button>`).join('');
+      const tabs = vers.map((s) => `<button class="${s.id === sel.id ? 'on' : ''}" data-vt="${e.id}:${s.id}">v${s.version}${s.judge ? (s.judge.status === 'AC' ? ' ✅' : ' ❌') : ''}</button>`).join('');
       const panes = vers.map((s) => {
         const cs = (s.submission_comments || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
         return `<div class="vpane" data-vp="${e.id}:${s.id}" ${s.id === sel.id ? '' : 'hidden'}>
-          <div class="muted small">v${s.version} · ${fmt(s.created_at)} <button class="link danger" data-delsub="${s.id}">이 제출 삭제</button></div>
+          <div class="muted small">v${s.version} · ${fmt(s.created_at)} ${judgeBadge(s.judge)} <button class="link danger" data-delsub="${s.id}">이 제출 삭제</button></div>
           <pre><code>${esc(s.code)}</code></pre>
           ${cs.map((c) => `<div class="tcomment"><span class="badge">선생님</span> <span class="muted small">${fmt(c.created_at)}</span> <button class="link danger" data-delcm="${c.id}">삭제</button><div class="txt">${esc(c.content)}</div></div>`).join('')}
           <form data-cform="${s.id}"><textarea style="min-height:70px" placeholder="이 풀이에 댓글 (학생이 볼 수 있어요)" required></textarea>
@@ -1421,7 +2041,7 @@
       return `<details class="rv" data-rv="${e.id}" ${reviewOpen.has(e.id) ? 'open' : ''}>
         <summary><span class="ex-no sm">${dispNo(e)}</span> <span class="dbadge d-${e.difficulty}">${e.difficulty}</span>
           <span class="rv-t">${esc(firstLine(e.body))}</span>
-          <span class="muted small">v${vers[vers.length - 1].version} · ${fmt(vers[vers.length - 1].created_at)}${nC ? ` · 💬${nC}` : ''}</span></summary>
+          ${judgeBadge(vers[vers.length - 1].judge)} <span class="muted small">v${vers[vers.length - 1].version} · ${fmt(vers[vers.length - 1].created_at)}${nC ? ` · 💬${nC}` : ''}</span></summary>
         <div class="rv-body">
           <details class="rv-prob"><summary>문제 보기</summary><div class="ex-body">${renderMarkup(e.body)}</div></details>
           ${vers.length > 1 ? `<div class="tabs vtabs">${tabs}</div>` : ''}
@@ -1431,11 +2051,13 @@
     };
 
     return [`
-      <p><a href="#/review">← 제출함</a></p>
+      <p><a href="#/review/u/${userId}">← ${esc(pr.data.username)} 학생</a> · <a href="#/review">제출함</a></p>
       <div class="page-head"><h2>📄 ${esc(title)}</h2></div>
       <p class="muted">푼 문제 ${solved.length}개 · 문제를 누르면 풀이가 펼쳐져요.</p>
+      ${bulkBar(pendD, '이 문제집')}
       <div class="card list rvlist">${solved.length ? solved.map(item).join('') : '<p class="muted center pad">제출한 문제가 없어요.</p>'}</div>`,
     (v) => {
+      bindBulk(v, () => subs, exMapD);
       v.querySelectorAll('[data-rv]').forEach((d) => d.addEventListener('toggle', () => {
         const id = Number(d.dataset.rv);
         if (d.open) reviewOpen.add(id); else reviewOpen.delete(id);
