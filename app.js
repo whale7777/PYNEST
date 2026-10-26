@@ -130,8 +130,8 @@
 
   // 난이도 표 (difficulties) — 표가 없으면 예전 4개로 동작
   let DIFF_LIST = [
-    { name: 'Beginner', points: 10, color: '#16a34a', builtin: true }, { name: 'Intermediate', points: 30, color: '#2563eb', builtin: true },
-    { name: 'Advanced', points: 60, color: '#7e22ce', builtin: true }, { name: 'ELITE', points: 100, color: '#db2777', builtin: true },
+    { name: 'Beginner', points: 5, color: '#16a34a', builtin: true }, { name: 'Intermediate', points: 10, color: '#2563eb', builtin: true },
+    { name: 'Advanced', points: 20, color: '#7e22ce', builtin: true }, { name: 'ELITE', points: 30, color: '#db2777', builtin: true },
   ];
   let RK_READY = false;
   async function loadDiffs() {

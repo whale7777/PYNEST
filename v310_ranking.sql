@@ -30,10 +30,10 @@ create table if not exists public.difficulties (
   created_at timestamptz not null default now()
 );
 insert into public.difficulties (name, points, color, position, builtin) values
-  ('Beginner',     10, '#16a34a', 10, true),
-  ('Intermediate', 30, '#2563eb', 20, true),
-  ('Advanced',     60, '#7e22ce', 30, true),
-  ('ELITE',       100, '#db2777', 40, true)
+  ('Beginner',      5, '#16a34a', 10, true),
+  ('Intermediate', 10, '#2563eb', 20, true),
+  ('Advanced',     20, '#7e22ce', 30, true),
+  ('ELITE',        30, '#db2777', 40, true)
 on conflict (name) do nothing;
 
 alter table public.difficulties enable row level security;
