@@ -215,13 +215,62 @@
   const toggleTheme = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 
   // 글 내용 표시: ``` 로 감싼 부분은 코드 블록으로
-  function renderContent(text) {
+  // 공지용 마크다운: # 제목 · **굵게** · *기울임* · ~~취소선~~ · `코드` · [링크](주소) · - 목록 · 1. 번호 · > 인용 · --- 구분선 · | 표 |
+  function mdInline(raw) {
+    return esc(raw)
+      .replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<i>$2</i>')
+      .replace(/~~([^~\n]+)~~/g, '<s>$1</s>')
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  }
+  function mdBlock(text) {
+    const L = String(text).replace(/\r/g, '').split('\n');
+    const out = [];
+    let i = 0;
+    const isRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+    const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    while (i < L.length) {
+      const l = L[i];
+      if (!l.trim()) { i += 1; continue; }
+      let m;
+      if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { out.push(`<h${m[1].length + 1} class="md-h">${mdInline(m[2])}</h${m[1].length + 1}>`); i += 1; continue; }
+      if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { out.push('<hr class="md-hr">'); i += 1; continue; }
+      if (isRow(l) && i + 1 < L.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(L[i + 1]) && L[i + 1].includes('-')) {
+        const head = cells(l);
+        const rows = [];
+        i += 2;
+        while (i < L.length && isRow(L[i])) { rows.push(cells(L[i])); i += 1; }
+        out.push(`<div class="mk-tablewrap"><table class="mk-table"><thead><tr>${head.map((c) => `<th>${mdInline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${head.map((_, k) => `<td>${mdInline(r[k] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+        continue;
+      }
+      if (/^\s*>/.test(l)) {
+        const q = [];
+        while (i < L.length && /^\s*>/.test(L[i])) { q.push(L[i].replace(/^\s*>\s?/, '')); i += 1; }
+        out.push(`<blockquote class="md-q">${q.map(mdInline).join('<br>')}</blockquote>`);
+        continue;
+      }
+      if (/^\s*[-*+]\s+/.test(l) || /^\s*\d+[.)]\s+/.test(l)) {
+        const ol = /^\s*\d+[.)]\s+/.test(l);
+        const items = [];
+        while (i < L.length && (ol ? /^\s*\d+[.)]\s+/ : /^\s*[-*+]\s+/).test(L[i])) { items.push(L[i].replace(ol ? /^\s*\d+[.)]\s+/ : /^\s*[-*+]\s+/, '')); i += 1; }
+        out.push(`<${ol ? 'ol' : 'ul'} class="md-l">${items.map((t) => `<li>${mdInline(t)}</li>`).join('')}</${ol ? 'ol' : 'ul'}>`);
+        continue;
+      }
+      const para = [];
+      while (i < L.length && L[i].trim() && !/^(#{1,4}\s|\s*(-{3,}|\*{3,})\s*$|\s*>|\s*[-*+]\s+|\s*\d+[.)]\s+)/.test(L[i]) && !isRow(L[i])) { para.push(L[i]); i += 1; }
+      if (!para.length) { para.push(L[i]); i += 1; }
+      out.push(`<p class="md-p">${para.map(mdInline).join('<br>')}</p>`);
+    }
+    return `<div class="md">${out.join('')}</div>`;
+  }
+  function renderContent(text, md = false) {
     return String(text ?? '').split('```').map((part, i) => {
       if (i % 2 === 1) {
         const code = part.replace(/^(python|py|text|c|cpp|java|js)\r?\n/i, '').replace(/^\r?\n/, '');
         return `<pre><code>${esc(code)}</code></pre>`;
       }
-      return part.trim() ? `<div class="txt">${esc(part)}</div>` : '';
+      return part.trim() ? (md ? mdBlock(part) : `<div class="txt">${esc(part)}</div>`) : '';
     }).join('');
   }
 
@@ -532,7 +581,7 @@
         <p class="muted small">${who(p.author_id, p.author_name)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}${p.updated_at ? ' (수정됨)' : ''}
           ${p.is_mine ? ` <a href="#/edit/${p.id}">수정</a>` : ''}
           ${p.is_mine || can('moderate') ? ' <button class="link danger" id="delPost">글 삭제</button>' : ''}</p>
-        ${renderContent(p.content)}
+        ${renderContent(p.content, p.board === 'notice')}
         ${files.length ? `<div class="attach">${files.map((f, i) => `<div class="file-row">📎 <button class="link" data-file="${i}">${esc(f.name || '첨부파일')}</button></div>`).join('')}</div>` : ''}
       </div>
       <div class="card"><h3>댓글 ${cs ? cs.length : 0}</h3>${comments}${commentBox}</div>`,
@@ -2451,6 +2500,36 @@ onmessage = (ev) => {
     return `${f(st)} (월) ~ ${f(en)} (일)`;
   }
 
+  // 화면 위쪽에 내려오는 작은 안내 배너 (새 창 X). 바깥을 누르거나 ✕ / Esc 로 닫아요.
+  function showTierInfo() {
+    const old = document.getElementById('tierBanner');
+    if (old) { old.remove(); return; }
+    const rows = TIERS.map((t, i) => {
+      const nx = TIERS[i + 1];
+      const step = nx ? Math.round(((nx.min - t.min) / 5) * 10) / 10 : 2000;
+      return `<tr><td>${tierBadge(t.min, 24)}</td><td><b>${esc(t.n)}</b></td><td>${t.min.toLocaleString()}점~</td><td class="muted">${step}점씩</td></tr>`;
+    }).join('');
+    const dif = DIFF_LIST.map((d) => `${diffTag(d.name)} <b>${d.points}</b>`).join(' &nbsp; ');
+    const el = document.createElement('div');
+    el.id = 'tierBanner';
+    el.className = 'tier-banner';
+    el.setAttribute('role', 'dialog');
+    el.innerHTML = `<button class="icon tb-x" type="button" aria-label="닫기">✕</button>
+      <h3>🏅 티어 기준</h3>
+      <p class="muted small">푼 문제의 점수를 모두 더한 <b>누적 점수</b>로 티어가 정해져요. 각 티어는 V → IV → III → II → I 다섯 단계예요 (I이 가장 높아요).</p>
+      <div class="tb-scroll"><table class="tb-table"><thead><tr><th></th><th>티어</th><th>시작 점수</th><th>한 단계</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <h4>문제 점수</h4><p class="small">${dif}</p>
+      <p class="muted small">같은 문제는 처음 맞춘 한 번만 점수를 받아요. 주간·월간 랭킹은 그 기간에 새로 받은 점수의 합이에요.</p>`;
+    document.body.appendChild(el);
+    const close = () => { el.remove(); document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown, true); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const onDown = (e) => { if (!el.contains(e.target) && e.target.id !== 'rkInfo') close(); };
+    $('.tb-x', el).onclick = close;
+    window.addEventListener('hashchange', close, { once: true });
+    document.addEventListener('keydown', onKey);
+    setTimeout(() => document.addEventListener('mousedown', onDown, true), 0);
+  }
+
   async function pageRanking() {
     const { data, error } = await sb.rpc('rank_board', { p_period: rankTab });
     if (error) return sqlHint('랭킹을 불러올 수 없어요.');
@@ -2467,13 +2546,14 @@ onmessage = (ev) => {
       ? `<p class="muted small">내 순위: <b>${mine.rnk}등</b> · ${unit} ${mine.pts}점 (${mine.solved}문제)</p>`
       : `<p class="muted small">${unit}에는 아직 푼 문제가 없어요. 지금 도전해봐요! 💪</p>`;
     return [`
-      <div class="page-head"><h2>🏆 랭킹</h2></div>
+      <div class="page-head"><h2>🏆 랭킹</h2><button class="info-btn" id="rkInfo" type="button" title="티어 기준 보기" aria-label="티어 기준 보기">i</button></div>
       <div class="tabs"><button data-rk="week" class="${rankTab === 'week' ? 'on' : ''}">주간</button><button data-rk="month" class="${rankTab === 'month' ? 'on' : ''}">월간</button></div>
       <p class="muted small">${unit} · ${periodText(rankTab)} — 이 기간에 새로 맞춘 문제의 점수 합 순이에요 (같은 문제는 한 번만 세요).</p>
       ${note}
       <div class="card list">${rows || '<p class="muted center pad">아직 아무도 문제를 풀지 않았어요.</p>'}</div>`,
     (v) => {
       v.querySelectorAll('[data-rk]').forEach((b) => (b.onclick = () => { rankTab = b.dataset.rk; route(); }));
+      $('#rkInfo', v).onclick = showTierInfo;
     }];
   }
 

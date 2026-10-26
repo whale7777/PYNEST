@@ -408,3 +408,27 @@ a.icon.shop:hover { background: var(--hover); }
 .tr-line .spacer { flex: 1; }
 #tPrev { display: inline-grid; place-items: center; }
 @media (max-width: 560px) { .tierlist .tierrow { flex-direction: column; } }
+
+/* ---------- 공지 마크다운 ---------- */
+.md { overflow-wrap: anywhere; line-height: 1.75; }
+.md .md-h { margin: 22px 0 8px; line-height: 1.35; }
+h2.md-h { font-size: 21px; } h3.md-h { font-size: 18px; } h4.md-h, h5.md-h { font-size: 16px; }
+.md .md-p { margin: 8px 0; }
+.md .md-l { margin: 8px 0; padding-left: 22px; }
+.md .md-l li { margin: 3px 0; }
+.md .md-hr { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+.md .md-q { margin: 10px 0; padding: 6px 14px; border-left: 4px solid var(--primary); background: var(--hover); border-radius: 0 8px 8px 0; }
+.md a { color: var(--primary); text-decoration: underline; }
+
+/* ---------- 랭킹 ⓘ 와 티어 기준 배너 ---------- */
+.info-btn { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 1.5px solid var(--muted); background: transparent; color: var(--muted); font: italic 700 14px/1 Georgia, serif; cursor: pointer; }
+.info-btn:hover { color: var(--primary); border-color: var(--primary); }
+.tier-banner { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 36px); overflow-y: auto; z-index: 300;
+  background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.3); animation: tbdrop .18s ease-out; }
+.tier-banner h3 { margin: 0 28px 4px 0; } .tier-banner h4 { margin: 12px 0 4px; font-size: 14px; }
+.tier-banner .tb-x { position: absolute; top: 10px; right: 10px; padding: 3px 8px; }
+.tb-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tb-table th { text-align: left; font-size: 12px; color: var(--muted); padding: 4px 6px; }
+.tb-table td { padding: 4px 6px; border-top: 1px solid var(--border); vertical-align: middle; }
+@keyframes tbdrop { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .tier-banner { animation: none; } }
