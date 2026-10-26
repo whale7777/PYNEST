@@ -19,6 +19,9 @@
   let liveUi = null; // 지금 열려 있는 방송 콘솔이 화면을 다시 그리는 함수
   let timers = [];
   const isAdmin = () => !!me && (me.role === 'admin' || me.staff === 'admin'); // OWNER / ADMIN (직원 역할은 staff_roles.sql)
+  // 학생 등급 (student_tiers.sql): solver 는 라이브 X, listener 는 라이브 시청 O · 라이브 문제 X. 직원은 제한 없음
+  const isStaff = () => !!me && (me.role === 'admin' || !!me.staff);
+  const tierCan = (feat) => { if (isStaff()) return true; const t = (me && me.tier) || 'student'; return t === 'solver' ? false : t === 'listener' ? feat === 'live' : true; };
   const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
   const every = (fn, ms) => { timers.push(setInterval(fn, ms)); };
   let cleanups = [];
@@ -351,6 +354,7 @@
     const v = $('#view');
     const tok = ++navTok;
     v.innerHTML = '<p class="loading">불러오는 중…</p>';
+    if (!tierCan('live')) { v.innerHTML = '<div class="card pad center"><h2>🔒 이용할 수 없어요</h2><p class="muted">내 등급(SOLVER)에서는 라이브를 볼 수 없어요.</p></div>'; return; }
     try {
       let r;
       if (a === 's') r = await pageSession(b);
@@ -394,10 +398,10 @@
           <div id="video"></div>
           <p class="muted small" id="vnote" style="margin:8px 0 0"></p>
         </section>
-        <section class="card" id="pcol">
+        ${tierCan('live_problem') ? `<section class="card" id="pcol">
           <div class="ptabs" id="ptabs"></div>
           <div id="pview" class="live-prob"><p class="muted">선생님이 문제를 열면 여기에 나와요 ✍️</p></div>
-        </section>
+        </section>` : ''}
       </div>`, (v, tok) => bindSession(v, tok, ses)];
   }
 
@@ -632,15 +636,17 @@
 
     async function refresh() {
       if (tok !== navTok) return;
+      const lp = tierCan('live_problem');
       const [sr, pr, ur] = await Promise.all([
         sb.from('live_sessions').select('*').eq('id', ses.id).maybeSingle(),
-        sb.from('live_problems').select('*').eq('session_id', ses.id).order('position'),
-        sb.from('live_submissions').select('id,problem_id,ok,judge,created_at').eq('user_id', me.id).eq('session_id', ses.id),
+        lp ? sb.from('live_problems').select('*').eq('session_id', ses.id).order('position') : Promise.resolve({}),
+        lp ? sb.from('live_submissions').select('id,problem_id,ok,judge,created_at').eq('user_id', me.id).eq('session_id', ses.id) : Promise.resolve({}),
       ]);
       if (sr.data) ses = sr.data;
       if (pr.data) probs = pr.data;
       if (ur.data) subs = ur.data;
       drawVideo();
+      if (!lp) { first = false; return; }
       const opened = probs.filter((p) => p.status === 'open' && !seen.has(p.id));
       probs.forEach((p) => seen.add(p.id));
       if (opened.length && !first) toast(`📣 새 문제가 열렸어요: ${opened[0].title || '문제'}`);
@@ -1157,6 +1163,10 @@
     me.staff = null;
     if (me.status === 'approved' && me.role !== 'admin') {
       try { const { data: r, error: re } = await sb.rpc('staff_role'); me.staff = re || !r ? null : String(r); } catch (e) { me.staff = null; }
+    }
+    me.tier = 'student';
+    if (me.status === 'approved' && !me.staff && me.role !== 'admin') {
+      try { const { data: t, error: te } = await sb.rpc('my_tier'); me.tier = te || !t ? 'student' : String(t); } catch (e) { me.tier = 'student'; }
     }
     if (me.status === 'pending') return renderStatus(true);
     if (me.status === 'rejected') return renderStatus(false);

@@ -52,6 +52,16 @@
   const isAdmin = () => ['owner', 'admin'].includes(staffRole()); // 모든 관리 기능 (OWNER / ADMIN)
   const staffTag = () => { const r = staffRole(); return r ? ` (${r === 'owner' ? '선생님' : ROLE_NAME[r]})` : ''; };
 
+  /* ---------- 학생 등급 (student_tiers.sql 의 tier_allows() 와 같은 표예요. 바꾸면 SQL 도 같이 바꿔요) ----------
+     STUDENT 전부 · SOLVER 문제만(강의·라이브 X) · LISTENER 강의·라이브만(문제·라이브 문제 X). 직원은 제한 없음 */
+  const TIER_NAME = { student: 'STUDENT', solver: 'SOLVER', listener: 'LISTENER' };
+  const TIER_DESC = { student: '모든 기능', solver: '문제만 (강의·라이브 제외)', listener: '문제·라이브 문제 제외 모두' };
+  const TIER_OK = { student: () => true, solver: (f) => f === 'problem', listener: (f) => f === 'lecture' || f === 'live' };
+  const myTier = () => (staffRole() ? 'student' : (me && me.tier) || 'student');
+  const tierCan = (feat) => (TIER_OK[myTier()] || TIER_OK.student)(feat); // feat: lecture / problem / live / live_problem
+  const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
+  const lockedPage = (what) => ['<div class="card pad center"><h2>🔒 이용할 수 없어요</h2><p class="muted">내 등급(' + TIER_NAME[myTier()] + ')에서는 ' + esc(what) + ' 기능을 쓸 수 없어요.</p></div>'];
+
   function toast(msg, bad = false) {
     const t = document.createElement('div');
     t.className = 'toast' + (bad ? ' bad' : '');
@@ -198,14 +208,14 @@
   ];
 
   function renderShell() {
-    const items = NAV.slice();
+    const items = NAV.filter(([k]) => (k === 'lectures' ? tierCan('lecture') : k === 'sets' ? tierCan('problem') : k === 'golive/' ? tierCan('live') : true));
     if (can('review')) items.push(['review', '📥', '제출함']);
     if (staffRole()) items.push(['admin', '🛠️', '관리자']);
     app.innerHTML = `
       <header class="top">
         <a class="brand" href="#/home">${esc(ICON)} ${esc(SITE)}</a>
         <div class="spacer"></div>
-        <span class="who">${esc(me.username)}${staffTag()}</span>
+        <span class="who">${esc(me.username)}${staffTag()}${tierTag()}</span>
         ${CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
         <a class="icon" href="#/settings" title="설정">⚙️</a>
@@ -249,6 +259,9 @@
     const tok = ++navTok;
     const v = $('#view');
     v.innerHTML = '<p class="loading">불러오는 중…</p>';
+    // 학생 등급 제한 (직원은 해당 없음)
+    const need = { lectures: ['lecture', '강의'], lecture: ['lecture', '강의'], sets: ['problem', '문제'], set: ['problem', '문제'], problems: ['problem', '문제'] }[a];
+    if (need && !tierCan(need[0])) { v.innerHTML = lockedPage(need[1])[0]; return; }
     try {
       const [html, bind] = await (pages[a] || notFound)();
       if (tok !== navTok) return;
@@ -281,8 +294,8 @@
       <div class="page-head"><h3>📢 최근 공지</h3><a href="#/board/notice">더 보기</a></div>
       <div class="card list">${notices}</div>
       <div class="grid2">
-        <div class="card"><h3>🎬 최신 강의</h3>${lec ? `<p><span class="week">${lec.week}주차</span><a href="#/lecture/${lec.id}">${esc(lec.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>
-        <div class="card"><h3>📄 최신 문제</h3>${prob ? `<p>${prob.week ? `<span class="week">${prob.week}주차</span>` : ''}<a href="#/set/${prob.id}">${esc(prob.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>
+        ${tierCan('lecture') ? `<div class="card"><h3>🎬 최신 강의</h3>${lec ? `<p><span class="week">${lec.week}주차</span><a href="#/lecture/${lec.id}">${esc(lec.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>` : ''}
+        ${tierCan('problem') ? `<div class="card"><h3>📄 최신 문제</h3>${prob ? `<p>${prob.week ? `<span class="week">${prob.week}주차</span>` : ''}<a href="#/set/${prob.id}">${esc(prob.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>` : ''}
       </div>`];
   }
 
@@ -2310,14 +2323,29 @@ onmessage = (ev) => {
     if (can('roles_basic')) { const { data: st } = await sb.rpc('staff_list'); (st || []).forEach((t) => { staffBy[t.uname] = t.urole; }); }
     const rankOf = (x) => (x.role === 'admin' ? 4 : { admin: 3, teacher: 2, mod: 1 }[staffBy[x.username]] || 0);
     const myRank = { owner: 4, admin: 3, teacher: 2, mod: 1 }[staffRole()] || 0;
-    const tagOf = (x) => (x.role === 'admin' ? ' · OWNER' : staffBy[x.username] ? ` · ${ROLE_NAME[staffBy[x.username]]}` : '');
+    // 학생 등급 (student_tiers.sql 전이면 조용히 없음)
+    const tierBy = {};
+    let tierOk = false;
+    if (can('members')) { const { data: tl, error: tle } = await sb.rpc('student_tier_list'); if (!tle) { tierOk = true; (tl || []).forEach((t) => { tierBy[t.uname] = t.tier; }); } }
+    const tagOf = (x) => (x.role === 'admin' ? ' · OWNER' : staffBy[x.username] ? ` · ${ROLE_NAME[staffBy[x.username]]}` : tierBy[x.username] ? ` · ${TIER_NAME[tierBy[x.username]]}` : '');
+    const tierBtns = (x) => (!tierOk || rankOf(x) > 0 ? '' : ['student', 'solver', 'listener'].filter((t) => (tierBy[x.username] || 'student') !== t).map((t) => `<button class="ghost" data-tier="${esc(x.username)}|${t}" title="${esc(TIER_DESC[t])}">${TIER_NAME[t]}</button>`).join(' ') + ' ');
     const line = (x, btns) => `<div class="row"><div class="row-main"><b>${esc(x.username)}</b> <span class="muted small">${fmt(x.created_at)}${tagOf(x)}</span></div><div>${btns}</div></div>`;
     const block = (title, arr, btns) => `<h3>${title} (${arr.length})</h3><div class="card list">${arr.length ? arr.map((x) => line(x, btns(x))).join('') : '<p class="muted center pad">없어요.</p>'}</div>`;
     return [
       block('가입 신청 대기', pending, (x) => `<button class="primary" data-act="approve" data-id="${x.id}">승인</button> <button class="ghost" data-act="reject" data-id="${x.id}">거절</button>`)
-      + block('승인된 학생', approved, (x) => (rankOf(x) >= myRank ? '<span class="muted small">상위/동급 계정</span>' : `${can('reset_pw') ? `<button class="ghost" data-act="reset" data-name="${esc(x.username)}">비밀번호 초기화</button> ` : ''}<button class="ghost" data-act="reject" data-id="${x.id}">사용 중지</button>`))
+      + (tierOk ? '<p class="muted small">학생 등급 — STUDENT 모든 기능 · SOLVER 문제만(강의·라이브 제외) · LISTENER 강의·라이브만(문제·라이브 문제 제외)</p>' : '')
+      + block('승인된 학생', approved, (x) => (rankOf(x) >= myRank ? '<span class="muted small">상위/동급 계정</span>' : `${tierBtns(x)}${can('reset_pw') ? `<button class="ghost" data-act="reset" data-name="${esc(x.username)}">비밀번호 초기화</button> ` : ''}<button class="ghost" data-act="reject" data-id="${x.id}">사용 중지</button>`))
       + block('거절/중지', rejected, (x) => `<button class="ghost" data-act="approve" data-id="${x.id}">다시 승인</button>`),
       (v) => {
+        v.querySelectorAll('[data-tier]').forEach((b) => (b.onclick = async () => {
+          const [name, t] = b.dataset.tier.split('|');
+          const { data: r, error: er } = await sb.rpc('student_set_tier', { p_username: name, p_tier: t });
+          if (er) return toast('처리하지 못했어요: ' + er.message, true);
+          const msg = { not_found: '가입된 ID가 아니에요', is_staff: '직원 계정에는 등급이 없어요', invalid: '등급이 올바르지 않아요' };
+          if (r !== 'ok') return toast(msg[r] || '처리하지 못했어요', true);
+          toast(`${name} → ${TIER_NAME[t]} (${TIER_DESC[t]})`);
+          route(true);
+        }));
         v.querySelectorAll('[data-act]').forEach((b) => (b.onclick = async () => {
           const act = b.dataset.act;
           if (act === 'reset') {
@@ -2444,6 +2472,10 @@ onmessage = (ev) => {
     me.staff = null;
     if (me.status === 'approved' && me.role !== 'admin') { // 직원 역할 (staff_roles.sql 전이면 조용히 없음)
       try { const { data: r, error: re } = await sb.rpc('staff_role'); me.staff = re || !r ? null : String(r); } catch (e) { me.staff = null; }
+    }
+    me.tier = 'student';
+    if (me.status === 'approved' && !me.staff && me.role !== 'admin') { // 학생 등급 (student_tiers.sql 전이면 조용히 student)
+      try { const { data: t, error: te } = await sb.rpc('my_tier'); me.tier = te || !t ? 'student' : String(t); } catch (e) { me.tier = 'student'; }
     }
     if (me.status === 'pending') return renderStatus('pending');
     if (me.status === 'rejected') return renderStatus('rejected');

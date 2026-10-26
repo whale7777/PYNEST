@@ -63,3 +63,10 @@
 - 원래 관리자(imadmin)는 자동으로 OWNER 예요. 🛠️ 관리자 › **🎖️ 권한** 탭에서 PyNest ID 로 역할을 부여해요 (민혁닷컴과 공유).
 - OWNER 전부 · ADMIN 전부(ADMIN 임명 제외) · TEACHER 강의·문제집·문제·숙제·제출함 · MOD 회원 승인/중지·글·댓글 삭제
 - 제출함·채점은 OWNER/ADMIN/TEACHER, 라이브는 OWNER/ADMIN 만 볼 수 있어요.
+
+## 학생 등급 (STUDENT / SOLVER / LISTENER)
+- **`student_tiers.sql`** 을 Supabase SQL Editor 에서 한 번 실행하세요 (`staff_roles.sql` 이 먼저 적용돼 있어야 해요). 기존 정책은 그대로 두고 제한만 "추가"해요.
+- 등급이 없는 기존 학생은 전부 **STUDENT** (지금과 똑같이 전부 이용).
+- **SOLVER** 문제(문제집·숙제·제출)만 · 강의·라이브 X / **LISTENER** 강의·라이브 시청 O · 문제·라이브 문제 X. 공지·질문·과제·자유 게시판은 모두 가능.
+- 직원(OWNER/ADMIN/TEACHER/MOD)은 등급과 상관없이 제한 없음. 부여는 🛠️ 관리자 › 👥 회원 › 승인된 학생 옆 버튼 (회원 관리 권한: OWNER/ADMIN/MOD).
+- 표를 바꾸려면 SQL 의 `tier_allows()` 와 `app.js` 의 `TIER_OK`(그리고 `golive.js` 의 `tierCan`)를 같이 고쳐요.
