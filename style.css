@@ -344,3 +344,27 @@ a.icon.shop:hover { background: var(--hover); }
 .tverdict { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; }
 .tverdict .okb:hover { border-color: #16a34a; color: #16a34a; }
 .tverdict .badb:hover { border-color: #dc2626; color: #dc2626; }
+
+/* ---------- V3.1.0 : 티어 뱃지 · 랭킹 · 프로필 ---------- */
+.tbadge { display: inline-flex; vertical-align: middle; margin-right: 5px; line-height: 0; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+.ulink { color: inherit; font-weight: 700; text-decoration: none; }
+.ulink:hover { text-decoration: underline; }
+.uname { font-weight: 700; }
+.row.rk { display: flex; align-items: center; gap: 12px; }
+.row.rk.me { background: color-mix(in srgb, var(--accent, #4f46e5) 10%, transparent); }
+.rk-no { width: 34px; text-align: center; font-weight: 800; font-size: 18px; flex: none; }
+.rk-no.top1, .rk-no.top2, .rk-no.top3 { font-size: 24px; }
+.rk-who { flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.rk-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-val { text-align: right; flex: none; }
+.prof-top { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.prof-top .tbadge { margin: 0; filter: drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+.prof-tier { font-weight: 800; font-size: 18px; margin: 2px 0 6px; }
+.pbar { height: 8px; width: min(320px, 70vw); border-radius: 99px; background: rgba(127,127,127,.25); overflow: hidden; margin-bottom: 4px; }
+.pbar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #22c55e, #3b82f6); }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.prof-stats { margin: 16px 0 12px; text-align: center; }
+.prof-stats b { font-size: 22px; }
+.prof-diff { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.diffctl { display: flex; align-items: center; gap: 6px; }
+.diffctl input { width: 90px; }

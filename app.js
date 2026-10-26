@@ -60,6 +60,99 @@
   const myTier = () => (staffRole() ? 'student' : (me && me.tier) || 'student');
   const tierCan = (feat) => (TIER_OK[myTier()] || TIER_OK.student)(feat); // feat: lecture / problem / live / live_problem
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
+
+  /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
+  const APP_VERSION = '3.1.0';
+  // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요. 구간을 바꾸려면 min 만 고치세요.
+  const TIERS = [
+    { n: 'Bronze', min: 0, c: ['#f0b27a', '#9c5a1e'], g: 'circle' },
+    { n: 'Silver', min: 100, c: ['#f1f5f9', '#8795a8'], g: 'tri' },
+    { n: 'Gold', min: 500, c: ['#ffe27a', '#d19a00'], g: 'sq' },
+    { n: 'Platinum', min: 1500, c: ['#8ff0e0', '#16a394'], g: 'dia' },
+    { n: 'Diamond', min: 3500, c: ['#9fd4ff', '#2563eb'], g: 'hex' },
+    { n: 'Emerald', min: 7000, c: ['#7df2a8', '#0e8a4f'], g: 'spark' },
+    { n: 'Master', min: 12000, c: ['#d9a8ff', '#7c2ae0'], g: 'star' },
+    { n: 'The Programmer', min: 20000, c: ['#ff8aa8', '#e11d48'], g: 'crown' },
+  ];
+  const ROMAN = ['V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요
+  function tierOf(score) {
+    const sc = Math.max(0, Number(score) || 0);
+    let i = TIERS.length - 1;
+    while (i > 0 && sc < TIERS[i].min) i -= 1;
+    const t = TIERS[i];
+    const nextMin = i < TIERS.length - 1 ? TIERS[i + 1].min : null;
+    const step = nextMin != null ? (nextMin - t.min) / 5 : 2000;
+    const lv = Math.min(4, Math.floor((sc - t.min) / step));
+    return { i, lv, roman: ROMAN[lv], name: `${t.n} ${ROMAN[lv]}`, lo: t.min + lv * step, hi: lv < 4 ? t.min + (lv + 1) * step : nextMin, score: sc };
+  }
+  const GLYPH = {
+    circle: '<circle cx="20" cy="15" r="5.5"/>',
+    tri: '<path d="M20 8.5 L26.5 20 H13.5 Z"/>',
+    sq: '<rect x="14.5" y="9.5" width="11" height="11" rx="2"/>',
+    dia: '<path d="M20 7.5 L27.5 15 L20 22.5 L12.5 15 Z"/>',
+    hex: '<path d="M20 8 L26.6 11.8 V19.4 L20 23.2 L13.4 19.4 V11.8 Z"/>',
+    spark: '<path d="M20 6.5 L22.4 12.6 L28.5 15 L22.4 17.4 L20 23.5 L17.6 17.4 L11.5 15 L17.6 12.6 Z"/>',
+    star: '<path d="M20 7.5 L22.5 12.8 L28.3 13.5 L24 17.5 L25.2 23.2 L20 20.3 L14.8 23.2 L16 17.5 L11.7 13.5 L17.5 12.8 Z"/>',
+    crown: '<path d="M12 21.5 L13 10.5 L17 15 L20 8 L23 15 L27 10.5 L28 21.5 Z"/>',
+  };
+  const SHIELD = 'M20 2 L35.5 7.5 V20 C35.5 28.5 28.8 34.6 20 38 C11.2 34.6 4.5 28.5 4.5 20 V7.5 Z';
+  function ensureDefs() { // 뱃지 그림(방패 + 문양)은 한 번만 만들어 두고 계속 재사용해요
+    if (document.getElementById('tbDefs')) return;
+    const defs = TIERS.map((t, i) => `<linearGradient id="tbg${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t.c[0]}"/><stop offset="1" stop-color="${t.c[1]}"/></linearGradient>
+      <symbol id="tbs${i}" viewBox="0 0 40 40"><path d="${SHIELD}" fill="url(#tbg${i})" stroke="${t.c[1]}" stroke-width="1.6" stroke-linejoin="round"/><g fill="#fff" fill-opacity=".93">${GLYPH[t.g]}</g>${i === TIERS.length - 1 ? `<path d="${SHIELD}" fill="none" stroke="#ffe27a" stroke-width="1"/>` : ''}</symbol>`).join('');
+    const d = document.createElement('div');
+    d.id = 'tbDefs';
+    d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    d.innerHTML = `<svg width="0" height="0" aria-hidden="true"><defs>${defs}</defs></svg>`;
+    document.body.appendChild(d);
+  }
+  function tierBadge(score, size = 20) {
+    const k = tierOf(score);
+    return `<span class="tbadge" title="${esc(k.name)} · ${k.score}점"><svg viewBox="0 0 40 40" width="${size}" height="${size}" role="img" aria-label="${esc(k.name)}"><use href="#tbs${k.i}" width="40" height="40"/><text x="20" y="33" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff" stroke="rgba(0,0,0,.45)" stroke-width=".7" paint-order="stroke" font-family="system-ui,sans-serif">${k.roman}</text></svg></span>`;
+  }
+
+  // 학생 이름표 (별명 · 누적 점수). student_directory() — v310_ranking.sql 전이면 조용히 비어 있어요.
+  let DIR = new Map();
+  let DIR_OK = false;
+  async function loadDir() {
+    try {
+      const { data, error } = await sb.rpc('student_directory');
+      if (error || !data) throw error || new Error('no data');
+      DIR = new Map(data.map((d) => [d.user_id, d]));
+      DIR_OK = true;
+    } catch (e) { DIR = new Map(); DIR_OK = false; }
+  }
+  const dname = (uid, fb = '') => { const d = DIR.get(uid); return d ? d.name : fb; }; // 직원에게는 "별명 (ID)"
+  const badgeFor = (uid, size = 18) => (DIR_OK && DIR.has(uid) ? tierBadge(DIR.get(uid).score, size) : '');
+  const who = (uid, name, link = true) => `${badgeFor(uid)}${link && uid ? `<a class="ulink" href="#/u/${uid}">${esc(name)}</a>` : `<span class="uname">${esc(name)}</span>`}`;
+  const selfName = () => dname(me.id, me.username);
+  const whoHtml = () => `${staffRole() ? esc(me.username) : `<a class="ulink" href="#/u/${me.id}">${badgeFor(me.id, 20)}${esc(selfName())}</a>`}${staffTag()}${tierTag()}`;
+
+  // 난이도 표 (difficulties) — 표가 없으면 예전 4개로 동작
+  let DIFF_LIST = [
+    { name: 'Beginner', points: 10, color: '#16a34a', builtin: true }, { name: 'Intermediate', points: 30, color: '#2563eb', builtin: true },
+    { name: 'Advanced', points: 60, color: '#7e22ce', builtin: true }, { name: 'ELITE', points: 100, color: '#db2777', builtin: true },
+  ];
+  let RK_READY = false;
+  async function loadDiffs() {
+    try {
+      const { data, error } = await sb.from('difficulties').select('*').order('position').order('name');
+      if (error || !data || !data.length) throw error || new Error('empty');
+      DIFF_LIST = data;
+      RK_READY = true;
+    } catch (e) { RK_READY = false; }
+  }
+  const diffNames = () => DIFF_LIST.map((d) => d.name);
+  const diffPts = (name) => { const d = DIFF_LIST.find((x) => x.name === name); return d ? d.points : 10; };
+  const diffTag = (name, text) => {
+    const t = text == null ? name : text;
+    if (['Beginner', 'Intermediate', 'Advanced', 'ELITE'].includes(name)) return `<span class="dbadge d-${name}">${esc(t)}</span>`;
+    const d = DIFF_LIST.find((x) => x.name === name);
+    const c = (d && d.color) || '#64748b';
+    return `<span class="dbadge" style="background:${esc(c)}26;color:${esc(c)}">${esc(t)}</span>`;
+  };
+
+
   const lockedPage = (what) => ['<div class="card pad center"><h2>🔒 이용할 수 없어요</h2><p class="muted">내 등급(' + TIER_NAME[myTier()] + ')에서는 ' + esc(what) + ' 기능을 쓸 수 없어요.</p></div>'];
 
   function toast(msg, bad = false) {
@@ -201,7 +294,7 @@
 
   /* ---------- 앱 뼈대 ---------- */
   const NAV = [
-    ['home', '🏠', '홈'], ['lectures', '🎬', '강의'], ['sets', '📄', '문제'],
+    ['home', '🏠', '홈'], ['lectures', '🎬', '강의'], ['sets', '📄', '문제'], ['ranking', '🏆', '랭킹'],
     ['board/notice', '📢', '공지'], ['board/qna', '❓', '질문'], ['board/assignment', '📝', '과제'],
     ['board/free', '💬', '자유'],
     ['golive/', '📡', '라이브 · 저지', 'ext'],
@@ -215,7 +308,7 @@
       <header class="top">
         <a class="brand" href="#/home">${esc(ICON)} ${esc(SITE)}</a>
         <div class="spacer"></div>
-        <span class="who">${esc(me.username)}${staffTag()}${tierTag()}</span>
+        <span class="who">${whoHtml()}</span>
         ${CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
         <a class="icon" href="#/settings" title="설정">⚙️</a>
@@ -235,7 +328,7 @@
     if (!me || me.status !== 'approved' || !$('#view')) return;
     const y = window.scrollY;
     const [a, b, c] = (location.hash.replace(/^#\//, '') || 'home').split('/');
-    const key = a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' ? 'sets' : a;
+    const key = a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' ? 'sets' : a;
     document.querySelectorAll('#menu a').forEach((l) => l.classList.toggle('on', l.dataset.k === key));
 
     const pages = {
@@ -244,6 +337,8 @@
       lecture: () => pageLecture(b),
       problems: () => pageBoard('problem'),
       sets: () => pageSets(),
+      ranking: () => pageRanking(),
+      u: () => pageProfile(b),
       set: () => pageSet(b),
       review: () => pageReview(b, c),
       board: () => (BOARDS[b] ? pageBoard(b) : notFound()),
@@ -259,6 +354,11 @@
     const tok = ++navTok;
     const v = $('#view');
     v.innerHTML = '<p class="loading">불러오는 중…</p>';
+    if (a === 'home' || a === 'ranking' || a === 'u') { // 점수가 바뀌었을 수 있어서 이름표를 새로 받아요
+      await loadDir();
+      const w = $('.who'); if (w) w.innerHTML = whoHtml();
+      if (tok !== navTok) return;
+    }
     // 학생 등급 제한 (직원은 해당 없음)
     const need = { lectures: ['lecture', '강의'], lecture: ['lecture', '강의'], sets: ['problem', '문제'], set: ['problem', '문제'], problems: ['problem', '문제'] }[a];
     if (need && !tierCan(need[0])) { v.innerHTML = lockedPage(need[1])[0]; return; }
@@ -290,7 +390,7 @@
     const notices = (n.data || []).map((x) => `<a class="row" href="#/post/${x.id}"><div class="row-main">${esc(x.title)}</div><div class="muted small">${fmt(x.created_at)}</div></a>`).join('')
       || '<p class="muted center pad">아직 공지가 없어요.</p>';
     return [`
-      <h2>안녕, ${esc(me.username)}! 👋</h2>
+      <h2>안녕, ${esc(selfName())}! 👋</h2>
       <div class="page-head"><h3>📢 최근 공지</h3><a href="#/board/notice">더 보기</a></div>
       <div class="card list">${notices}</div>
       <div class="grid2">
@@ -339,7 +439,7 @@
   async function pageBoard(key) {
     const B = BOARDS[key];
     let q = sb.from('posts_view')
-      .select('id,title,created_at,author_name,anonymous,files,week')
+      .select('id,title,created_at,author_name,author_id,anonymous,files,week')
       .eq('board', key);
     if (B.week) q = q.order('week', { ascending: false, nullsFirst: false });
     const { data, error } = await q.order('created_at', { ascending: false });
@@ -348,7 +448,7 @@
     const rows = data.length ? data.map((p) => `
       <a class="row" href="#/post/${p.id}">
         <div class="row-main">${p.week ? `<span class="week">${p.week}주차</span>` : ''}<b>${esc(p.title)}</b>${(p.files || []).length ? ` <span title="첨부파일 ${(p.files || []).length}개">📎${(p.files || []).length}</span>` : ''}</div>
-        <div class="muted small meta">${esc(p.author_name)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}</div>
+        <div class="muted small meta">${who(p.author_id, p.author_name, false)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}</div>
       </a>`).join('') : '<p class="muted center pad">아직 글이 없어요.</p>';
     return [`
       <div class="page-head"><h2>${B.icon} ${B.name}</h2>${canWrite ? `<a class="btn" href="#/write/${key}">글쓰기</a>` : ''}</div>
@@ -367,7 +467,7 @@
 
     const comments = (cs || []).map((c) => `
       <div class="comment">
-        <div class="c-head"><b>${esc(c.author_name)}</b>${c.by_admin ? ' <span class="badge">선생님</span>' : ''}
+        <div class="c-head">${who(c.author_id, c.author_name)}${c.by_admin ? ' <span class="badge">선생님</span>' : ''}
           <span class="muted small"> · ${fmt(c.created_at)}</span>
           ${c.is_mine || can('moderate') ? ` <button class="link danger" data-delc="${c.id}">삭제</button>` : ''}</div>
         <div class="txt">${esc(c.content)}</div>
@@ -386,7 +486,7 @@
       <p><a href="#/board/${p.board}">← ${B.name}</a></p>
       <div class="card">
         <h2 class="post-title">${p.week ? `<span class="week">${p.week}주차</span>` : ''}${esc(p.title)}</h2>
-        <p class="muted small">${esc(p.author_name)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}${p.updated_at ? ' (수정됨)' : ''}
+        <p class="muted small">${who(p.author_id, p.author_name)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}${p.updated_at ? ' (수정됨)' : ''}
           ${p.is_mine ? ` <a href="#/edit/${p.id}">수정</a>` : ''}
           ${p.is_mine || can('moderate') ? ' <button class="link danger" id="delPost">글 삭제</button>' : ''}</p>
         ${renderContent(p.content)}
@@ -543,6 +643,8 @@
   const DIFFS = ['Beginner', 'Intermediate', 'Advanced', 'ELITE'];
   const normDiff = (d) => {
     const k = String(d ?? '').trim().toLowerCase();
+    const own = DIFF_LIST.find((x) => x.name.toLowerCase() === k);
+    if (own) return own.name;
     if (/^(elite|엘리트)/.test(k)) return 'ELITE';
     if (/^(adv|고급|상)/.test(k)) return 'Advanced';
     if (/^(int|중)/.test(k)) return 'Intermediate';
@@ -876,7 +978,7 @@
       return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : ''}" id="ex-${e.id}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
         <header class="ex-head">
           <span class="ex-no">${dispNo(e)}</span>
-          <span class="dbadge d-${e.difficulty}">${e.difficulty}</span>
+          ${diffTag(e.difficulty)}
           ${e.label ? `<span class="chip">${esc(e.label)}</span>` : ''}
           ${e.points ? `<span class="chip pts">${e.points}점</span>` : ''}
           ${(e.tests || []).length || (e.answers || []).some((x) => x.type !== 'm') ? '<span class="chip judgechip" title="제출하면 자동으로 채점돼요">⚖️ 자동 채점</span>' : (e.answers || []).length ? '<span class="chip judgechip" title="선생님이 확인해요">✍️ 서술</span>' : ''}
@@ -1639,7 +1741,7 @@ onmessage = (ev) => {
       const have = by[p.id] || new Set();
       const miss = all.filter((e) => !have.has(e.id));
       const done = all.length - miss.length;
-      return `<tr><td><b>${esc(p.username)}</b></td><td>${done} / ${all.length}</td>
+      return `<tr><td><b>${esc(dname(p.id, p.username))}</b></td><td>${done} / ${all.length}</td>
         <td>${miss.length ? `<span class="muted small">안 푼 문제: ${esc(rangeText(miss))}</span>` : '✅ 완료'}</td></tr>`;
     }).join('');
     modal(`<h3>📊 ${esc(hw.title)} 제출 현황</h3>
@@ -1768,13 +1870,14 @@ onmessage = (ev) => {
       <h3>${ex ? `문제 수정 <span class="muted small">(고유 번호 ${ex.id})</span>` : '문제 추가'}</h3>
       <form id="exForm">
         <div class="grid2">
-          <label>난이도<select id="fDiff">${DIFFS.map((d) => `<option ${cur.difficulty === d ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
+          <label>난이도<select id="fDiff">${(RK_READY ? diffNames() : DIFFS).map((d) => `<option ${cur.difficulty === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></label>
           <label>유형 (선택)<input type="text" id="fLabel" placeholder="예: 빈칸 채우기 · 서술형" value="${esc(cur.label || '')}"></label>
         </div>
         <div class="grid2">
           <label>배점 (선택)<input type="number" id="fPts" min="0" value="${cur.points ?? ''}"></label>
           <label>출처 (선택)<input type="text" id="fSrc" placeholder="예: 백준 2557번" value="${esc(cur.source || '')}"></label>
         </div>
+        ${RK_READY ? `<label>🏆 랭킹 점수 (선택) <span class="muted small">— 비워 두면 난이도 점수를 써요</span><input type="number" id="fRank" min="0" placeholder="${diffPts(cur.difficulty)}" value="${cur.rank_points ?? ''}"></label>` : ''}
         <label>태그 (쉼표로 구분, 선택)<input type="text" id="fTags" placeholder="예: 50자 이내, abs() 사용 금지" value="${esc((cur.tags || []).join(', '))}"></label>
         <div class="grid2">
           <label>챕터<input type="text" id="fCh" list="dlCh" value="${esc(cur.chapter || '')}"></label>
@@ -1858,6 +1961,7 @@ onmessage = (ev) => {
       const answers = textToAnswers(q('#fAns').value);
       if (answersColumn !== false) row.answers = answers;
       else if (answers.length) toast('정답은 update5.sql을 실행한 뒤에 저장돼요', true);
+      if (RK_READY && q('#fRank')) { const rp = q('#fRank').value; row.rank_points = rp === '' ? null : Number(rp); }
       const btn = q('#fSave');
       btn.disabled = true;
       let id = ex ? ex.id : null;
@@ -2068,7 +2172,7 @@ onmessage = (ev) => {
     if (sr.error) throw sr.error;
     if (pr.error) throw pr.error;
     const names = {};
-    pr.data.forEach((p) => { names[p.id] = p.username; });
+    pr.data.forEach((p) => { names[p.id] = dname(p.id, p.username); });
     const setMap = {};
     sr.data.forEach((s, i) => { setMap[s.id] = { ...s, order: i }; });
     const exMap = {};
@@ -2171,7 +2275,7 @@ onmessage = (ev) => {
     const exMapD = {};
     exs.forEach((e) => { exMapD[e.id] = e; });
     const pendD = pendingOf(subs, exMapD).length;
-    const title = `${pr.data.username} - ${shortOf(sr.data)}`;
+    const title = `${dname(pr.data.id, pr.data.username)} - ${shortOf(sr.data)}`;
     const solved = L.normal.concat(L.elite).filter((e) => subsBy[e.id]);
 
     const item = (e) => {
@@ -2193,7 +2297,7 @@ onmessage = (ev) => {
       }).join('');
       const nC = vers.reduce((n, s) => n + (s.submission_comments || []).length, 0);
       return `<details class="rv" data-rv="${e.id}" ${reviewOpen.has(e.id) ? 'open' : ''}>
-        <summary><span class="ex-no sm">${dispNo(e)}</span> <span class="dbadge d-${e.difficulty}">${e.difficulty}</span>
+        <summary><span class="ex-no sm">${dispNo(e)}</span> ${diffTag(e.difficulty)}
           <span class="rv-t">${esc(firstLine(e.body))}</span>
           ${judgeBadge(vers[vers.length - 1].judge)} <span class="muted small">v${vers[vers.length - 1].version} · ${fmt(vers[vers.length - 1].created_at)}${nC ? ` · 💬${nC}` : ''}</span></summary>
         <div class="rv-body">
@@ -2205,7 +2309,7 @@ onmessage = (ev) => {
     };
 
     return [`
-      <p><a href="#/review/u/${userId}">← ${esc(pr.data.username)} 학생</a> · <a href="#/review">제출함</a></p>
+      <p><a href="#/review/u/${userId}">← ${esc(dname(pr.data.id, pr.data.username))} 학생</a> · <a href="#/review">제출함</a></p>
       <div class="page-head"><h2>📄 ${esc(title)}</h2></div>
       <p class="muted">푼 문제 ${solved.length}개 · 문제를 누르면 풀이가 펼쳐져요.</p>
       ${bulkBar(pendD, '이 문제집')}
@@ -2274,7 +2378,8 @@ onmessage = (ev) => {
           <div class="form-actions"><button class="primary">바꾸기</button></div>
         </form>
       </div>
-      <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>`,
+      <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>
+      <p class="muted small center">PyNest V${APP_VERSION}</p>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
       $('#pwForm', v).onsubmit = async (e) => {
@@ -2290,15 +2395,91 @@ onmessage = (ev) => {
     }];
   }
 
+  /* ---------- 랭킹 · 프로필 (V3.1.0) ---------- */
+  let rankTab = 'week';
+  const sqlHint = (what) => [`<div class="card pad center">${what}<br><span class="muted small">Supabase SQL Editor 에서 <b>v310_ranking.sql</b> 을 한 번 실행해주세요.</span></div>`];
+  function periodText(p) {
+    const d = new Date(Date.now() + 9 * 3600e3); // 한국 시간 (UTC getter 로 읽어요)
+    if (p === 'month') return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월`;
+    const dow = (d.getUTCDay() + 6) % 7;
+    const st = new Date(d.getTime() - dow * 864e5);
+    const en = new Date(st.getTime() + 6 * 864e5);
+    const f = (x) => `${x.getUTCMonth() + 1}/${x.getUTCDate()}`;
+    return `${f(st)} (월) ~ ${f(en)} (일)`;
+  }
+
+  async function pageRanking() {
+    const { data, error } = await sb.rpc('rank_board', { p_period: rankTab });
+    if (error) return sqlHint('랭킹을 불러올 수 없어요.');
+    const unit = rankTab === 'week' ? '이번 주' : '이번 달';
+    const medal = ['🥇', '🥈', '🥉'];
+    const rows = data.map((r) => `
+      <a class="row rk ${r.user_id === me.id ? 'me' : ''}" href="#/u/${r.user_id}">
+        <div class="rk-no top${r.rnk <= 3 ? r.rnk : 0}">${r.rnk <= 3 ? medal[r.rnk - 1] : r.rnk}</div>
+        <div class="row-main rk-who">${tierBadge(r.score, 28)}<b>${esc(r.name)}</b></div>
+        <div class="rk-val"><b>${r.solved}</b><span class="muted small"> 문제</span><div class="muted small">+${r.pts}점</div></div>
+      </a>`).join('');
+    const mine = data.find((r) => r.user_id === me.id);
+    const note = staffRole() ? '' : mine
+      ? `<p class="muted small">내 순위: <b>${mine.rnk}등</b> · ${unit} ${mine.solved}문제</p>`
+      : `<p class="muted small">${unit}에는 아직 푼 문제가 없어요. 지금 도전해봐요! 💪</p>`;
+    return [`
+      <div class="page-head"><h2>🏆 랭킹</h2></div>
+      <div class="tabs"><button data-rk="week" class="${rankTab === 'week' ? 'on' : ''}">주간</button><button data-rk="month" class="${rankTab === 'month' ? 'on' : ''}">월간</button></div>
+      <p class="muted small">${unit} · ${periodText(rankTab)} — 새로 맞춘 서로 다른 문제 개수 순이에요 (같은 문제는 한 번만 세요).</p>
+      ${note}
+      <div class="card list">${rows || '<p class="muted center pad">아직 아무도 문제를 풀지 않았어요.</p>'}</div>`,
+    (v) => {
+      v.querySelectorAll('[data-rk]').forEach((b) => (b.onclick = () => { rankTab = b.dataset.rk; route(); }));
+    }];
+  }
+
+  async function pageProfile(uid) {
+    if (!/^[0-9a-f-]{36}$/i.test(uid || '')) return notFound();
+    const { data: p, error } = await sb.rpc('user_profile', { p_uid: uid });
+    if (error) return sqlHint('프로필을 불러올 수 없어요.');
+    if (!p) return notFound();
+    if (p.staff) {
+      return [`<div class="card pad center"><h2>${esc(p.name)}</h2><p><span class="badge">${p.staff === 'owner' ? '선생님' : ROLE_NAME[p.staff] || esc(p.staff)}</span></p></div>`];
+    }
+    const k = tierOf(p.score);
+    const pct = k.hi == null ? 100 : Math.max(0, Math.min(100, Math.round(((p.score - k.lo) / (k.hi - k.lo)) * 100)));
+    const next = k.hi == null ? '최고 단계예요! 👑' : `다음 <b>${esc(tierOf(k.hi).name)}</b> 까지 ${k.hi - p.score}점`;
+    const rk = (x) => (x.rank ? `${x.rank}등` : '-');
+    const recent = (p.recent || []).map((r) => `
+      <div class="row"><div class="row-main">${diffTag(r.difficulty, `${r.difficulty} ${r.no}`)} <span class="muted small">(#${r.id})</span>
+        ${tierCan('problem') ? `<a href="#/set/${r.set_id}">${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</a>` : `<span>${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</span>`}</div>
+        <div class="muted small">+${r.pts}점 · ${fmt(r.at)}</div></div>`).join('') || '<p class="muted center pad">아직 푼 문제가 없어요.</p>';
+    const byd = (p.by_diff || []).map((d) => `${diffTag(d.difficulty)} <b>${d.n}</b>`).join(' &nbsp; ') || '<span class="muted small">-</span>';
+    return [`
+      <p><a href="#/ranking">← 랭킹</a></p>
+      <div class="card prof">
+        <div class="prof-top">${tierBadge(p.score, 84)}
+          <div><h2 style="margin:0">${esc(p.name)}</h2>
+            <div class="prof-tier">${esc(k.name)} <span class="muted small">· ${p.score}점</span></div>
+            <div class="pbar" title="${p.score} / ${k.hi == null ? '∞' : k.hi}"><i style="width:${pct}%"></i></div>
+            <div class="muted small">${next}</div></div></div>
+        <div class="grid3 prof-stats">
+          <div><div class="muted small">푼 문제</div><b>${p.solved}</b></div>
+          <div><div class="muted small">이번 주</div><b>${p.week.solved}</b> <span class="muted small">${rk(p.week)}</span></div>
+          <div><div class="muted small">이번 달</div><b>${p.month.solved}</b> <span class="muted small">${rk(p.month)}</span></div>
+        </div>
+        <div class="prof-diff">${byd}</div>
+      </div>
+      <h3>최근 푼 문제</h3><div class="card list">${recent}</div>`];
+  }
+
   /* ---------- 관리자 ---------- */
   async function pageAdmin() {
     const tabs = [];
     if (can('members')) tabs.push(['members', '👥 회원']);
     if (can('content')) tabs.push(['lectures', '🎬 강의']);
+    if (can('content')) tabs.push(['diff', '🎯 난이도']);
+    if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, nick: adminNick, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -2329,7 +2510,7 @@ onmessage = (ev) => {
     if (can('members')) { const { data: tl, error: tle } = await sb.rpc('student_tier_list'); if (!tle) { tierOk = true; (tl || []).forEach((t) => { tierBy[t.uname] = t.tier; }); } }
     const tagOf = (x) => (x.role === 'admin' ? ' · OWNER' : staffBy[x.username] ? ` · ${ROLE_NAME[staffBy[x.username]]}` : tierBy[x.username] ? ` · ${TIER_NAME[tierBy[x.username]]}` : '');
     const tierBtns = (x) => (!tierOk || rankOf(x) > 0 ? '' : ['student', 'solver', 'listener'].filter((t) => (tierBy[x.username] || 'student') !== t).map((t) => `<button class="ghost" data-tier="${esc(x.username)}|${t}" title="${esc(TIER_DESC[t])}">${TIER_NAME[t]}</button>`).join(' ') + ' ');
-    const line = (x, btns) => `<div class="row"><div class="row-main"><b>${esc(x.username)}</b> <span class="muted small">${fmt(x.created_at)}${tagOf(x)}</span></div><div>${btns}</div></div>`;
+    const line = (x, btns) => `<div class="row"><div class="row-main"><b>${esc(dname(x.id, x.username))}</b> <span class="muted small">${fmt(x.created_at)}${tagOf(x)}</span></div><div>${btns}</div></div>`;
     const block = (title, arr, btns) => `<h3>${title} (${arr.length})</h3><div class="card list">${arr.length ? arr.map((x) => line(x, btns(x))).join('') : '<p class="muted center pad">없어요.</p>'}</div>`;
     return [
       block('가입 신청 대기', pending, (x) => `<button class="primary" data-act="approve" data-id="${x.id}">승인</button> <button class="ghost" data-act="reject" data-id="${x.id}">거절</button>`)
@@ -2409,6 +2590,89 @@ onmessage = (ev) => {
     }];
   }
 
+  // 🏷️ 별명 — 학생 ID 대신 보일 이름 (직원 누구나). 직원에게는 항상 "별명 (ID)" 로 보여요.
+  async function adminNick() {
+    await loadDir();
+    if (!DIR_OK) return sqlHint('별명 기능이 아직 켜지지 않았어요.');
+    const arr = [...DIR.values()].sort((a, b) => (a.nick ? 0 : 1) - (b.nick ? 0 : 1) || String(a.uname || a.name).localeCompare(String(b.uname || b.name)));
+    const rows = arr.map((d) => `<div class="row" data-q="${esc(`${d.nick || ''} ${d.uname || ''}`.toLowerCase())}">
+      <div class="row-main">${tierBadge(d.score, 22)} ${d.nick ? `<b>${esc(d.nick)}</b> <span class="muted small">(${esc(d.uname)})</span>` : `<b>${esc(d.uname)}</b> <span class="muted small">별명 없음</span>`}</div>
+      <div><button class="ghost" data-nick="${esc(d.uname)}|${esc(d.nick || '')}">${d.nick ? '변경' : '별명 정하기'}</button></div></div>`).join('');
+    return [`
+      <div class="card">
+        <h3>별명 정하기</h3>
+        <p class="muted small">학생들에게는 <b>별명</b>만 보이고(글·댓글·랭킹·프로필), 선생님들에게는 <b>별명 (ID)</b> 로 같이 보여요. 비워서 저장하면 별명이 지워지고 ID로 돌아가요. 다른 사람의 ID와 같은 별명은 쓸 수 없어요. (최대 20자)</p>
+        <input type="search" id="nkQ" placeholder="별명 또는 ID 검색">
+      </div>
+      <h3>학생 (${arr.length})</h3><div class="card list" id="nkList">${rows || '<p class="muted center pad">승인된 학생이 없어요.</p>'}</div>`,
+    (v) => {
+      $('#nkQ', v).oninput = (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        v.querySelectorAll('#nkList [data-q]').forEach((r) => { r.hidden = !!q && !r.dataset.q.includes(q); });
+      };
+      v.querySelectorAll('[data-nick]').forEach((b) => (b.onclick = async () => {
+        const [uname, cur] = b.dataset.nick.split('|');
+        const nick = prompt(`${uname} 의 별명 (비우면 삭제)`, cur);
+        if (nick === null) return;
+        const { data: r, error: er } = await sb.rpc('nickname_set', { p_username: uname, p_nick: nick });
+        if (er) return toast('처리하지 못했어요: ' + er.message, true);
+        const msg = { not_found: '가입된 ID가 아니에요', invalid: '별명은 20자까지예요', taken: '이미 쓰고 있는 별명(또는 다른 사람의 ID)이에요' };
+        if (r !== 'ok') return toast(msg[r] || '처리하지 못했어요', true);
+        toast(nick.trim() ? '별명을 저장했어요' : '별명을 지웠어요');
+        route(true);
+      }));
+    }];
+  }
+
+  // 🎯 난이도 — 난이도별 랭킹 점수 + 직접 만드는 난이도
+  async function adminDiff() {
+    await loadDiffs();
+    if (!RK_READY) return sqlHint('난이도 표가 아직 없어요.');
+    const rows = DIFF_LIST.map((d) => `<div class="row"><div class="row-main">${diffTag(d.name)} <span class="muted small">${d.builtin ? '기본' : '직접 만듦'}</span></div>
+      <div class="diffctl"><input type="number" min="0" max="100000" value="${d.points}" data-dp="${esc(d.name)}" aria-label="${esc(d.name)} 점수"> <span class="muted small">점</span>
+        <button class="ghost" data-dsave="${esc(d.name)}">저장</button>${d.builtin ? '' : ` <button class="ghost" data-ddel="${esc(d.name)}">삭제</button>`}</div></div>`).join('');
+    return [`
+      <div class="card">
+        <h3>난이도 추가</h3>
+        <p class="muted small">문제의 난이도 선택 칸에 바로 나와요. 이름은 24자까지예요.</p>
+        <form id="dForm"><div class="grid2">
+          <label>이름<input type="text" id="dName" maxlength="24" placeholder="예: Expert" required></label>
+          <label>점수<input type="number" id="dPts" min="0" max="100000" value="50" required></label>
+        </div>
+        <label>색 <input type="color" id="dColor" value="#0ea5e9"></label>
+        <div class="form-actions"><button class="primary">추가</button></div></form>
+      </div>
+      <h3>난이도별 점수</h3>
+      <p class="muted small">문제를 맞히면 이 점수가 쌓여서 티어가 올라가요. 문제를 만들 때 <b>🏆 랭킹 점수</b>를 직접 쓰면 그 문제만 그 점수예요. 점수를 바꾸면 모든 학생 점수가 바로 다시 계산돼요.</p>
+      <div class="card list">${rows}</div>`,
+    (v) => {
+      const done = async (msg) => { toast(msg); await loadDiffs(); route(true); };
+      $('#dForm', v).onsubmit = async (e) => {
+        e.preventDefault();
+        const name = $('#dName', v).value.trim();
+        if (!name) return;
+        if (DIFF_LIST.some((d) => d.name.toLowerCase() === name.toLowerCase())) return toast('이미 있는 난이도예요', true);
+        const { error: er } = await sb.from('difficulties').insert({ name, points: Number($('#dPts', v).value), color: $('#dColor', v).value, position: 100 + DIFF_LIST.length });
+        if (er) return toast('추가하지 못했어요: ' + er.message, true);
+        done(`${name} 난이도를 추가했어요`);
+      };
+      v.querySelectorAll('[data-dsave]').forEach((b) => (b.onclick = async () => {
+        const inp = v.querySelector(`[data-dp="${CSS.escape(b.dataset.dsave)}"]`);
+        const pts = Number(inp.value);
+        if (!Number.isFinite(pts) || pts < 0) return toast('점수를 확인해주세요', true);
+        const { data: r, error: er } = await sb.from('difficulties').update({ points: pts }).eq('name', b.dataset.dsave).select('name');
+        if (er || !r || !r.length) return toast('저장하지 못했어요', true);
+        done('점수를 저장했어요');
+      }));
+      v.querySelectorAll('[data-ddel]').forEach((b) => (b.onclick = async () => {
+        if (!confirm(`${b.dataset.ddel} 난이도를 삭제할까요?`)) return;
+        const { error: er } = await sb.from('difficulties').delete().eq('name', b.dataset.ddel);
+        if (er) return toast(er.code === '23503' ? '이 난이도를 쓰는 문제가 있어서 지울 수 없어요' : '삭제하지 못했어요', true);
+        done('삭제했어요');
+      }));
+    }];
+  }
+
   async function adminLectures() {
     const { data, error } = await sb.from('lectures').select('*').order('week', { ascending: false }).order('id', { ascending: false });
     if (error) throw error;
@@ -2479,6 +2743,8 @@ onmessage = (ev) => {
     }
     if (me.status === 'pending') return renderStatus('pending');
     if (me.status === 'rejected') return renderStatus('rejected');
+    ensureDefs();
+    await Promise.all([loadDir(), loadDiffs()]); // v310_ranking.sql 전이면 조용히 건너뛰어요
     renderShell();
     route();
   }

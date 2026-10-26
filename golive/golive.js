@@ -1142,7 +1142,9 @@
           const { data } = await sb.from('profiles').select('id,username,role,status').eq('status', 'approved').neq('role', 'admin').order('username');
           if (tok !== navTok) { busy = false; return; }
           roster = data || [];
-          roster.forEach((r) => { names[r.id] = r.username; });
+          let dirN = {};
+          try { const { data: dd } = await sb.rpc('student_directory'); (dd || []).forEach((d) => { dirN[d.user_id] = d.name; }); } catch (e) { dirN = {}; } // 별명 (v310_ranking.sql 전이면 ID)
+          roster.forEach((r) => { names[r.id] = dirN[r.id] || r.username; });
         }
         if (tok !== navTok) { busy = false; return; }
         drawCfg(); drawPlist(); drawMon();
