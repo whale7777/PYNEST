@@ -62,18 +62,26 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.1.0';
-  // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요. 구간을 바꾸려면 min 만 고치세요.
-  const TIERS = [
+  const APP_VERSION = '3.2.0';
+  // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
+  // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
+  const DEFAULT_TIERS = [
     { n: 'Bronze', min: 0, c: ['#f0b27a', '#9c5a1e'], g: 'circle' },
     { n: 'Silver', min: 100, c: ['#f1f5f9', '#8795a8'], g: 'tri' },
     { n: 'Gold', min: 500, c: ['#ffe27a', '#d19a00'], g: 'sq' },
     { n: 'Platinum', min: 1500, c: ['#8ff0e0', '#16a394'], g: 'dia' },
     { n: 'Diamond', min: 3500, c: ['#9fd4ff', '#2563eb'], g: 'hex' },
+    { n: 'Sapphire', min: 5000, c: ['#7aa2ff', '#1e3a8a'], g: 'drop' },
     { n: 'Emerald', min: 7000, c: ['#7df2a8', '#0e8a4f'], g: 'spark' },
+    { n: 'Amethyst', min: 9500, c: ['#f0abfc', '#a21caf'], g: 'gem' },
     { n: 'Master', min: 12000, c: ['#d9a8ff', '#7c2ae0'], g: 'star' },
+    { n: 'Grandmaster', min: 15000, c: ['#ffb36b', '#c2410c'], g: 'flame' },
+    { n: 'Obsidian', min: 17500, c: ['#9ca3af', '#111827'], g: 'oct' },
     { n: 'The Programmer', min: 20000, c: ['#ff8aa8', '#e11d48'], g: 'crown' },
   ];
+  let TIERS = DEFAULT_TIERS.slice();
+  let TIER_ROWS = []; // DB 에서 읽은 티어 (id 포함)
+  let TIER_DB = false; // tiers 표가 있나?
   const ROMAN = ['V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요
   function tierOf(score) {
     const sc = Math.max(0, Number(score) || 0);
@@ -85,30 +93,61 @@
     const lv = Math.min(4, Math.floor((sc - t.min) / step));
     return { i, lv, roman: ROMAN[lv], name: `${t.n} ${ROMAN[lv]}`, lo: t.min + lv * step, hi: lv < 4 ? t.min + (lv + 1) * step : nextMin, score: sc };
   }
+  // 뱃지 문양 (40×40 칸 안, 방패 가운데 위쪽). 이름은 티어 편집 화면의 선택 칸에 나와요.
   const GLYPH = {
-    circle: '<circle cx="20" cy="15" r="5.5"/>',
-    tri: '<path d="M20 8.5 L26.5 20 H13.5 Z"/>',
-    sq: '<rect x="14.5" y="9.5" width="11" height="11" rx="2"/>',
-    dia: '<path d="M20 7.5 L27.5 15 L20 22.5 L12.5 15 Z"/>',
-    hex: '<path d="M20 8 L26.6 11.8 V19.4 L20 23.2 L13.4 19.4 V11.8 Z"/>',
-    spark: '<path d="M20 6.5 L22.4 12.6 L28.5 15 L22.4 17.4 L20 23.5 L17.6 17.4 L11.5 15 L17.6 12.6 Z"/>',
-    star: '<path d="M20 7.5 L22.5 12.8 L28.3 13.5 L24 17.5 L25.2 23.2 L20 20.3 L14.8 23.2 L16 17.5 L11.7 13.5 L17.5 12.8 Z"/>',
-    crown: '<path d="M12 21.5 L13 10.5 L17 15 L20 8 L23 15 L27 10.5 L28 21.5 Z"/>',
+    circle: ['동그라미', '<circle cx="20" cy="15" r="5.5"/>'],
+    tri: ['삼각형', '<path d="M20 8.5 L26.5 20 H13.5 Z"/>'],
+    sq: ['네모', '<rect x="14.5" y="9.5" width="11" height="11" rx="2"/>'],
+    dia: ['마름모', '<path d="M20 7.5 L27.5 15 L20 22.5 L12.5 15 Z"/>'],
+    hex: ['육각형', '<path d="M20 8 L26.6 11.8 V19.4 L20 23.2 L13.4 19.4 V11.8 Z"/>'],
+    oct: ['팔각형', '<path d="M16.5 7.5 H23.5 L28.5 12.5 V18.5 L23.5 23.5 H16.5 L11.5 18.5 V12.5 Z"/>'],
+    spark: ['반짝임', '<path d="M20 6.5 L22.4 12.6 L28.5 15 L22.4 17.4 L20 23.5 L17.6 17.4 L11.5 15 L17.6 12.6 Z"/>'],
+    star: ['별', '<path d="M20 7.5 L22.5 12.8 L28.3 13.5 L24 17.5 L25.2 23.2 L20 20.3 L14.8 23.2 L16 17.5 L11.7 13.5 L17.5 12.8 Z"/>'],
+    crown: ['왕관', '<path d="M12 21.5 L13 10.5 L17 15 L20 8 L23 15 L27 10.5 L28 21.5 Z"/>'],
+    drop: ['물방울', '<path d="M20 6.5 C20 6.5 14 13 14 17 A6 6 0 0 0 26 17 C26 13 20 6.5 20 6.5 Z"/>'],
+    gem: ['보석', '<path d="M14 11 L17 7.5 H23 L26 11 L20 23 Z"/>'],
+    flame: ['불꽃', '<path d="M20 6.5 C21.5 11 26.5 12.5 26.5 17.5 A6.5 6.5 0 0 1 13.5 17.5 C13.5 14.5 15.5 13 16.5 10.5 C17.5 12 18.5 12.5 20 6.5 Z"/>'],
+    bolt: ['번개', '<path d="M22.5 6.5 L13.5 16 H19 L17.5 23.5 L26.5 13.5 H21 Z"/>'],
+    moon: ['달', '<path d="M24.5 7.5 A8 8 0 1 0 24.5 22.5 A6.5 6.5 0 1 1 24.5 7.5 Z"/>'],
+    leaf: ['잎', '<path d="M13 22 C13 13 18 8 27.5 7.5 C27.5 16 23 22 13 22 Z"/>'],
+    heart: ['하트', '<path d="M20 23 L12.8 15.5 A4 4 0 0 1 20 11 A4 4 0 0 1 27.2 15.5 Z"/>'],
+    plus: ['십자', '<path d="M18 7.5 H22 V13 H27.5 V17 H22 V22.5 H18 V17 H12.5 V13 H18 Z"/>'],
+    ring: ['고리', '<path fill-rule="evenodd" d="M20 8 A7 7 0 1 0 20 22 A7 7 0 1 0 20 8 Z M20 12 A3 3 0 1 1 20 18 A3 3 0 1 1 20 12 Z"/>'],
+    chev: ['화살표', '<path d="M12 17.5 L20 9 L28 17.5 L25.5 20 L20 14.3 L14.5 20 Z"/>'],
   };
+  const glyphSvg = (g) => (GLYPH[g] || GLYPH.circle)[1];
   const SHIELD = 'M20 2 L35.5 7.5 V20 C35.5 28.5 28.8 34.6 20 38 C11.2 34.6 4.5 28.5 4.5 20 V7.5 Z';
-  function ensureDefs() { // 뱃지 그림(방패 + 문양)은 한 번만 만들어 두고 계속 재사용해요
-    if (document.getElementById('tbDefs')) return;
-    const defs = TIERS.map((t, i) => `<linearGradient id="tbg${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t.c[0]}"/><stop offset="1" stop-color="${t.c[1]}"/></linearGradient>
-      <symbol id="tbs${i}" viewBox="0 0 40 40"><path d="${SHIELD}" fill="url(#tbg${i})" stroke="${t.c[1]}" stroke-width="1.6" stroke-linejoin="round"/><g fill="#fff" fill-opacity=".93">${GLYPH[t.g]}</g>${i === TIERS.length - 1 ? `<path d="${SHIELD}" fill="none" stroke="#ffe27a" stroke-width="1"/>` : ''}</symbol>`).join('');
-    const d = document.createElement('div');
-    d.id = 'tbDefs';
-    d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-    d.innerHTML = `<svg width="0" height="0" aria-hidden="true"><defs>${defs}</defs></svg>`;
-    document.body.appendChild(d);
+  const shieldSvg = (id, c1, c2, g, gold) => `<linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>
+      <symbol id="${id}" viewBox="0 0 40 40"><path d="${SHIELD}" fill="url(#${id}g)" stroke="${c2}" stroke-width="1.6" stroke-linejoin="round"/><g fill="#fff" fill-opacity=".93">${glyphSvg(g)}</g>${gold ? `<path d="${SHIELD}" fill="none" stroke="#ffe27a" stroke-width="1"/>` : ''}</symbol>`;
+  function ensureDefs() { // 뱃지 그림(방패 + 문양)은 만들어 두고 계속 재사용해요. 티어가 바뀌면 다시 만들어요.
+    let d = document.getElementById('tbDefs');
+    if (!d) {
+      d = document.createElement('div');
+      d.id = 'tbDefs';
+      d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+      document.body.appendChild(d);
+    }
+    d.innerHTML = `<svg width="0" height="0" aria-hidden="true"><defs>${TIERS.map((t, i) => shieldSvg(`tbs${i}`, t.c[0], t.c[1], t.g, i === TIERS.length - 1)).join('')}</defs></svg>`;
+  }
+  let pvSeq = 0;
+  // 화면 어디서나 쓰는 "혼자 서 있는" 뱃지 (티어 편집 미리보기용)
+  function tierPreview(c1, c2, g, roman = 'I', size = 40) {
+    const id = `tpv${++pvSeq}`;
+    return `<svg viewBox="0 0 40 40" width="${size}" height="${size}" aria-hidden="true"><defs>${shieldSvg(id, c1, c2, g, false)}</defs><use href="#${id}" width="40" height="40"/><text x="20" y="33" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff" stroke="rgba(0,0,0,.45)" stroke-width=".7" paint-order="stroke" font-family="system-ui,sans-serif">${esc(roman)}</text></svg>`;
   }
   function tierBadge(score, size = 20) {
     const k = tierOf(score);
     return `<span class="tbadge" title="${esc(k.name)} · ${k.score}점"><svg viewBox="0 0 40 40" width="${size}" height="${size}" role="img" aria-label="${esc(k.name)}"><use href="#tbs${k.i}" width="40" height="40"/><text x="20" y="33" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff" stroke="rgba(0,0,0,.45)" stroke-width=".7" paint-order="stroke" font-family="system-ui,sans-serif">${k.roman}</text></svg></span>`;
+  }
+  async function loadTiers() {
+    try {
+      const { data, error } = await sb.from('tiers').select('*').order('min_score');
+      if (error || !data || !data.length || data[0].min_score !== 0) throw error || new Error('empty');
+      TIER_ROWS = data;
+      TIERS = data.map((t) => ({ n: t.name, min: t.min_score, c: [t.c1, t.c2], g: GLYPH[t.glyph] ? t.glyph : 'circle' }));
+      TIER_DB = true;
+    } catch (e) { TIER_ROWS = []; TIERS = DEFAULT_TIERS.slice(); TIER_DB = false; }
+    ensureDefs();
   }
 
   // 학생 이름표 (별명 · 누적 점수). student_directory() — v310_ranking.sql 전이면 조용히 비어 있어요.
@@ -142,6 +181,10 @@
       RK_READY = true;
     } catch (e) { RK_READY = false; }
   }
+  // 문제 카드 배경: 난이도마다 달라요 (Bronze·Iron·Gold·Diamond·Ruby·Master 는 전용 무늬, 나머지는 난이도 색으로 은은하게)
+  const DX_OWN = ['bronze', 'iron', 'gold', 'diamond', 'ruby', 'master'];
+  const dxCls = (name) => (name === 'ELITE' ? '' : `dx ${DX_OWN.includes(String(name).toLowerCase()) ? `dx-${String(name).toLowerCase()}` : ''}`);
+  const dxStyle = (name) => { const d = DIFF_LIST.find((x) => x.name === name); return d && /^#[0-9a-f]{6}$/i.test(d.color || '') ? ` style="--dc:${d.color}"` : ''; };
   const diffNames = () => DIFF_LIST.map((d) => d.name);
   const diffPts = (name) => { const d = DIFF_LIST.find((x) => x.name === name); return d ? d.points : 10; };
   const diffTag = (name, text) => {
@@ -975,7 +1018,7 @@
       const last = vers[vers.length - 1];
       const hasC = vers.some((s) => (s.submission_comments || []).length);
       const tags = (e.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
-      return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : ''}" id="ex-${e.id}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
+      return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : dxCls(e.difficulty)}"${dxStyle(e.difficulty)} id="ex-${e.id}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
         <header class="ex-head">
           <span class="ex-no">${dispNo(e)}</span>
           ${diffTag(e.difficulty)}
@@ -2397,7 +2440,7 @@ onmessage = (ev) => {
 
   /* ---------- 랭킹 · 프로필 (V3.1.0) ---------- */
   let rankTab = 'week';
-  const sqlHint = (what) => [`<div class="card pad center">${what}<br><span class="muted small">Supabase SQL Editor 에서 <b>v310_ranking.sql</b> 을 한 번 실행해주세요.</span></div>`];
+  const sqlHint = (what, file = 'v310_ranking.sql') => [`<div class="card pad center">${what}<br><span class="muted small">Supabase SQL Editor 에서 <b>${file}</b> 을 한 번 실행해주세요.</span></div>`];
   function periodText(p) {
     const d = new Date(Date.now() + 9 * 3600e3); // 한국 시간 (UTC getter 로 읽어요)
     if (p === 'month') return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월`;
@@ -2475,11 +2518,12 @@ onmessage = (ev) => {
     if (can('members')) tabs.push(['members', '👥 회원']);
     if (can('content')) tabs.push(['lectures', '🎬 강의']);
     if (can('content')) tabs.push(['diff', '🎯 난이도']);
+    if (isAdmin()) tabs.push(['tier', '🏅 티어']);
     if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, nick: adminNick, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, tier: adminTiers, nick: adminNick, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -2587,6 +2631,91 @@ onmessage = (ev) => {
         setRole(name, $('#sRole', v).value);
       };
       v.querySelectorAll('[data-srole]').forEach((b) => (b.onclick = () => { const [n, r] = b.dataset.srole.split('|'); setRole(n, r); }));
+    }];
+  }
+
+  // 🏅 티어 — 이름 · 시작 점수 · 색 · 뱃지 문양을 직접 추가/수정/삭제 (OWNER / ADMIN)
+  async function adminTiers() {
+    await loadTiers();
+    if (!TIER_DB) return sqlHint('티어 표가 아직 없어요.', 'v320_tiers.sql');
+    const glyphOpts = (sel) => Object.entries(GLYPH).map(([k, [nm]]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${nm}</option>`).join('');
+    const rows = TIER_ROWS.map((t, i) => {
+      const next = TIER_ROWS[i + 1];
+      const step = next ? Math.round(((next.min_score - t.min_score) / 5) * 10) / 10 : null;
+      return `<div class="card tierrow" data-tid="${t.id}">
+        <div class="tr-prev">${tierPreview(t.c1, t.c2, t.glyph, 'I', 44)}</div>
+        <div class="tr-form">
+          <div class="grid2">
+            <label>이름<input type="text" maxlength="24" data-f="name" value="${esc(t.name)}"></label>
+            <label>시작 점수<input type="number" min="0" max="10000000" data-f="min" value="${t.min_score}" ${t.min_score === 0 ? 'readonly title="가장 낮은 티어는 0점에서 시작해요"' : ''}></label>
+          </div>
+          <div class="tr-line">
+            <label>색 <input type="color" data-f="c1" value="${esc(t.c1)}"> <input type="color" data-f="c2" value="${esc(t.c2)}"></label>
+            <label>문양 <select data-f="glyph">${glyphOpts(t.glyph)}</select></label>
+            <span class="muted small">${step == null ? '가장 높은 티어 · 한 단계 2000점' : `다음 티어(${esc(next.name)})까지 · 한 단계 ${step}점`}</span>
+            <span class="spacer"></span>
+            <button class="ghost" data-tsave="${t.id}">저장</button>
+            ${t.min_score === 0 ? '' : `<button class="ghost" data-tdel="${t.id}">삭제</button>`}
+          </div>
+        </div></div>`;
+    }).join('');
+    return [`
+      <div class="card">
+        <h3>티어 추가</h3>
+        <p class="muted small">누적 점수가 <b>시작 점수</b> 이상이면 그 티어예요. 각 티어는 V → IV → III → II → I 다섯 단계로 나뉘고(I 이 가장 높음), 다음 티어의 시작 점수까지를 5등분해요. 이름과 시작 점수는 겹치면 안 돼요. 저장하면 모든 학생의 티어가 바로 다시 계산돼요.</p>
+        <form id="tForm">
+          <div class="grid2">
+            <label>이름<input type="text" id="tName" maxlength="24" placeholder="예: Titan" required></label>
+            <label>시작 점수<input type="number" id="tMin" min="1" max="10000000" value="25000" required></label>
+          </div>
+          <div class="tr-line">
+            <label>색 <input type="color" id="tC1" value="#7dd3fc"> <input type="color" id="tC2" value="#0369a1"></label>
+            <label>문양 <select id="tG">${glyphOpts('star')}</select></label>
+            <span class="tr-prev" id="tPrev"></span>
+            <span class="spacer"></span>
+            <button class="primary">추가</button>
+          </div>
+        </form>
+      </div>
+      <h3>티어 (${TIER_ROWS.length})</h3>
+      <div class="tierlist">${rows}</div>`,
+    (v) => {
+      const done = async (msg) => { toast(msg); await loadTiers(); route(true); };
+      const err = (e, fb) => toast(e.code === '23505' ? '같은 이름이거나 같은 시작 점수의 티어가 이미 있어요' : e.code === '42501' || /row-level/.test(e.message || '') ? '권한이 없어요' : /base tier/.test(e.message || '') ? '0점에서 시작하는 가장 낮은 티어는 바꾸거나 지울 수 없어요' : `${fb}: ${e.message}`, true);
+      const prev = () => { $('#tPrev', v).innerHTML = tierPreview($('#tC1', v).value, $('#tC2', v).value, $('#tG', v).value, 'I', 40); };
+      ['#tC1', '#tC2', '#tG'].forEach((k) => { $(k, v).oninput = prev; });
+      prev();
+      $('#tForm', v).onsubmit = async (e) => {
+        e.preventDefault();
+        const name = $('#tName', v).value.trim();
+        const min = Number($('#tMin', v).value);
+        if (!name || !Number.isInteger(min) || min < 1) return toast('이름과 시작 점수(1 이상의 정수)를 확인해주세요', true);
+        const { error } = await sb.from('tiers').insert({ name, min_score: min, c1: $('#tC1', v).value, c2: $('#tC2', v).value, glyph: $('#tG', v).value });
+        if (error) return err(error, '추가하지 못했어요');
+        done(`${name} 티어를 추가했어요`);
+      };
+      v.querySelectorAll('.tierrow').forEach((row) => {
+        const f = (k) => $(`[data-f="${k}"]`, row);
+        const upd = () => { $('.tr-prev', row).innerHTML = tierPreview(f('c1').value, f('c2').value, f('glyph').value, 'I', 44); };
+        ['c1', 'c2', 'glyph'].forEach((k) => { f(k).oninput = upd; });
+        const sv = $('[data-tsave]', row);
+        sv.onclick = async () => {
+          const name = f('name').value.trim();
+          const min = Number(f('min').value);
+          if (!name || !Number.isInteger(min) || min < 0) return toast('이름과 시작 점수(0 이상의 정수)를 확인해주세요', true);
+          const { data, error } = await sb.from('tiers').update({ name, min_score: min, c1: f('c1').value, c2: f('c2').value, glyph: f('glyph').value }).eq('id', row.dataset.tid).select('id');
+          if (error) return err(error, '저장하지 못했어요');
+          if (!data || !data.length) return toast('저장하지 못했어요', true);
+          done('티어를 저장했어요');
+        };
+        const dl = $('[data-tdel]', row);
+        if (dl) dl.onclick = async () => {
+          if (!confirm(`${f('name').value} 티어를 삭제할까요?\n이 티어였던 학생은 한 단계 아래 티어로 바뀌어요.`)) return;
+          const { error } = await sb.from('tiers').delete().eq('id', row.dataset.tid);
+          if (error) return err(error, '삭제하지 못했어요');
+          done('삭제했어요');
+        };
+      });
     }];
   }
 
@@ -2743,8 +2872,8 @@ onmessage = (ev) => {
     }
     if (me.status === 'pending') return renderStatus('pending');
     if (me.status === 'rejected') return renderStatus('rejected');
+    await Promise.all([loadDir(), loadDiffs(), loadTiers()]); // SQL 을 아직 안 돌렸으면 조용히 기본값으로 동작해요
     ensureDefs();
-    await Promise.all([loadDir(), loadDiffs()]); // v310_ranking.sql 전이면 조용히 건너뛰어요
     renderShell();
     route();
   }

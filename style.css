@@ -368,3 +368,43 @@ a.icon.shop:hover { background: var(--hover); }
 .prof-diff { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 .diffctl { display: flex; align-items: center; gap: 6px; }
 .diffctl input { width: 90px; }
+
+/* ---------- V3.2.0 : 난이도별 문제 카드 배경 ---------- */
+/* 모든 배경은 반투명이라 밝은/어두운 화면 모두에서 글자가 잘 보여요. --dc 는 난이도 색(기본 회색) */
+.ex.dx { --dc: #64748b; border-left: 5px solid var(--dc); background-image: linear-gradient(100deg, color-mix(in srgb, var(--dc) 9%, transparent), transparent 55%); }
+
+/* Bronze — 구리빛 + 가는 사선 무늬 */
+.ex.dx-bronze { --dc: #b45309; border-color: rgba(180,83,9,.45); border-left-color: #b45309;
+  background-image: repeating-linear-gradient(135deg, rgba(180,83,9,.07) 0 2px, transparent 2px 9px), linear-gradient(120deg, rgba(217,119,6,.16), rgba(180,83,9,.03) 55%); }
+/* Iron — 쇳덩이: 결이 있는 회색 금속 + 리벳 */
+.ex.dx-iron { --dc: #64748b; border-color: rgba(100,116,139,.5); border-left-color: #475569;
+  background-image: radial-gradient(circle at 12px 12px, rgba(100,116,139,.5) 0 2.2px, transparent 2.6px), radial-gradient(circle at calc(100% - 12px) 12px, rgba(100,116,139,.5) 0 2.2px, transparent 2.6px),
+    repeating-linear-gradient(90deg, rgba(100,116,139,.09) 0 1px, transparent 1px 5px), linear-gradient(180deg, rgba(148,163,184,.16), rgba(71,85,105,.05)); }
+/* Gold — 반짝이는 금빛 */
+.ex.dx-gold { --dc: #ca8a04; border-color: rgba(202,138,4,.55); border-left-color: #eab308;
+  background-image: radial-gradient(circle at 92% 14%, rgba(253,224,71,.38), transparent 22%), radial-gradient(circle at 6% 88%, rgba(250,204,21,.22), transparent 24%),
+    linear-gradient(135deg, rgba(250,204,21,.16), rgba(250,204,21,.02) 42%, rgba(234,179,8,.14)); }
+/* Diamond — 얼음 결정: 마름모 격자 */
+.ex.dx-diamond { --dc: #0ea5e9; border-color: rgba(14,165,233,.5); border-left-color: #38bdf8;
+  background-image: repeating-linear-gradient(45deg, rgba(56,189,248,.10) 0 1px, transparent 1px 14px), repeating-linear-gradient(-45deg, rgba(56,189,248,.10) 0 1px, transparent 1px 14px),
+    linear-gradient(160deg, rgba(186,230,253,.28), rgba(14,165,233,.04) 60%); }
+/* Ruby — 붉은 빛이 번지는 보석 */
+.ex.dx-ruby { --dc: #dc2626; border-color: rgba(220,38,38,.55); border-left-color: #dc2626; box-shadow: 0 0 0 1px rgba(220,38,38,.12), 0 6px 22px rgba(220,38,38,.14);
+  background-image: radial-gradient(circle at 100% 0%, rgba(239,68,68,.34), transparent 52%), radial-gradient(circle at 0% 100%, rgba(190,18,60,.20), transparent 46%), linear-gradient(135deg, rgba(220,38,38,.07), transparent 60%); }
+/* Master — 보랏빛 우주: 별가루 + 테두리 빛 */
+.ex.dx-master { --dc: #7c3aed; border-color: rgba(124,58,237,.6); border-left-color: #7c3aed; box-shadow: 0 0 0 1px rgba(124,58,237,.18), 0 8px 28px rgba(124,58,237,.2);
+  background-image: radial-gradient(1.4px 1.4px at 12% 22%, rgba(196,181,253,.9), transparent 60%), radial-gradient(1.2px 1.2px at 34% 78%, rgba(196,181,253,.7), transparent 60%),
+    radial-gradient(1.6px 1.6px at 71% 36%, rgba(233,213,255,.85), transparent 60%), radial-gradient(1.2px 1.2px at 88% 82%, rgba(196,181,253,.7), transparent 60%),
+    radial-gradient(circle at 85% 8%, rgba(167,139,250,.32), transparent 45%), linear-gradient(140deg, rgba(124,58,237,.16), rgba(30,27,75,.10) 70%); }
+
+/* ---------- V3.2.0 : 티어 편집 화면 ---------- */
+.tierlist .tierrow { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; margin-bottom: 10px; }
+.tierrow .tr-prev { flex: none; display: grid; place-items: center; width: 52px; height: 52px; }
+.tierrow .tr-form { flex: 1; min-width: 0; }
+.tr-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 10px; }
+.tr-line label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.tr-line select { width: auto; }
+.tr-line input[type="color"] { width: 38px; height: 30px; padding: 2px; }
+.tr-line .spacer { flex: 1; }
+#tPrev { display: inline-grid; place-items: center; }
+@media (max-width: 560px) { .tierlist .tierrow { flex-direction: column; } }

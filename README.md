@@ -78,3 +78,10 @@
 - **티어**: 누적 점수 → Bronze 0 · Silver 100 · Gold 500 · Platinum 1500 · Diamond 3500 · Emerald 7000 · Master 12000 · The Programmer 20000, 각 티어 V~I(I 최고). 뱃지로 표시, 구간은 `app.js` 의 `TIERS`.
 - **프로필**: 이름을 누르면 점수·티어·주/월 순위·난이도별 푼 개수·최근 푼 문제(`Advanced 12 (#345)` = 문제집 안 번호 + 고유 번호).
 - **점수**: 문제 점수 = 문제의 🏆 랭킹 점수(선택) → 없으면 난이도 점수. 🛠️ 관리자 › 🎯 난이도에서 점수 조정·난이도 추가. 기본 Beginner 5 / Intermediate 10 / Advanced 20 / ELITE 30. (기존 "배점"은 그대로 따로 있어요.)
+
+## V3.2.0 — 티어 편집 · 난이도 6종 · m저지 1
+
+- **티어 편집**: [관리 → 🏅 티어] 에서 OWNER/ADMIN 이 티어를 추가·수정·삭제 (이름, 시작 점수, 색 2개, 뱃지 문양 19종). 기본 12티어(Bronze … The Programmer).
+- **난이도 6종**: Bronze 3 · Iron 15 · Gold 50 · Diamond 100 · Ruby 250 · Master 400 점 (티어 이름과 무관). 난이도마다 문제 카드 배경이 달라요.
+- **적용 순서**: Supabase SQL Editor 에서 `v320_tiers.sql` 한 번 실행 → 문제집 페이지에서 `mjudge1.json` 가져오기.
+- `mjudge1.json`: 자동 채점 300문제 (Bronze 29 · Iron 235 · Gold 20 · Diamond 6 · Ruby 7 · Master 3).
