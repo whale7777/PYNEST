@@ -547,6 +547,9 @@
     };
 
     const mySubs = (pid) => subs.filter((s) => s.problem_id === pid);
+    const LPTS = {}; // 난이도 → 점수 (표가 없으면 비어 있어요)
+    try { sb.from('difficulties').select('name,points').then(({ data }) => (data || []).forEach((d) => { LPTS[d.name] = d.points; }), () => {}); } catch (e) { /* 무시 */ }
+    const liveWorth = (p) => (p.rank_points != null ? p.rank_points : (LPTS[p.difficulty] || 0));
     const stateOf = (pid) => { const m = mySubs(pid); return m.some((s) => s.ok) ? 'ok' : m.length ? 'bad' : ''; };
 
     const drawTabs = () => {
@@ -569,6 +572,7 @@
       const st = stateOf(p.id);
       pv.innerHTML = `
         <h3>${esc(p.title) || '문제'} ${open ? '<span class="badge ok">진행 중</span>' : '<span class="badge">마감</span>'}
+          ${liveWorth(p) ? `<span class="badge">🏆 +${liveWorth(p)}점</span>` : ''}
           ${st === 'ok' ? '<span class="badge ok">✅ 맞았어요</span>' : st === 'bad' ? `<span class="badge bad">❌ ${ms.length}번 제출</span>` : ''}</h3>
         <div class="ex-body">${renderMarkup(p.body)}</div>
         ${showCode ? `<textarea class="code" id="cd" spellcheck="false" placeholder="여기에 코드를 쓰세요" ${open ? '' : 'readonly'}>${esc(d.code)}</textarea>
@@ -1002,14 +1006,28 @@
     };
 
     const SN = { '코드': '```\n코드\n```\n', '입출력': '```io\n>>> 입력값\n출력값\n```\n', '출력': '```out\n출력 결과\n```\n', '조건 박스': '```box 조건\n○ 조건 하나\n```\n' };
-    function openEditor(p) {
-      const cur = p || { title: '', body: '', tests: [], answers: [] };
+    // 난이도·랭킹 점수 (v320b_live_points.sql 을 돌렸을 때만 나와요)
+    let LDIFF = null;
+    async function loadLiveDiffs() {
+      if (LDIFF !== null) return LDIFF;
+      try {
+        const probe = await sb.from('live_problems').select('difficulty,rank_points').limit(1);
+        const { data, error } = await sb.from('difficulties').select('name,points').order('position').order('name');
+        LDIFF = probe.error || error || !data ? false : data;
+      } catch (e) { LDIFF = false; }
+      return LDIFF;
+    }
+    async function openEditor(p) {
+      const ld = await loadLiveDiffs();
+      const cur = p || { title: '', body: '', tests: [], answers: [], difficulty: null, rank_points: null };
       const m = modal(`<h3>${p ? '문제 수정' : '문제 추가'}</h3>
         <form id="f">
           <label>제목<input type="text" id="eT" value="${esc(cur.title)}" placeholder="예: 문제 1 · 두 수의 합" required></label>
           <label>문제 내용</label>
           <div class="snips">${Object.keys(SN).map((k) => `<button type="button" class="ghost" data-sn="${esc(k)}">${esc(k)}</button>`).join('')}</div>
           <textarea id="eB" class="code" style="min-height:180px" required>${esc(cur.body)}</textarea>
+          ${ld ? `<div class="grid2"><label>난이도 (점수) <span class="muted small">— 맞히면 랭킹·티어 점수가 올라가요</span><select id="eD"><option value="">점수 없음</option>${ld.map((d) => `<option value="${esc(d.name)}" ${cur.difficulty === d.name ? 'selected' : ''}>${esc(d.name)} · ${d.points}점</option>`).join('')}</select></label>
+            <label>🏆 랭킹 점수 직접 정하기 (선택)<input type="number" id="eR" min="0" placeholder="비우면 난이도 점수" value="${cur.rank_points ?? ''}"></label></div>` : ''}
           <label>미리보기</label><div id="eP" class="ex-body prev"></div>
           <label>자동 채점 테스트 (선택)</label>
           <div class="snips"><button type="button" class="ghost" id="eFrom">문제의 입출력 예시 가져오기</button></div>
@@ -1034,6 +1052,7 @@
       q('#f').onsubmit = async (e) => {
         e.preventDefault();
         const row = { title: q('#eT').value.trim(), body: q('#eB').value.trim(), tests: textToTests(q('#eTe').value), answers: textToAnswers(q('#eA').value) };
+        if (ld) { row.difficulty = q('#eD').value || null; const rp = q('#eR').value; row.rank_points = rp === '' ? null : Number(rp); }
         const r = p ? await sb.from('live_problems').update(row).eq('id', p.id)
           : await sb.from('live_problems').insert({ ...row, session_id: ses.id, position: probs.reduce((mx, x) => Math.max(mx, x.position), 0) + 1000 });
         if (r.error) return toast('저장하지 못했어요: ' + r.error.message, true);
@@ -1042,6 +1061,7 @@
     }
 
     async function openImport() {
+      const ld = await loadLiveDiffs();
       const { data: sets, error } = await sb.from('problem_sets').select('id,title,short_name').order('id');
       if (error || !sets.length) return toast('가져올 PyNest 문제집이 없어요', true);
       const m = modal(`<h3>📥 PyNest 문제집에서 가져오기</h3>
@@ -1068,7 +1088,7 @@
         if (!pick.length) return toast('가져올 문제를 고르세요', true);
         const setName = (sets.find((s) => s.id === Number($('#iS', m.el).value)) || {}).short_name || '';
         let pos = probs.reduce((mx, x) => Math.max(mx, x.position), 0);
-        const rows = pick.map((x) => ({ session_id: ses.id, position: (pos += 1000), title: `${setName} ${x.no}번`.trim(), body: x.body, tests: x.tests || [], answers: x.answers || [] }));
+        const rows = pick.map((x) => ({ session_id: ses.id, position: (pos += 1000), title: `${setName} ${x.no}번`.trim(), body: x.body, tests: x.tests || [], answers: x.answers || [], ...(ld ? { difficulty: x.difficulty === 'ELITE' || ld.some((d) => d.name === x.difficulty) ? x.difficulty : null, rank_points: x.rank_points ?? null } : {}) }));
         const { error: er } = await sb.from('live_problems').insert(rows);
         if (er) return toast('가져오지 못했어요: ' + er.message, true);
         m.close(); toast(`${rows.length}문제를 가져왔어요 (초안 상태예요)`); refresh();

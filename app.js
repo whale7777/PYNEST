@@ -2570,8 +2570,10 @@ onmessage = (ev) => {
     const next = k.hi == null ? '최고 단계예요! 👑' : `다음 <b>${esc(tierOf(k.hi).name)}</b> 까지 ${k.hi - p.score}점`;
     const rk = (x) => (x.rank ? `${x.rank}등` : '-');
     const recent = (p.recent || []).map((r) => `
-      <div class="row"><div class="row-main">${diffTag(r.difficulty, `${r.difficulty} ${r.no}`)} <span class="muted small">(#${r.id})</span>
-        ${tierCan('problem') ? `<a href="#/set/${r.set_id}">${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</a>` : `<span>${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</span>`}</div>
+      <div class="row"><div class="row-main">${r.live
+        ? `${r.difficulty ? diffTag(r.difficulty, `${r.difficulty} 라이브`) : '<span class="dbadge">라이브</span>'} <span class="muted small">(#${r.id})</span> <span>${esc(r.set_title || '라이브')}</span>`
+        : `${diffTag(r.difficulty, `${r.difficulty} ${r.no}`)} <span class="muted small">(#${r.id})</span>
+        ${tierCan('problem') ? `<a href="#/set/${r.set_id}">${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</a>` : `<span>${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</span>`}`}</div>
         <div class="muted small">+${r.pts}점 · ${fmt(r.at)}</div></div>`).join('') || '<p class="muted center pad">아직 푼 문제가 없어요.</p>';
     const byd = (p.by_diff || []).map((d) => `${diffTag(d.difficulty)} <b>${d.n}</b>`).join(' &nbsp; ') || '<span class="muted small">-</span>';
     return [`
