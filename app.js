@@ -2417,16 +2417,16 @@ onmessage = (ev) => {
       <a class="row rk ${r.user_id === me.id ? 'me' : ''}" href="#/u/${r.user_id}">
         <div class="rk-no top${r.rnk <= 3 ? r.rnk : 0}">${r.rnk <= 3 ? medal[r.rnk - 1] : r.rnk}</div>
         <div class="row-main rk-who">${tierBadge(r.score, 28)}<b>${esc(r.name)}</b></div>
-        <div class="rk-val"><b>${r.solved}</b><span class="muted small"> 문제</span><div class="muted small">+${r.pts}점</div></div>
+        <div class="rk-val"><b>${r.pts}</b><span class="muted small"> 점</span><div class="muted small">${r.solved}문제</div></div>
       </a>`).join('');
     const mine = data.find((r) => r.user_id === me.id);
     const note = staffRole() ? '' : mine
-      ? `<p class="muted small">내 순위: <b>${mine.rnk}등</b> · ${unit} ${mine.solved}문제</p>`
+      ? `<p class="muted small">내 순위: <b>${mine.rnk}등</b> · ${unit} ${mine.pts}점 (${mine.solved}문제)</p>`
       : `<p class="muted small">${unit}에는 아직 푼 문제가 없어요. 지금 도전해봐요! 💪</p>`;
     return [`
       <div class="page-head"><h2>🏆 랭킹</h2></div>
       <div class="tabs"><button data-rk="week" class="${rankTab === 'week' ? 'on' : ''}">주간</button><button data-rk="month" class="${rankTab === 'month' ? 'on' : ''}">월간</button></div>
-      <p class="muted small">${unit} · ${periodText(rankTab)} — 새로 맞춘 서로 다른 문제 개수 순이에요 (같은 문제는 한 번만 세요).</p>
+      <p class="muted small">${unit} · ${periodText(rankTab)} — 이 기간에 새로 맞춘 문제의 점수 합 순이에요 (같은 문제는 한 번만 세요).</p>
       ${note}
       <div class="card list">${rows || '<p class="muted center pad">아직 아무도 문제를 풀지 않았어요.</p>'}</div>`,
     (v) => {
@@ -2461,8 +2461,8 @@ onmessage = (ev) => {
             <div class="muted small">${next}</div></div></div>
         <div class="grid3 prof-stats">
           <div><div class="muted small">푼 문제</div><b>${p.solved}</b></div>
-          <div><div class="muted small">이번 주</div><b>${p.week.solved}</b> <span class="muted small">${rk(p.week)}</span></div>
-          <div><div class="muted small">이번 달</div><b>${p.month.solved}</b> <span class="muted small">${rk(p.month)}</span></div>
+          <div><div class="muted small">이번 주</div><b>${p.week.pts}</b><span class="muted small">점 · ${p.week.solved}문제 · ${rk(p.week)}</span></div>
+          <div><div class="muted small">이번 달</div><b>${p.month.pts}</b><span class="muted small">점 · ${p.month.solved}문제 · ${rk(p.month)}</span></div>
         </div>
         <div class="prof-diff">${byd}</div>
       </div>

@@ -7,7 +7,7 @@
 --
 --  점수  = 푼(AC) 문제의 점수 합 (같은 문제는 1번만)
 --          문제 점수 = 문제에 직접 지정한 "랭킹 점수" → 없으면 난이도 점수 → 없으면 10
---  랭킹  = 이번 주(월~일) / 이번 달 에 "처음 맞춘" 서로 다른 문제 개수  (한국 시간 기준)
+--  랭킹  = 이번 주(월~일) / 이번 달 에 "처음 맞춘" 문제들의 점수 합  (한국 시간 기준)
 --  티어  = 누적 점수 (뱃지·구간은 app.js 의 TIERS)
 -- =====================================================================
 
@@ -212,7 +212,7 @@ as $$
 $$;
 revoke all on function public.rk_period_start(text) from public, anon, authenticated;
 
--- 랭킹. p_period: week / month. 순위는 "푼 개수"로만 매기고(같으면 공동), 같은 개수끼리는 점수 순으로 보여줘요.
+-- 랭킹. p_period: week / month. 순위는 그 기간에 얻은 "점수" 순이에요(같으면 공동, 같은 점수끼리는 푼 개수 순으로 보여줘요).
 create or replace function public.rank_board(p_period text)
 returns table (user_id uuid, name text, solved int, pts int, rnk int, score int)
 language sql stable security definer set search_path = public
@@ -220,11 +220,11 @@ as $$
   with per as (select * from public.rk_scores(public.rk_period_start(p_period))),
        tot as (select * from public.rk_scores(null))
   select per.uid, public.disp(per.uid), per.solved, per.pts,
-         (rank() over (order by per.solved desc))::int,
+         (rank() over (order by per.pts desc))::int,
          coalesce(tot.pts, 0)
     from per left join tot on tot.uid = per.uid
    where public.is_approved() and p_period in ('week', 'month')
-   order by per.solved desc, per.pts desc, 2
+   order by per.pts desc, per.solved desc, 2
 $$;
 
 -- 이름 + 누적 점수 (뱃지·이름 표시용). 직원에게만 원래 ID(uname)도 내려가요.
@@ -273,8 +273,8 @@ begin
   select * into v_tot from public.rk_scores(null) where uid = p_uid;
   select * into v_w from public.rk_scores(v_ws) where uid = p_uid;
   select * into v_m from public.rk_scores(v_ms) where uid = p_uid;
-  select 1 + count(*) into v_rw from public.rk_scores(v_ws) x where x.solved > coalesce(v_w.solved, 0);
-  select 1 + count(*) into v_rm from public.rk_scores(v_ms) x where x.solved > coalesce(v_m.solved, 0);
+  select 1 + count(*) into v_rw from public.rk_scores(v_ws) x where x.pts > coalesce(v_w.pts, 0);
+  select 1 + count(*) into v_rm from public.rk_scores(v_ms) x where x.pts > coalesce(v_m.pts, 0);
 
   select coalesce(jsonb_agg(jsonb_build_object('difficulty', t.difficulty, 'n', t.n) order by t.n desc), '[]'::jsonb)
     into v_by
@@ -303,8 +303,8 @@ begin
     'joined', v_p.created_at,
     'score', coalesce(v_tot.pts, 0),
     'solved', coalesce(v_tot.solved, 0),
-    'week', jsonb_build_object('solved', coalesce(v_w.solved, 0), 'rank', case when coalesce(v_w.solved, 0) > 0 then v_rw end),
-    'month', jsonb_build_object('solved', coalesce(v_m.solved, 0), 'rank', case when coalesce(v_m.solved, 0) > 0 then v_rm end),
+    'week', jsonb_build_object('solved', coalesce(v_w.solved, 0), 'pts', coalesce(v_w.pts, 0), 'rank', case when coalesce(v_w.pts, 0) > 0 then v_rw end),
+    'month', jsonb_build_object('solved', coalesce(v_m.solved, 0), 'pts', coalesce(v_m.pts, 0), 'rank', case when coalesce(v_m.pts, 0) > 0 then v_rm end),
     'by_diff', v_by,
     'recent', v_recent
   );
