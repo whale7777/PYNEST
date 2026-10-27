@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.4.0';
+  const APP_VERSION = '3.5.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -322,6 +322,7 @@
         </div>
         <form id="authForm">
           <label>ID<input type="text" id="aid" autocomplete="username" autocapitalize="none" placeholder="영문 소문자·숫자·_ (3~20자)" required></label>
+          ${signup ? '<label>별명 <small class="muted">(사이트에 보여요 · 1~20자)</small><input type="text" id="anick" maxlength="20" autocomplete="nickname" placeholder="한글·영문·숫자" required></label>' : ''}
           <label>비밀번호<input type="password" id="apw" autocomplete="${signup ? 'new-password' : 'current-password'}" placeholder="6자 이상" required></label>
           ${signup ? '<label>비밀번호 확인<input type="password" id="apw2" autocomplete="new-password" required></label><p class="muted small">가입을 신청하면 선생님이 승인한 뒤에 사용할 수 있어요.</p>' : ''}
           <div class="form-actions"><button class="primary" id="authBtn" style="width:100%">${signup ? '가입 신청하기' : '로그인'}</button></div>
@@ -344,16 +345,22 @@
     boot();
   }
 
+  const NICK_RE = /^[0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ _.-]{1,20}$/;
+  const NICK_MSG = { invalid: '별명은 한글·영문·숫자·공백·_ . - 로 1~20자예요', reserved: '운영진처럼 보이는 별명은 쓸 수 없어요', taken: '이미 쓰고 있는 별명이거나 다른 사람의 ID예요', locked: '선생님이 정해준 별명이라 바꿀 수 없어요', login: '로그인이 필요해요' };
   async function doSignup() {
     const id = $('#aid').value.trim().toLowerCase();
     const pw = $('#apw').value;
     if (!ID_RE.test(id)) return toast('ID는 영문 소문자, 숫자, _ 로 3~20자예요', true);
     if (pw.length < 6) return toast('비밀번호는 6자 이상이어야 해요', true);
     if (pw !== $('#apw2').value) return toast('비밀번호 확인이 달라요', true);
+    const nick = $('#anick').value.trim().replace(/\s+/g, ' ');
+    if (!NICK_RE.test(nick)) return toast(NICK_MSG.invalid, true);
+    const av = await sb.rpc('nickname_available', { p_nick: nick }); // v350 SQL 전이면 검사 없이 통과
+    if (!av.error && av.data !== 'ok') return toast(NICK_MSG[av.data] || '쓸 수 없는 별명이에요', true);
     const btn = $('#authBtn');
     btn.disabled = true;
     signingUp = true;
-    const { error } = await sb.auth.signUp({ email: emailOf(id), password: pw, options: { data: { username: id } } });
+    const { error } = await sb.auth.signUp({ email: emailOf(id), password: pw, options: { data: { username: id, nickname: nick } } });
     await sb.auth.signOut();
     signingUp = false;
     if (error) {
@@ -2567,11 +2574,36 @@ onmessage = (ev) => {
           <div class="form-actions"><button class="primary">바꾸기</button></div>
         </form>
       </div>
+      <div class="card" id="nickCard">
+        <h3>🏷️ 별명</h3>
+        <form id="nickForm"><div class="form-actions" style="gap:8px"><input type="text" id="nickIn" maxlength="20" placeholder="한글·영문·숫자 1~20자" style="flex:1" disabled><button class="primary" id="nickBtn" disabled>저장</button></div></form>
+        <p class="muted small" id="nickNote">불러오는 중…</p>
+      </div>
       <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>
       <div class="card" id="kkCard"><h3>💬 카카오톡 연동</h3><p class="muted small">PyNest 카카오톡 채널 챗봇에서 랭킹·내 프로필·티어를 볼 수 있어요.</p><div id="kkBody" class="muted small">불러오는 중…</div></div>
       <p class="muted small center">PyNest V${APP_VERSION}</p>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
+      const nickDraw = async () => {
+        const { data: nr, error: ne } = await sb.from('nicknames').select('nickname,set_by').eq('user_id', me.id).maybeSingle();
+        if (ne) { $('#nickNote', v).textContent = '아직 준비되지 않았어요. (관리자가 v350_nickname_signup.sql 을 실행하면 쓸 수 있어요)'; return; }
+        const locked = !!nr && nr.set_by !== me.id; // 선생님이 정해준 별명은 못 바꿔요
+        $('#nickIn', v).value = nr ? nr.nickname : '';
+        $('#nickIn', v).disabled = locked;
+        $('#nickBtn', v).disabled = locked;
+        $('#nickNote', v).textContent = locked ? '🔒 선생님이 정해준 별명이라 바꿀 수 없어요.' : '랭킹·게시판 등에 보이는 이름이에요. 비우고 저장하면 별명이 없어져요.';
+      };
+      nickDraw();
+      $('#nickForm', v).onsubmit = async (e) => {
+        e.preventDefault();
+        const nick = $('#nickIn', v).value.trim().replace(/\s+/g, ' ');
+        if (nick && !NICK_RE.test(nick)) return toast(NICK_MSG.invalid, true);
+        const { data: r, error: er } = await sb.rpc('nickname_set_self', { p_nick: nick });
+        if (er) return toast('저장하지 못했어요: ' + er.message, true);
+        if (r !== 'ok') return toast(NICK_MSG[r] || '저장하지 못했어요', true);
+        await loadDir(); nickDraw();
+        toast(nick ? '별명을 저장했어요' : '별명을 지웠어요');
+      };
       const kk = $('#kkBody', v);
       const kkDraw = async () => {
         const { data, error } = await sb.rpc('kakao_status');
