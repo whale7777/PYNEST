@@ -1283,6 +1283,7 @@
     }
     if (me.status === 'pending') return renderStatus(true);
     if (me.status === 'rejected') return renderStatus(false);
+    try { const { data: pf, error: pe } = await sb.from('prelude_funcs').select('*').order('position').order('id'); window.PYJ.setPre(pe || !pf ? [] : pf); } catch (e) { window.PYJ.setPre([]); } // 공용 함수 (공용 + 라이브만)
     renderShell();
     route();
   }

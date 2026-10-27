@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.6.0';
+  const APP_VERSION = '3.7.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -1443,7 +1443,7 @@
     '        raise EOFError("EOF when reading a line")',
     '    return s.rstrip("\\n")',
     'builtins.input = _inp',
-    'def judge_run(code, inp):',
+    'def judge_run(code, inp, pre="[]"):',
     '    so, si, se = sys.stdout, sys.stdin, sys.stderr',
     '    out = io.StringIO()',
     '    sys.stdin = io.StringIO(inp)',
@@ -1451,7 +1451,15 @@
     '    sys.stderr = io.StringIO()',
     '    err = None',
     '    try:',
-    '        exec(compile(code, "main.py", "exec"), {"__name__": "__main__"})',
+    '        g = {"__name__": "__main__"}',
+    '        stage = None',
+    '        for b in json.loads(pre or "[]"):',
+    '            stage = b.get("n") or "이름 없음"',
+    '            exec(compile(b.get("c", ""), "prelude.py", "exec"), g)',
+    '        stage = None',
+    '        out.seek(0)',
+    '        out.truncate(0)',
+    '        exec(compile(code, "main.py", "exec"), g)',
     '    except SystemExit:',
     '        pass',
     '    except BaseException as e:',
@@ -1463,6 +1471,8 @@
     '            tb = tb.tb_next',
     '        msg = e.msg if isinstance(e, SyntaxError) else str(e)',
     '        err = (str(line) + "번째 줄 · " if line else "") + type(e).__name__ + (": " + msg if msg else "")',
+    '        if stage is not None:',
+    '            err = "[공용 함수 \'" + stage + "\' 오류] " + type(e).__name__ + (": " + msg if msg else "")',
     '    finally:',
     '        sys.stdout, sys.stdin, sys.stderr = so, si, se',
     '    return json.dumps({"ok": err is None, "out": out.getvalue()[:20000], "err": err})',
@@ -1480,11 +1490,22 @@ let run = null;
 })();
 onmessage = (ev) => {
   const d = ev.data;
-  try { postMessage(Object.assign({ id: d.id }, JSON.parse(run(d.code, d.input)))); }
+  try { postMessage(Object.assign({ id: d.id }, JSON.parse(run(d.code, d.input, d.pre || '[]')))); }
   catch (e) { postMessage({ id: d.id, ok: false, out: '', err: String(e) }); }
 };`;
   let jw = null;
   let jseq = 0;
+  // 선생님이 미리 만들어 둔 공용 함수 (v370_prelude.sql). 학생 코드를 돌리기 전에 먼저 불러와져요.
+  let PRE_ROWS = [];
+  let PRE_JSON = '[]';
+  const preScope = (list, scopes) => JSON.stringify(list.filter((x) => x.enabled !== false && scopes.includes(x.scope) && String(x.code || '').trim()).map((x) => ({ n: x.name || '', c: x.code })));
+  async function loadPre() {
+    try {
+      const { data, error } = await sb.from('prelude_funcs').select('*').order('position').order('id');
+      PRE_ROWS = error || !data ? [] : data;
+    } catch (e) { PRE_ROWS = []; }
+    PRE_JSON = preScope(PRE_ROWS, ['all']);
+  }
 
   function jworker() {
     if (jw) return jw.p;
@@ -1574,7 +1595,7 @@ onmessage = (ev) => {
         resolve({ status: 'TLE', out: '' });
       }, limit);
       w.addEventListener('message', on);
-      w.postMessage({ id, code, input });
+      w.postMessage({ id, code, input, pre: PRE_JSON });
     });
   }
 
@@ -2797,12 +2818,13 @@ onmessage = (ev) => {
     if (can('members')) tabs.push(['members', '👥 회원']);
     if (can('content')) tabs.push(['lectures', '🎬 강의']);
     if (can('content')) tabs.push(['diff', '🎯 난이도']);
+    if (can('content')) tabs.push(['pre', '🧩 공용 함수']);
     if (isAdmin()) tabs.push(['tier', '🏅 티어']);
     if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, tier: adminTiers, nick: adminNick, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, tier: adminTiers, nick: adminNick, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -2914,6 +2936,93 @@ onmessage = (ev) => {
   }
 
   // 🏅 티어 — 이름 · 시작 점수 · 색 · 뱃지 문양을 직접 추가/수정/삭제 (OWNER / ADMIN)
+  /* ---------- 공용 함수 (학생 코드 앞에 미리 불러오는 함수) ---------- */
+  async function adminPre() {
+    const { data, error } = await sb.from('prelude_funcs').select('*').order('position').order('id');
+    if (error) return sqlHint('공용 함수 표가 아직 없어요.', 'v370_prelude.sql');
+    PRE_ROWS = data;
+    PRE_JSON = preScope(PRE_ROWS, ['all']);
+    const card = (x) => `<div class="card prerow" ${x ? `data-pid="${x.id}"` : 'data-new="1"'}>
+      <div class="pre-top">
+        <select data-f="scope" title="어디에서 쓸 수 있는 함수인가요?">
+          <option value="all" ${!x || x.scope === 'all' ? 'selected' : ''}>🌐 공용 (모든 문제 + 라이브)</option>
+          <option value="live" ${x && x.scope === 'live' ? 'selected' : ''}>📡 라이브만</option>
+        </select>
+        <input type="text" data-f="name" maxlength="80" placeholder="메모(이름) — 예: 리스트 안을 모두 정수로 바꾸는 함수" value="${esc(x ? x.name : '')}">
+        <label class="inline pre-on"><input type="checkbox" data-f="enabled" ${!x || x.enabled ? 'checked' : ''}> 사용</label>
+      </div>
+      <textarea class="code" data-f="code" spellcheck="false" placeholder="def to_ints(lst):&#10;    return [int(x) for x in lst]">${esc(x ? x.code : '')}</textarea>
+      <div class="form-actions">
+        <button class="primary" data-psave>저장</button>
+        <button class="ghost" data-ptest title="이 함수를 불러와 보고 오류가 없는지 확인해요">▶ 오류 확인</button>
+        <span class="muted small" data-pmsg></span>
+        <span class="spacer"></span>
+        <button class="ghost" data-pdel>삭제</button>
+      </div></div>`;
+    return [`
+      <div class="card">
+        <h3>🧩 공용 함수</h3>
+        <p class="muted small" style="margin:0">여기에 함수를 미리 만들어 두면, 학생이 코드를 <b>실행·채점·제출</b>할 때 이 함수들이 <b>먼저 불러와져서</b> 학생은 함수 이름만 쓰면 돼요. (예: <code>to_ints(lst)</code>) 문제 본문에 "<code>to_ints()</code> 를 써서 풀어보세요"처럼 쓰는 건 직접 적어주세요. 왼쪽 위에서 <b>🌐 공용</b>(모든 문제와 라이브) 또는 <b>📡 라이브만</b>을 골라요. 함수 코드는 학생 브라우저에서 실행돼서 정답을 숨기는 용도는 아니에요.</p>
+      </div>
+      <div id="preList">${data.map(card).join('')}</div>
+      <div class="form-actions"><button class="primary" id="preAdd">＋ 함수 추가</button></div>`,
+    (v) => {
+      const list = $('#preList', v);
+      const bindRow = (row) => {
+        const f = (k) => row.querySelector(`[data-f="${k}"]`);
+        const msg = (t, bad) => { const m = row.querySelector('[data-pmsg]'); m.textContent = t; m.style.color = bad ? 'var(--danger, #dc2626)' : ''; };
+        const ta = f('code');
+        ta.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Tab') { ev.preventDefault(); const st = ta.selectionStart; ta.value = ta.value.slice(0, st) + '    ' + ta.value.slice(ta.selectionEnd); ta.selectionStart = ta.selectionEnd = st + 4; }
+        });
+        row.querySelector('[data-ptest]').onclick = async () => {
+          const code = ta.value;
+          if (!code.trim()) return msg('코드를 입력하세요', true);
+          msg('⏳ 확인 중…');
+          const r = await runOnce(code + '\n', '');
+          if (r.status === 'OK') msg('✅ 오류 없이 불러와져요');
+          else if (r.status === 'LOAD') msg('실행 도구를 불러오지 못했어요', true);
+          else if (r.status === 'TLE') msg('시간이 너무 오래 걸려요 (무한 반복인지 확인)', true);
+          else msg('❌ ' + (r.err || '오류'), true);
+        };
+        row.querySelector('[data-psave]').onclick = async () => {
+          const body = { scope: f('scope').value, name: f('name').value.trim(), code: ta.value, enabled: f('enabled').checked };
+          if (!body.code.trim()) return msg('코드를 입력하세요', true);
+          const isNew = row.dataset.new === '1';
+          let r;
+          if (isNew) {
+            const pos = [...list.children].indexOf(row);
+            r = await sb.from('prelude_funcs').insert({ ...body, position: (pos + 1) * 10 }).select('id').single();
+          } else r = await sb.from('prelude_funcs').update({ ...body, updated_at: new Date().toISOString() }).eq('id', Number(row.dataset.pid));
+          if (r.error) return msg('저장하지 못했어요: ' + r.error.message, true);
+          if (isNew && r.data) { row.dataset.pid = r.data.id; delete row.dataset.new; }
+          await loadPre();
+          msg('✅ 저장했어요');
+          toast('저장했어요');
+        };
+        row.querySelector('[data-pdel]').onclick = async () => {
+          if (row.dataset.new === '1') { row.remove(); return; }
+          if (!confirm(`"${f('name').value || '이름 없는 함수'}" 함수를 삭제할까요?`)) return;
+          const { error: de } = await sb.from('prelude_funcs').delete().eq('id', Number(row.dataset.pid));
+          if (de) return toast('삭제하지 못했어요', true);
+          row.remove();
+          await loadPre();
+          toast('삭제했어요');
+        };
+      };
+      list.querySelectorAll('.prerow').forEach(bindRow);
+      $('#preAdd', v).onclick = () => {
+        const t = document.createElement('div');
+        t.innerHTML = card(null);
+        const row = t.firstElementChild;
+        list.appendChild(row);
+        bindRow(row);
+        row.querySelector('[data-f="name"]').focus();
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+    }];
+  }
+
   async function adminTiers() {
     await loadTiers();
     if (!TIER_DB) return sqlHint('티어 표가 아직 없어요.', 'v320_tiers.sql');
@@ -3151,7 +3260,7 @@ onmessage = (ev) => {
     }
     if (me.status === 'pending') return renderStatus('pending');
     if (me.status === 'rejected') return renderStatus('rejected');
-    await Promise.all([loadDir(), loadDiffs(), loadTiers()]); // SQL 을 아직 안 돌렸으면 조용히 기본값으로 동작해요
+    await Promise.all([loadDir(), loadDiffs(), loadTiers(), loadPre()]); // SQL 을 아직 안 돌렸으면 조용히 기본값으로 동작해요
     ensureDefs();
     renderShell();
     route();

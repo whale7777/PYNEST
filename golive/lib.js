@@ -63,7 +63,7 @@
     '        raise EOFError("EOF when reading a line")',
     '    return s.rstrip("\\n")',
     'builtins.input = _inp',
-    'def judge_run(code, inp):',
+    'def judge_run(code, inp, pre="[]"):',
     '    so, si, se = sys.stdout, sys.stdin, sys.stderr',
     '    out = io.StringIO()',
     '    sys.stdin = io.StringIO(inp)',
@@ -71,7 +71,15 @@
     '    sys.stderr = io.StringIO()',
     '    err = None',
     '    try:',
-    '        exec(compile(code, "main.py", "exec"), {"__name__": "__main__"})',
+    '        g = {"__name__": "__main__"}',
+    '        stage = None',
+    '        for b in json.loads(pre or "[]"):',
+    '            stage = b.get("n") or "이름 없음"',
+    '            exec(compile(b.get("c", ""), "prelude.py", "exec"), g)',
+    '        stage = None',
+    '        out.seek(0)',
+    '        out.truncate(0)',
+    '        exec(compile(code, "main.py", "exec"), g)',
     '    except SystemExit:',
     '        pass',
     '    except BaseException as e:',
@@ -83,6 +91,8 @@
     '            tb = tb.tb_next',
     '        msg = e.msg if isinstance(e, SyntaxError) else str(e)',
     '        err = (str(line) + "번째 줄 · " if line else "") + type(e).__name__ + (": " + msg if msg else "")',
+    '        if stage is not None:',
+    '            err = "[공용 함수 \'" + stage + "\' 오류] " + type(e).__name__ + (": " + msg if msg else "")',
     '    finally:',
     '        sys.stdout, sys.stdin, sys.stderr = so, si, se',
     '    return json.dumps({"ok": err is None, "out": out.getvalue()[:20000], "err": err})',
@@ -100,11 +110,14 @@ let run = null;
 })();
 onmessage = (ev) => {
   const d = ev.data;
-  try { postMessage(Object.assign({ id: d.id }, JSON.parse(run(d.code, d.input)))); }
+  try { postMessage(Object.assign({ id: d.id }, JSON.parse(run(d.code, d.input, d.pre || '[]')))); }
   catch (e) { postMessage({ id: d.id, ok: false, out: '', err: String(e) }); }
 };`;
   let jw = null;
   let jseq = 0;
+  // 선생님이 미리 만들어 둔 공용 함수 (v370_prelude.sql). rows 는 이미 범위를 거른 목록이에요.
+  let PRE_JSON = '[]';
+  const setPre = (rows) => { PRE_JSON = JSON.stringify((rows || []).filter((x) => x.enabled !== false && String(x.code || '').trim()).map((x) => ({ n: x.name || '', c: x.code }))); };
 
   function jworker() {
     if (jw) return jw.p;
@@ -140,7 +153,7 @@ onmessage = (ev) => {
         resolve({ status: 'TLE', out: '' });
       }, limit);
       w.addEventListener('message', on);
-      w.postMessage({ id, code, input });
+      w.postMessage({ id, code, input, pre: PRE_JSON });
     });
   }
 
@@ -383,5 +396,5 @@ onmessage = (ev) => {
   }
 
   window.PYJ = { esc, fmt, inline, parseBlocks, renderMarkup, runOnce, gradeAll, cmpOut, renderRun, renderGrade, judgeBadge, summarize,
-    normTests, testsToText, textToTests, testsFromBody, normAnswers, answersToText, textToAnswers, gradeParts, packSubmission, unpackSubmission, checkPart };
+    setPre, normTests, testsToText, textToTests, testsFromBody, normAnswers, answersToText, textToAnswers, gradeParts, packSubmission, unpackSubmission, checkPart };
 })();
