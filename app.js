@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.7.0';
+  const APP_VERSION = '3.8.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -162,8 +162,10 @@
     } catch (e) { DIR = new Map(); DIR_OK = false; }
   }
   const dname = (uid, fb = '') => { const d = DIR.get(uid); return d ? d.name : fb; }; // 직원에게는 "별명 (ID)"
-  const badgeFor = (uid, size = 18) => (DIR_OK && DIR.has(uid) ? tierBadge(DIR.get(uid).score, size) : '');
-  const who = (uid, name, link = true) => `${badgeFor(uid)}${link && uid ? `<a class="ulink" href="#/u/${uid}">${esc(name)}</a>` : `<span class="uname">${esc(name)}</span>`}`;
+  // SOLVER 등급 학생은 남에게 티어·프로필이 안 보여요 (v380_hide_solver.sql 이 점수를 -1 로 내려줘요)
+  const hiddenUid = (uid) => DIR_OK && DIR.has(uid) && DIR.get(uid).score < 0;
+  const badgeFor = (uid, size = 18) => (DIR_OK && DIR.has(uid) && !hiddenUid(uid) ? tierBadge(DIR.get(uid).score, size) : '');
+  const who = (uid, name, link = true) => `${badgeFor(uid)}${link && uid && !hiddenUid(uid) ? `<a class="ulink" href="#/u/${uid}">${esc(name)}</a>` : `<span class="uname">${esc(name)}</span>`}`;
   const selfName = () => dname(me.id, me.username);
   const whoHtml = () => `${staffRole() ? esc(me.username) : `<a class="ulink" href="#/u/${me.id}">${badgeFor(me.id, 20)}${esc(selfName())}</a>`}${staffTag()}${tierTag()}`;
 
