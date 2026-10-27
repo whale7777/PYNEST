@@ -94,3 +94,9 @@
 - 홈: 제공되는 문제 / 내가 푼 문제(학생) / 최근 한 주간 새 문제 / 아직 아무도 못 푼 문제(자동채점 문제 중) 카드와 목록. 항목을 누르면 해당 문제로 이동.
 - 상단 가로 스크롤 메뉴 → ☰ 버튼을 누르면 왼쪽에서 메뉴가 열리고, 항목을 누르면 이동 후 닫힘(바깥 클릭/Esc로도 닫힘).
 - `v330_home.sql` (함수 `home_stats()` 추가만, 기존 데이터 변경 없음) 을 Supabase SQL Editor에서 1회 실행. 안 돌려도 총 문제 수·새 문제 수는 보임.
+
+## V3.4.0 — 카카오톡 챗봇 연동
+- 설정 화면에 [💬 카카오톡 연동]: 6자리 코드 발급 / 연동 해제.
+- `v340_kakao.sql`: 표 `kakao_links/kakao_codes/kakao_fails`, 학생용 함수 `kakao_issue_code/status/unlink`, 봇용(service_role 전용) `bot_link/unlink/rank/me/tiers`.
+- `supabase/functions/kakao-bot/`: 카카오 오픈빌더 스킬 서버(Edge Function). 설정 방법은 `KAKAO_SETUP.md`.
+- 봇 명령: 랭킹 · 월간랭킹 · 전체랭킹 · 내 프로필(티어·다음 단계까지 점수) · 티어 · 연동 / 연동해제.

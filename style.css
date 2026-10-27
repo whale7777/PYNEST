@@ -454,3 +454,5 @@ h2.md-h { font-size: 21px; } h3.md-h { font-size: 18px; } h4.md-h, h5.md-h { fon
 .numrow .row-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .numrow .numtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .numrow:hover { background: var(--hover); }
+
+.kk-code { font-size: 34px; font-weight: 800; letter-spacing: 6px; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }

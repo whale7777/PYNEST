@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.2.0';
+  const APP_VERSION = '3.4.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -2568,9 +2568,28 @@ onmessage = (ev) => {
         </form>
       </div>
       <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>
+      <div class="card" id="kkCard"><h3>💬 카카오톡 연동</h3><p class="muted small">PyNest 카카오톡 채널 챗봇에서 랭킹·내 프로필·티어를 볼 수 있어요.</p><div id="kkBody" class="muted small">불러오는 중…</div></div>
       <p class="muted small center">PyNest V${APP_VERSION}</p>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
+      const kk = $('#kkBody', v);
+      const kkDraw = async () => {
+        const { data, error } = await sb.rpc('kakao_status');
+        if (error || !data) { kk.innerHTML = '아직 준비되지 않았어요. (관리자가 v340_kakao.sql 을 실행하면 쓸 수 있어요)'; return; }
+        kk.className = '';
+        kk.innerHTML = data.linked
+          ? `<p>✅ 연동돼 있어요 <span class="muted small">(${fmt(data.linked_at)})</span></p><button class="ghost" id="kkOff">연동 해제</button>`
+          : '<button class="primary" id="kkNew">연동 코드 받기</button><div id="kkCode"></div>';
+        const off = $('#kkOff', kk);
+        if (off) off.onclick = async () => { if (!confirm('카카오톡 연동을 해제할까요?')) return; const r = await sb.rpc('kakao_unlink'); if (r.error) return toast('해제하지 못했어요', true); toast('연동을 해제했어요'); kkDraw(); };
+        const nw = $('#kkNew', kk);
+        if (nw) nw.onclick = async () => {
+          const r = await sb.rpc('kakao_issue_code');
+          if (r.error || !r.data) return toast('코드를 만들지 못했어요', true);
+          $('#kkCode', kk).innerHTML = `<p class="kk-code">${esc(r.data)}</p><p class="muted small">10분 안에 PyNest 카카오톡 채널 채팅창에 <b>연동 ${esc(r.data)}</b> 라고 보내주세요.</p>`;
+        };
+      };
+      kkDraw();
       $('#pwForm', v).onsubmit = async (e) => {
         e.preventDefault();
         const a = $('#np1', v).value;
