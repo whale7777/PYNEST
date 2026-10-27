@@ -416,6 +416,7 @@
     let first = true;
     const drafts = new Map();
     const memo = new Map();
+    const sent = new Map(); // 문제별로 마지막에 낸 답 (자동 제출 중복 방지)
 
     let stopViewer = null;
     cleanups.push(() => { if (stopViewer) stopViewer(); });
@@ -617,24 +618,33 @@
         showJ(renderRun(await runOnce(getCode(), ($('#sin', pv) || { value: '' }).value.replace(/\n?$/, '\n'))));
         lock(false);
       };
-      const gb = $('#gb', pv);
-      if (gb) gb.onclick = async () => {
-        if (!getCode().trim() && !getVals().some((x) => x.trim())) return toast('답을 입력하세요', true);
-        lock(true);
-        try { const g = await doGrade(); memo.set(p.id, renderGrade(g.res, g.parts, answers, !open)); showJ(memo.get(p.id)); } catch (e) { showJ(renderRun({ status: 'LOAD', err: String(e.message || e) })); }
-        lock(false);
-      };
-      $('#sb', pv).onclick = async () => {
-        if (!getCode().trim() && !getVals().some((x) => x.trim())) return toast('내용을 입력하세요', true);
+      const sigNow = () => getCode() + '\u0000' + JSON.stringify(getVals());
+      let graded = null;
+      const submitLive = async (auto) => {
         lock(true);
         let judge = null;
-        try { const g = await doGrade(); judge = g.judge; memo.set(p.id, renderGrade(g.res, g.parts, answers, false)); showJ(memo.get(p.id)); } catch (e) { toast('채점 도구를 불러오지 못해서 채점 없이 제출해요', true); }
+        try { const g = graded && graded.sig === sigNow() ? graded.g : await doGrade(); judge = g.judge; memo.set(p.id, renderGrade(g.res, g.parts, answers, false)); showJ(memo.get(p.id)); } catch (e) { toast('채점 도구를 불러오지 못해서 채점 없이 제출해요', true); }
         const code = answers.length ? packSubmission(getCode(), answers, getVals()) : getCode();
         const { error } = await sb.from('live_submissions').insert({ problem_id: p.id, user_id: me.id, code, judge });
         lock(false);
         if (error) return toast(/closed/.test(error.message || '') ? '이미 마감된 문제예요' : '제출하지 못했어요: ' + error.message, true);
-        toast(!judge ? '제출했어요!' : judge.status === 'AC' ? '제출했어요! 정답이에요 🎉' : judge.status === 'MANUAL' ? '제출했어요. 선생님이 확인해요' : `제출했어요. ${judge.passed}/${judge.total} 통과`);
+        sent.set(p.id, sigNow());
+        toast(auto ? '✅ 모두 통과! 자동으로 제출했어요 🎉' : !judge ? '제출했어요!' : judge.status === 'AC' ? '제출했어요! 정답이에요 🎉' : judge.status === 'MANUAL' ? '제출했어요. 선생님이 확인해요' : `제출했어요. ${judge.passed}/${judge.total} 통과`);
         await refresh();
+      };
+      const gb = $('#gb', pv);
+      if (gb) gb.onclick = async () => {
+        if (!getCode().trim() && !getVals().some((x) => x.trim())) return toast('답을 입력하세요', true);
+        lock(true);
+        let g = null;
+        try { g = await doGrade(); graded = { sig: sigNow(), g }; memo.set(p.id, renderGrade(g.res, g.parts, answers, !open)); showJ(memo.get(p.id)); } catch (e) { g = null; showJ(renderRun({ status: 'LOAD', err: String(e.message || e) })); }
+        lock(false);
+        // 자동 채점을 전부 통과(서술형 칸 없음)하면 자동으로 제출 (열려 있는 문제만, 같은 답은 다시 안 내요)
+        if (g && open && g.judge.status === 'AC' && !g.judge.manual && sent.get(p.id) !== sigNow()) await submitLive(true);
+      };
+      $('#sb', pv).onclick = () => {
+        if (!getCode().trim() && !getVals().some((x) => x.trim())) return toast('내용을 입력하세요', true);
+        submitLive(false);
       };
     };
 
@@ -966,17 +976,18 @@
       drawn.plist = key;
       $('#plist', v).innerHTML = `
         <div class="live-head"><h2>📝 문제</h2><span class="spacer"></span>
-          <button class="ghost" id="pImp">📥 PyNest 문제집에서 가져오기</button><button class="primary" id="pAdd">＋ 문제 추가</button></div>
+          <button class="ghost" id="pImp">📥 PyNest 문제집에서 가져오기</button><button class="ghost" id="pJson">📂 JSON 파일로 가져오기</button><button class="primary" id="pAdd">＋ 문제 추가</button></div>
         ${probs.length ? probs.map((p, i) => `<div class="prow-admin">
           <span class="chip">${i + 1}</span><span class="t"><b>${esc(p.title) || '(제목 없음)'}</b> <span class="badge ${p.status === 'open' ? 'ok' : p.status === 'closed' ? '' : 'warn'}">${PSTAT[p.status]}</span>
             <span class="muted small">${(p.tests || []).length ? `테스트 ${p.tests.length}` : ''} ${(p.answers || []).length ? `정답칸 ${p.answers.length}` : ''}</span></span>
           ${p.status === 'open' ? `<button class="ghost" data-st="${p.id}:closed">⏹ 마감</button>` : `<button class="primary" data-st="${p.id}:open">▶ ${p.status === 'closed' ? '다시 열기' : '문제 열기'}</button>`}
           <button class="icon" data-up="${p.id}" title="위로">↑</button><button class="icon" data-down="${p.id}" title="아래로">↓</button>
           <button class="icon" data-ed="${p.id}" title="수정">✏️</button><button class="icon" data-dl="${p.id}" title="삭제">🗑</button></div>`).join('')
-          : '<p class="muted">아직 문제가 없어요. 추가하거나 PyNest 문제집에서 가져오세요.</p>'}`;
+          : '<p class="muted">아직 문제가 없어요. 추가하거나 PyNest 문제집·JSON 파일에서 가져오세요.</p>'}`;
       const q = $('#plist', v);
       $('#pAdd', q).onclick = () => openEditor(null);
       $('#pImp', q).onclick = openImport;
+      $('#pJson', q).onclick = openJsonImport;
       q.querySelectorAll('[data-st]').forEach((b) => (b.onclick = async () => {
         const [id, st] = b.dataset.st.split(':');
         const o = { status: st };
@@ -1092,6 +1103,86 @@
         const { error: er } = await sb.from('live_problems').insert(rows);
         if (er) return toast('가져오지 못했어요: ' + er.message, true);
         m.close(); toast(`${rows.length}문제를 가져왔어요 (초안 상태예요)`); refresh();
+      };
+    }
+
+    // JSON 파일(pynest-problemset-v1 / pynest-live-v1)에서 라이브 문제 가져오기. 자동 채점(tests·answers)도 그대로 들어와요.
+    function parseLiveJson(text) {
+      let d;
+      try { d = JSON.parse(text); } catch (e) { throw new Error('JSON 파일을 읽을 수 없어요 (형식 오류)'); }
+      if (!d || typeof d !== 'object') throw new Error('올바른 문제 파일이 아니에요');
+      if (d.format && !['pynest-problemset-v1', 'pynest-live-v1'].includes(d.format)) throw new Error('지원하지 않는 형식이에요: ' + d.format);
+      const out = [];
+      const add = (p) => {
+        const body = String(p.body ?? '').trim();
+        if (!body) throw new Error(`${out.length + 1}번째 문제의 body(문제 내용)가 비어 있어요`);
+        const first = (body.split('\n').find((l) => l.trim() && !l.trim().startsWith('```')) || '').replace(/[`*]/g, '').trim();
+        const rp = p.rank_points === '' || p.rank_points == null ? null : Number(p.rank_points);
+        out.push({
+          title: String(p.title || first || `문제 ${out.length + 1}`).slice(0, 100), body,
+          difficulty: p.difficulty ? String(p.difficulty) : null, rank_points: Number.isFinite(rp) ? rp : null,
+          tests: normTests(p.tests), answers: normAnswers(p.answers),
+        });
+      };
+      (d.chapters || []).forEach((ch) => (ch.sections || []).forEach((sc) => (sc.problems || []).forEach(add)));
+      (d.problems || []).forEach(add);
+      (d.elite || []).forEach((p) => add({ ...p, difficulty: 'ELITE' }));
+      if (!out.length) throw new Error('문제가 하나도 없어요');
+      return out;
+    }
+
+    async function openJsonImport() {
+      const ld = await loadLiveDiffs();
+      const m = modal(`<h3>📂 JSON 파일로 문제 가져오기</h3>
+        <p class="muted small" style="margin-top:0">PyNest 문제집 JSON(<b>pynest-problemset-v1</b>)이나 라이브 전용 JSON(<b>pynest-live-v1</b>)을 올리면 문제·자동 채점·난이도(점수)가 한꺼번에 들어와요.</p>
+        <input type="file" id="jF" accept=".json,application/json">
+        <p class="muted small" id="jInfo"></p>
+        <div id="jL"></div>
+        <div class="pubpick" id="jMode" hidden>
+          <label class="inline"><input type="radio" name="jm" value="draft" checked> 🔒 <b>초안</b>으로 넣기 <span class="muted small">— 학생에게 안 보여요. 원할 때 [문제 열기]</span></label>
+          <label class="inline"><input type="radio" name="jm" value="open" id="jOpen"> ▶ <b>바로 열기</b> <span class="muted small">— 문제가 1개일 때만 쓸 수 있어요</span></label>
+        </div>
+        <div class="form-actions"><button class="primary" id="jGo" disabled>선택한 문제 가져오기</button><button class="ghost" id="jC">취소</button></div>`);
+      const q = (x) => $(x, m.el);
+      let items = [];
+      const dnorm = (x) => { if (!x || !ld) return null; const k = String(x).trim().toLowerCase(); const f = ld.find((d) => d.name.toLowerCase() === k); return f ? f.name : (k === 'elite' ? 'ELITE' : null); };
+      const picked = () => [...m.el.querySelectorAll('[data-j]:checked')].map((c) => items[Number(c.dataset.j)]);
+      const sync = () => {
+        const n = picked().length;
+        q('#jGo').disabled = !n;
+        q('#jOpen').disabled = n !== 1;
+        if (n !== 1 && q('#jOpen').checked) m.el.querySelector('input[name="jm"][value="draft"]').checked = true;
+      };
+      q('#jC').onclick = m.close;
+      q('#jF').onchange = async (e) => {
+        items = [];
+        const f = e.target.files[0];
+        q('#jL').innerHTML = ''; q('#jMode').hidden = true;
+        if (!f) { q('#jInfo').textContent = ''; return sync(); }
+        try {
+          items = parseLiveJson(await f.text());
+          const auto = items.filter((x) => x.tests.length || x.answers.some((a) => a.type !== 'm')).length;
+          q('#jInfo').textContent = `✅ ${items.length}문제를 읽었어요 (자동 채점 ${auto}문제).`;
+          q('#jL').innerHTML = `<div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:6px">${items.map((x, i) => `<label style="display:flex;gap:8px;align-items:center;padding:3px 4px;margin:0"><input type="checkbox" data-j="${i}" checked style="width:auto"><span class="chip">${i + 1}</span><span class="small">${esc(x.title)}</span>${x.difficulty ? `<span class="chip">${esc(x.difficulty)}</span>` : ''}${x.tests.length || x.answers.some((a) => a.type !== 'm') ? ' <span class="chip">⚖️</span>' : ''}</label>`).join('')}</div>`;
+          q('#jMode').hidden = false;
+          m.el.querySelectorAll('[data-j]').forEach((c) => (c.onchange = sync));
+        } catch (err) { q('#jInfo').textContent = '⚠️ ' + err.message; e.target.value = ''; }
+        sync();
+      };
+      q('#jGo').onclick = async () => {
+        const pick = picked();
+        if (!pick.length) return;
+        const open = pick.length === 1 && q('#jOpen').checked;
+        let pos = probs.reduce((mx, x) => Math.max(mx, x.position), 0);
+        const rows = pick.map((x) => ({
+          session_id: ses.id, position: (pos += 1000), title: x.title, body: x.body, tests: x.tests, answers: x.answers,
+          status: open ? 'open' : 'draft', ...(open ? { opened_at: new Date().toISOString() } : {}),
+          ...(ld ? { difficulty: dnorm(x.difficulty), rank_points: x.rank_points } : {}),
+        }));
+        q('#jGo').disabled = true;
+        const { error: er } = await sb.from('live_problems').insert(rows);
+        if (er) { q('#jGo').disabled = false; return toast('가져오지 못했어요: ' + er.message, true); }
+        m.close(); toast(open ? '문제를 가져와서 바로 열었어요' : `${rows.length}문제를 초안으로 가져왔어요`); refresh();
       };
     }
 

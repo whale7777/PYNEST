@@ -799,6 +799,7 @@
   };
 
   let openPanels = new Set(); // 열려 있는 '풀어보기' 칸 (문제 고유 번호)
+  const sentSig = new Map(); // 문제별로 마지막에 낸 답 (자동 제출 때 같은 답을 또 내지 않게)
   let reviewOpen = new Set(); // 제출함에서 펼쳐 둔 문제
   const reviewVer = new Map(); // 제출함에서 보고 있는 버전
   let reviewSet = '';
@@ -986,7 +987,7 @@
       const t = total[s.id] || 0;
       const d = solved[s.id] || 0;
       return `<a class="card set-card" href="#/set/${s.id}">
-        <div class="set-top">${s.week ? `<span class="week">${s.week}주차</span>` : ''}<h3>${esc(s.title)}</h3></div>
+        <div class="set-top">${s.week ? `<span class="week">${s.week}주차</span>` : ''}<h3>${esc(s.title)}</h3>${can('content') ? pubChip(s.is_public) : ''}</div>
         ${s.description ? `<p class="muted small">${esc(s.description)}</p>` : ''}
         <div class="muted small">문제 ${t}개${can('content') ? '' : ` · 내가 푼 문제 ${d}개`}</div>
         ${can('content') ? '' : `<div class="bar"><i style="width:${t ? Math.round((d / t) * 100) : 0}%"></i></div>`}
@@ -1045,8 +1046,18 @@
     }];
   }
 
-  function openNewSet() {
+  // 비공개/공개 칸(v350_publish.sql)이 있는지 한 번만 확인해요
+  let PUB_READY = null;
+  async function pubReady() {
+    if (PUB_READY !== null) return PUB_READY;
+    try { const r = await sb.from('problem_sets').select('is_public').limit(1); PUB_READY = !r.error; } catch (e) { PUB_READY = false; }
+    return PUB_READY;
+  }
+  const pubChip = (on) => (on === false ? '<span class="chip privchip" title="학생에게 안 보여요">🔒 비공개</span>' : '');
+
+  async function openNewSet() {
     let parsed = null;
+    const pr = await pubReady();
     const m = modal(`
       <h3>새 문제집 만들기</h3>
       <form id="nsForm">
@@ -1062,6 +1073,9 @@
           <span></span>
         </div>
         <label>설명 (선택)<textarea id="nsDesc" style="min-height:70px"></textarea></label>
+        ${pr ? `<div class="pubpick"><div class="muted small">공개 설정</div>
+          <label class="inline"><input type="radio" name="nsPub" value="0" checked> 🔒 <b>비공개</b>로 올리기 <span class="muted small">— 학생에게 안 보여요. 확인하고 고친 뒤 나중에 공개해요</span></label>
+          <label class="inline"><input type="radio" name="nsPub" value="1"> 🌐 <b>바로 게시</b> <span class="muted small">— 지금 바로 학생에게 보여요</span></label></div>` : ''}
         <div class="form-actions"><button class="primary" id="nsBtn">만들기</button><button type="button" class="ghost" id="nsCancel">취소</button></div>
       </form>`);
     const q = (s) => $(s, m.el);
@@ -1086,10 +1100,12 @@
       e.preventDefault();
       const btn = q('#nsBtn');
       btn.disabled = true;
-      const { data: s, error } = await sb.from('problem_sets').insert({
+      const setRow = {
         title: q('#nsTitle').value.trim(), short_name: q('#nsShort').value.trim() || null,
         week: Number(q('#nsWeek').value) || null, description: q('#nsDesc').value.trim() || null,
-      }).select('id').single();
+      };
+      if (pr) setRow.is_public = (m.el.querySelector('input[name="nsPub"]:checked') || { value: '1' }).value === '1';
+      const { data: s, error } = await sb.from('problem_sets').insert(setRow).select('id').single();
       if (error || !s) { btn.disabled = false; return toast('만들지 못했어요', true); }
       if (parsed) {
         const rows = parsed.rows.map((r) => ({ ...r, set_id: s.id }));
@@ -1110,7 +1126,7 @@
         }
       }
       m.close();
-      toast('문제집을 만들었어요');
+      toast(pr && setRow.is_public === false ? '비공개로 만들었어요. 확인한 뒤 [🌐 공개하기]를 눌러주세요' : '문제집을 만들었어요');
       location.hash = '#/set/' + s.id;
     };
   }
@@ -1131,6 +1147,7 @@
     const set = sr.data;
     if (!set) return notFound();
     if (exs.length) { testsColumn = 'tests' in exs[0]; answersColumn = 'answers' in exs[0]; }
+    if (set && 'is_public' in set) PUB_READY = true;
     const L = layoutEx(exs);
     const subsBy = {};
     subs.forEach((s) => { (subsBy[s.exercise_id] = subsBy[s.exercise_id] || []).push(s); });
@@ -1175,6 +1192,7 @@
         <header class="ex-head">
           <span class="ex-no">${dispNo(e)}</span>
           ${diffTag(e.difficulty)}
+          ${admin ? pubChip(e.is_public) : ''}
           ${e.label ? `<span class="chip">${esc(e.label)}</span>` : ''}
           ${e.points ? `<span class="chip pts">${e.points}점</span>` : ''}
           ${(e.tests || []).length || (e.answers || []).some((x) => x.type !== 'm') ? '<span class="chip judgechip" title="제출하면 자동으로 채점돼요">⚖️ 자동 채점</span>' : (e.answers || []).length ? '<span class="chip judgechip" title="선생님이 확인해요">✍️ 서술</span>' : ''}
@@ -1220,11 +1238,13 @@
     return [`
       <p><a href="#/sets">← 문제 목록</a></p>
       <div class="page-head">
-        <h2>${set.week ? `<span class="week">${set.week}주차</span>` : ''}${esc(set.title)}</h2>
+        <h2>${set.week ? `<span class="week">${set.week}주차</span>` : ''}${esc(set.title)} ${admin ? pubChip(set.is_public) : ''}</h2>
       </div>
+      ${admin && set.is_public === false ? '<div class="privbar">🔒 이 문제집은 <b>비공개</b>예요. 학생에게는 목록에도, 주소로도 안 보여요. 다 고쳤으면 <b>🌐 공개하기</b>를 눌러주세요.</div>' : ''}
       ${set.description ? `<p class="muted">${esc(set.description)}</p>` : ''}
       <div class="form-actions" style="margin:0 0 12px">
         ${files.join('')}
+        ${admin && 'is_public' in set ? (set.is_public === false ? '<button class="primary" id="togPub">🌐 공개하기</button>' : '<button class="ghost" id="togPub">🔒 비공개로 바꾸기</button>') : ''}${exs.some((e) => e.is_public === false) && admin ? '<button class="ghost" id="pubAllEx" title="이 문제집의 비공개 문제를 모두 공개해요">🌐 비공개 문제 모두 공개</button>' : ''}
         ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><button class="ghost" id="autoTests" title="입출력 예시가 있는 문제에 채점 테스트를 한꺼번에 만들어요">⚖️ 예시로 채점 만들기</button><button class="ghost" id="impKey" title="JSON 파일의 정답·채점 테스트를 같은 문제에 덮어써요 (학생 제출물은 그대로)">🔑 정답·채점 가져오기</button><input type="file" id="impKeyFile" accept=".json,application/json" hidden><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
       </div>
       ${hwHtml}
@@ -1305,7 +1325,7 @@
             ${canGrade ? `<button class="ghost" data-grade>✅ 채점하기 <span class="muted small">(${nAuto}개 항목)</span></button>` : ''}
             <button class="solve" data-send>제출하기${last ? ` (v${last.version + 1})` : ''}</button>
           </div>
-          <p class="muted small" style="margin:4px 0">${canGrade ? '제출하면 자동으로 채점돼요. 채점 결과는 선생님도 볼 수 있어요. ' : ''}${answers.some((a) => a.type === 'm') ? '서술형 답은 선생님이 확인해요. ' : ''}${last ? '다시 내면 새 버전으로 쌓이고, 이전 풀이도 그대로 남아요.' : '제출한 풀이는 선생님만 볼 수 있어요.'}</p>
+          <p class="muted small" style="margin:4px 0">${canGrade ? '제출하면 자동으로 채점돼요. <b>채점하기</b>에서 모두 통과하면 자동으로 제출돼요. 채점 결과는 선생님도 볼 수 있어요. ' : ''}${answers.some((a) => a.type === 'm') ? '서술형 답은 선생님이 확인해요. ' : ''}${last ? '다시 내면 새 버전으로 쌓이고, 이전 풀이도 그대로 남아요.' : '제출한 풀이는 선생님만 볼 수 있어요.'}</p>
           <div class="judge-out" hidden></div>
           ${hist ? `<div class="vers"><div class="muted small">내가 낸 풀이</div>${hist}</div>` : ''}`;
         p.dataset.ready = '1';
@@ -1356,22 +1376,8 @@
           showJ(renderRun(r));
           lock(false);
         };
-        const gradeBtn = $('[data-grade]', p);
-        if (gradeBtn) gradeBtn.onclick = async () => {
-          if (empty()) return toast('답을 입력하세요', true);
-          lock(true);
-          try {
-            const g = await doGrade();
-            p._graded = { sig: sig(), g };
-            gradeMemo.set(eid, renderGrade(g.res, g.parts, answers, reveal));
-            showJ(gradeMemo.get(eid));
-          } catch (err) {
-            showJ(renderRun({ status: 'LOAD', err: String(err.message || err) }));
-          }
-          lock(false);
-        };
-        $('[data-send]', p).onclick = async () => {
-          if (empty()) return toast('내용을 입력하세요', true);
+        // 제출 (직접 누르거나, 자동 채점을 모두 통과하면 자동으로)
+        const submitIt = async (auto) => {
           const code = answers.length ? packSubmission(getCode(), answers, getVals()) : getCode();
           if (code.length > 30000) return toast('너무 길어요 (3만 자 이하)', true);
           if (busy) return;
@@ -1388,8 +1394,31 @@
           let { error } = await sb.from('submissions').insert({ exercise_id: eid, user_id: me.id, code, judge });
           if (error && /judge/.test(error.message || '')) ({ error } = await sb.from('submissions').insert({ exercise_id: eid, user_id: me.id, code }));
           if (error) { lock(false); return toast('제출하지 못했어요: ' + error.message, true); }
-          toast(!judge ? '제출했어요! 👍' : judge.status === 'MANUAL' ? '제출했어요. 선생님이 확인할 거예요 👍' : judge.status === 'AC' ? '제출했어요! 자동 채점을 모두 통과했어요 🎉' : `제출했어요. 채점 결과는 ${judge.passed}/${judge.total} 통과예요`);
+          sentSig.set(eid, sig());
+          toast(auto ? '✅ 모두 통과! 자동으로 제출했어요 🎉' : !judge ? '제출했어요! 👍' : judge.status === 'MANUAL' ? '제출했어요. 선생님이 확인할 거예요 👍' : judge.status === 'AC' ? '제출했어요! 자동 채점을 모두 통과했어요 🎉' : `제출했어요. 채점 결과는 ${judge.passed}/${judge.total} 통과예요`);
           route(true);
+        };
+        const gradeBtn = $('[data-grade]', p);
+        if (gradeBtn) gradeBtn.onclick = async () => {
+          if (empty()) return toast('답을 입력하세요', true);
+          lock(true);
+          let g = null;
+          try {
+            g = await doGrade();
+            p._graded = { sig: sig(), g };
+            gradeMemo.set(eid, renderGrade(g.res, g.parts, answers, reveal));
+            showJ(gradeMemo.get(eid));
+          } catch (err) {
+            g = null;
+            showJ(renderRun({ status: 'LOAD', err: String(err.message || err) }));
+          }
+          lock(false);
+          // 자동 채점을 전부 통과(서술형 칸 없음)하면 따로 누르지 않아도 제출해요. 같은 답을 다시 내지는 않아요.
+          if (g && g.judge.status === 'AC' && !g.judge.manual && sentSig.get(eid) !== sig()) await submitIt(true);
+        };
+        $('[data-send]', p).onclick = () => {
+          if (empty()) return toast('내용을 입력하세요', true);
+          submitIt(false);
         };
         return p;
       };
@@ -1958,6 +1987,23 @@ onmessage = (ev) => {
     const ae = $('#addElite', v);
     if (ae) ae.onclick = () => openExEditor(set, exs, null, { position: maxPos + 1000, difficulty: 'ELITE', chapter: '', section: '' });
     $('#setCfg', v).onclick = () => openSetCfg(set);
+    const tp = $('#togPub', v);
+    if (tp) tp.onclick = async () => {
+      const to = set.is_public === false;
+      if (!confirm(to ? `"${set.title}" 문제집을 학생에게 공개할까요?` : `"${set.title}" 문제집을 비공개로 바꿀까요?\n학생에게는 바로 안 보여요. (제출 기록은 그대로 남아요)`)) return;
+      const { error } = await sb.from('problem_sets').update({ is_public: to }).eq('id', set.id);
+      if (error) return toast('바꾸지 못했어요: ' + error.message, true);
+      toast(to ? '공개했어요! 이제 학생에게 보여요 🌐' : '비공개로 바꿨어요 🔒');
+      route(true);
+    };
+    const pa = $('#pubAllEx', v);
+    if (pa) pa.onclick = async () => {
+      const n = exs.filter((e) => e.is_public === false).length;
+      if (!confirm(`비공개 문제 ${n}개를 모두 공개할까요?`)) return;
+      const { error } = await sb.from('exercises').update({ is_public: true }).eq('set_id', set.id).eq('is_public', false);
+      if (error) return toast('공개하지 못했어요: ' + error.message, true);
+      toast('공개했어요 🌐'); route(true);
+    };
     const ah = $('#addHw', v);
     if (ah) ah.onclick = () => openHwEditor(set, L, null);
     const hwById = (i) => hws.find((h) => h.id === Number(i));
@@ -2060,7 +2106,8 @@ onmessage = (ev) => {
   };
 
   function openExEditor(set, list, ex, base) {
-    const cur = ex || { ...base, label: '', points: null, tags: [], source: '', body: '', check_point: '', answers: [] };
+    const cur = ex || { ...base, label: '', points: null, tags: [], source: '', body: '', check_point: '', answers: [], is_public: false };
+    const hasPub = !!ex ? 'is_public' in ex : PUB_READY === true;
     const uniq = (k) => [...new Set(list.map((e) => e[k]).filter(Boolean))];
     const m = modal(`
       <h3>${ex ? `문제 수정 <span class="muted small">(고유 번호 ${ex.id})</span>` : '문제 추가'}</h3>
@@ -2081,6 +2128,7 @@ onmessage = (ev) => {
         </div>
         <datalist id="dlCh">${uniq('chapter').map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
         <datalist id="dlSec">${uniq('section').map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
+        ${hasPub ? `<label>공개 설정<select id="fPub"><option value="0" ${cur.is_public === false ? 'selected' : ''}>🔒 비공개 (학생에게 안 보여요)</option><option value="1" ${cur.is_public === false ? '' : 'selected'}>🌐 바로 게시</option></select></label>` : ''}
         <label>문제 내용</label>
         <div class="snips">${Object.keys(SNIPS).map((k) => `<button type="button" class="ghost" data-snip="${esc(k)}">${esc(k)}</button>`).join('')}</div>
         <textarea id="fBody" class="code" style="min-height:220px" required>${esc(cur.body)}</textarea>
@@ -2157,6 +2205,7 @@ onmessage = (ev) => {
       const answers = textToAnswers(q('#fAns').value);
       if (answersColumn !== false) row.answers = answers;
       else if (answers.length) toast('정답은 update5.sql을 실행한 뒤에 저장돼요', true);
+      if (q('#fPub')) row.is_public = q('#fPub').value === '1';
       if (RK_READY && q('#fRank')) { const rp = q('#fRank').value; row.rank_points = rp === '' ? null : Number(rp); }
       const btn = q('#fSave');
       btn.disabled = true;

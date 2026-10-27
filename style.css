@@ -456,3 +456,9 @@ h2.md-h { font-size: 21px; } h3.md-h { font-size: 18px; } h4.md-h, h5.md-h { fon
 .numrow:hover { background: var(--hover); }
 
 .kk-code { font-size: 34px; font-weight: 800; letter-spacing: 6px; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }
+.privchip { background: #fef3c7 !important; color: #92400e !important; border-color: #fcd34d !important; font-weight: 700; }
+[data-theme="dark"] .privchip { background: #422006 !important; color: #fcd34d !important; border-color: #854d0e !important; }
+.privbar { margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; font-size: 14px; }
+[data-theme="dark"] .privbar { background: #422006; color: #fcd34d; border-color: #854d0e; }
+.pubpick { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+.pubpick label.inline { margin: 0; }

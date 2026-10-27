@@ -100,3 +100,9 @@
 - `v340_kakao.sql`: 표 `kakao_links/kakao_codes/kakao_fails`, 학생용 함수 `kakao_issue_code/status/unlink`, 봇용(service_role 전용) `bot_link/unlink/rank/me/tiers`.
 - `supabase/functions/kakao-bot/`: 카카오 오픈빌더 스킬 서버(Edge Function). 설정 방법은 `KAKAO_SETUP.md`.
 - 봇 명령: 랭킹 · 월간랭킹 · 전체랭킹 · 내 프로필(티어·다음 단계까지 점수) · 티어 · 연동 / 연동해제.
+
+## V3.5.0 — 비공개 / 바로 게시 · 라이브 JSON · 통과하면 자동 제출
+- `v350_publish.sql`: `problem_sets.is_public`, `exercises.is_public` (+ 공개 시각) 추가, 학생이 읽는 규칙만 "공개된 것만"으로 변경(직원·관리자는 전부 보임), 비공개 문제에는 제출 불가, `home_stats` 를 공개 문제 기준으로 다시 만듦. 기존 문제집·문제는 모두 그대로 "공개".
+- 새 문제집을 만들 때 🔒 비공개(기본) / 🌐 바로 게시 선택, 문제집 화면의 [🌐 공개하기]·[🔒 비공개로 바꾸기], 문제별 [공개 설정], [🌐 비공개 문제 모두 공개].
+- 라이브: [📂 JSON 파일로 가져오기] (`pynest-problemset-v1` / `pynest-live-v1`), 초안으로 들어가고 자동 채점·난이도 점수 포함.
+- 자동 제출: [채점하기]에서 모든 자동 채점을 통과하면(서술형 칸 없음) 바로 제출. 문제 풀이와 라이브 문제 둘 다. 같은 답은 중복 제출하지 않아요.
