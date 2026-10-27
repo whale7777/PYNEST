@@ -432,3 +432,12 @@ h2.md-h { font-size: 21px; } h3.md-h { font-size: 18px; } h4.md-h, h5.md-h { fon
 .tb-table td { padding: 4px 6px; border-top: 1px solid var(--border); vertical-align: middle; }
 @keyframes tbdrop { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (prefers-reduced-motion: reduce) { .tier-banner { animation: none; } }
+
+/* ---------- 문제: 번호로 보기 ---------- */
+.numtools { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+.numtools input[type="search"] { flex: 1 1 220px; width: auto; min-width: 0; }
+.numtools select { flex: 0 1 180px; width: auto; }
+.numrow { text-decoration: none; }
+.numrow .row-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.numrow .numtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.numrow:hover { background: var(--hover); }

@@ -906,10 +906,18 @@
   }
 
   /* ---------- 문제집 목록 ---------- */
+  // 문제 보기 방식: 'sets' 문제집별 / 'num' 번호(절대번호)순
+  let setsView = 'sets';
+  try { if (localStorage.getItem('pn_sets_view') === 'num') setsView = 'num'; } catch (e) { /* 무시 */ }
+  let numQ = '';
+  let numDiff = '';
+  let numLimit = 100;
+
   async function pageSets() {
+    const num = setsView === 'num';
     const [sr, ex, mine] = await Promise.all([
       sb.from('problem_sets').select('*').order('week', { ascending: true, nullsFirst: false }).order('id'),
-      fetchAll((a, b) => sb.from('exercises').select('id,set_id').order('id').range(a, b)),
+      fetchAll((a, b) => sb.from('exercises').select(num ? 'id,set_id,difficulty,body' : 'id,set_id').order('id').range(a, b)),
       can('content') ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions').select('id,exercise_id,set_id').eq('user_id', me.id).order('id').range(a, b)),
     ]);
     if (sr.error) throw sr.error;
@@ -930,14 +938,55 @@
       </a>`;
     }).join('') : '<div class="card pad center muted">아직 올라온 문제집이 없어요.</div>';
 
+    // 번호로 보기: 모든 문제를 고유 번호(#id) 순서로
+    const setBy = new Map(sr.data.map((x) => [x.id, x]));
+    const doneEx = new Set(mine.map((x) => x.exercise_id));
+    const numRows = (rows) => rows.slice(0, numLimit).map((e) => {
+      const st = setBy.get(e.set_id);
+      return `<a class="row numrow" href="#/set/${e.set_id}" data-ex="${e.id}" data-set="${e.set_id}">
+        <div class="row-main"><span class="ex-no sm">#${e.id}</span> ${diffTag(e.difficulty)} <span class="numtitle">${esc(firstLine(e.body).replace(/^\*\*|\*\*$/g, '') || '(제목 없음)')}</span></div>
+        <div class="muted small">${doneEx.has(e.id) ? '<span class="done">✓ 풀었어요</span> · ' : ''}${st ? esc(shortOf(st)) : ''}</div></a>`;
+    }).join('');
+    const numMatch = (e) => (!numDiff || e.difficulty === numDiff)
+      && (!numQ || String(e.id) === numQ.replace(/^#/, '') || firstLine(e.body).toLowerCase().includes(numQ.toLowerCase()));
+    const numBody = () => {
+      const rows = ex.filter(numMatch);
+      return `${numRows(rows) || '<p class="muted center pad">조건에 맞는 문제가 없어요.</p>'}${rows.length > numLimit ? `<div class="center pad"><button class="ghost" id="numMore">더 보기 (${rows.length - numLimit}개 남음)</button></div>` : ''}`;
+    };
+    const diffOpts = ['', ...new Set(ex.map((e) => e.difficulty))];
+    const view = num
+      ? `<div class="card numtools"><input type="search" id="numQ" placeholder="번호(예: 123) 또는 제목 검색" value="${esc(numQ)}">
+          <select id="numD">${diffOpts.map((d) => `<option value="${esc(d)}" ${d === numDiff ? 'selected' : ''}>${d ? esc(d) : '모든 난이도'}</option>`).join('')}</select></div>
+         <div class="card list" id="numList">${numBody()}</div>`
+      : `<div class="sets">${cards}</div>`;
     return [`
       <div class="page-head"><h2>📄 문제</h2>${can('content') ? '<button class="primary" id="newSet">＋ 새 문제집</button>' : ''}</div>
-      <p class="muted">문제를 하나씩 보고, <b class="redtxt">풀어보기</b>로 코드를 제출해요. 제출한 풀이는 선생님만 볼 수 있어요.</p>
-      <div class="sets">${cards}</div>
+      <div class="tabs"><button data-sv="sets" class="${num ? '' : 'on'}">📚 문제집으로 보기</button><button data-sv="num" class="${num ? 'on' : ''}">🔢 번호로 보기</button></div>
+      <p class="muted">${num ? `모든 문제를 <b>고유 번호</b> 순서로 보여줘요 (총 ${ex.length}문제). 눌러서 문제집 안의 그 문제로 이동해요.` : '문제를 하나씩 보고, <b class="redtxt">풀어보기</b>로 코드를 제출해요. 제출한 풀이는 선생님만 볼 수 있어요.'}</p>
+      ${view}
       <p class="muted small"><a href="#/board/problem">📁 예전에 올린 문제 파일 보기</a></p>`,
     (v) => {
       const nb = $('#newSet', v);
       if (nb) nb.onclick = openNewSet;
+      v.querySelectorAll('[data-sv]').forEach((b) => (b.onclick = () => {
+        setsView = b.dataset.sv;
+        try { localStorage.setItem('pn_sets_view', setsView); } catch (e) { /* 무시 */ }
+        numLimit = 100;
+        route();
+      }));
+      if (!num) return;
+      const redraw = () => {
+        $('#numList', v).innerHTML = numBody();
+        bindNum();
+      };
+      const bindNum = () => {
+        v.querySelectorAll('.numrow').forEach((a) => (a.onclick = () => { scrollToEx = 'ex-' + a.dataset.ex; }));
+        const mb = $('#numMore', v);
+        if (mb) mb.onclick = () => { numLimit += 200; redraw(); };
+      };
+      $('#numQ', v).oninput = (e) => { numQ = e.target.value.trim(); numLimit = 100; redraw(); };
+      $('#numD', v).onchange = (e) => { numDiff = e.target.value; numLimit = 100; redraw(); };
+      bindNum();
     }];
   }
 
