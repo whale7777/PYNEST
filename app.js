@@ -398,6 +398,7 @@
     if (staffRole()) items.push(['admin', '🛠️', '관리자']);
     app.innerHTML = `
       <header class="top">
+        <button class="icon" id="menuBtn" aria-label="메뉴" aria-expanded="false" title="메뉴">☰</button>
         <a class="brand" href="#/home">${esc(ICON)} ${esc(SITE)}</a>
         <div class="spacer"></div>
         <span class="who">${whoHtml()}</span>
@@ -409,7 +410,13 @@
       <nav class="menu" id="menu">
         ${items.map(([k, ic, name, soon]) => (soon === 'ext' ? `<a href="${k}" data-k="${k}">${ic} ${name}</a>` : `<a href="#/${k}" data-k="${k}" class="${soon ? 'soon' : ''}">${ic} ${name}</a>`)).join('')}
       </nav>
+      <div class="menu-back" id="menuBack"></div>
       <main id="view"></main>`;
+    const setMenu = (open) => { document.body.classList.toggle('menu-open', open); $('#menuBtn').setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    $('#menuBtn').onclick = () => setMenu(!document.body.classList.contains('menu-open'));
+    $('#menuBack').onclick = () => setMenu(false);
+    $('#menu').onclick = (e) => { if (e.target.closest('a')) setMenu(false); };
+    document.onkeydown = (e) => { if (e.key === 'Escape') setMenu(false); };
     setTheme(document.documentElement.dataset.theme || 'light');
     $('#themeBtn').onclick = toggleTheme;
     $('#logoutBtn').onclick = logout;
@@ -421,6 +428,7 @@
     const y = window.scrollY;
     const [a, b, c] = (location.hash.replace(/^#\//, '') || 'home').split('/');
     const key = a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' ? 'sets' : a;
+    document.body.classList.remove('menu-open');
     document.querySelectorAll('#menu a').forEach((l) => l.classList.toggle('on', l.dataset.k === key));
 
     const pages = {
@@ -471,24 +479,64 @@
   const pageSoon = async (title, text) => [`<div class="card pad center"><h2>${title}</h2><p class="muted">${esc(text)}</p><span class="badge warn">준비 중</span></div>`];
 
   /* ---------- 홈 ---------- */
+  async function homeStats() {
+    try {
+      const r = await sb.rpc('home_stats');
+      if (!r.error && r.data) return r.data;
+    } catch (e) { /* SQL 미적용 → 아래 대체 */ }
+    // v330_home.sql 을 아직 안 돌렸을 때: 가능한 것만 계산
+    const wk = new Date(Date.now() - 7 * 864e5).toISOString();
+    const [t, w] = await Promise.all([
+      sb.from('exercises').select('id', { count: 'exact', head: true }),
+      sb.from('exercises').select('id', { count: 'exact', head: true }).gte('created_at', wk),
+    ]);
+    return { total: t.count || 0, week: w.count || 0, mine: null, unsolved: null, new_list: [], unsolved_list: [], fallback: true };
+  }
+
   async function pageHome() {
-    const [n, l, p] = await Promise.all([
+    const wantProb = tierCan('problem');
+    const [n, l, p, st] = await Promise.all([
       sb.from('posts_view').select('id,title,created_at').eq('board', 'notice').order('created_at', { ascending: false }).limit(3),
       sb.from('lectures').select('*').order('week', { ascending: false }).limit(1),
       sb.from('problem_sets').select('id,title,week').order('id', { ascending: false }).limit(1),
+      wantProb ? homeStats() : Promise.resolve(null),
     ]);
     const lec = l.data && l.data[0];
     const prob = p.data && p.data[0];
     const notices = (n.data || []).map((x) => `<a class="row" href="#/post/${x.id}"><div class="row-main">${esc(x.title)}</div><div class="muted small">${fmt(x.created_at)}</div></a>`).join('')
       || '<p class="muted center pad">아직 공지가 없어요.</p>';
+    const isStaff = !!staffRole();
+    const plist = (arr, empty) => (arr && arr.length ? arr.map((x) => `<a class="row hp" href="#/set/${x.set_id}" data-ex="${x.id}"><div class="row-main"><span class="hp-d">${esc(x.difficulty || '')}</span> ${esc(x.title || '(제목 없음)')}</div><div class="muted small">${esc(x.set_name || '')}</div></a>`).join('') : `<p class="muted center pad">${empty}</p>`);
+    let probHtml = '';
+    if (wantProb && st) {
+      const pct = st.mine != null && st.total ? Math.round((st.mine / st.total) * 100) : 0;
+      const num = (v) => (v == null ? '–' : v);
+      probHtml = `
+      <div class="page-head"><h3>🧩 문제 현황</h3><a href="#/sets">문제 보러가기</a></div>
+      <div class="stat-grid">
+        <a class="stat" href="#/sets"><div class="stat-n">${num(st.total)}</div><div class="stat-l">제공되는 문제</div></a>
+        ${isStaff ? '' : `<a class="stat ok" href="#/sets"><div class="stat-n">${num(st.mine)}</div><div class="stat-l">내가 푼 문제</div></a>`}
+        <div class="stat new"><div class="stat-n">${num(st.week)}</div><div class="stat-l">최근 한 주간 새 문제</div></div>
+        <div class="stat hot"><div class="stat-n">${num(st.unsolved)}</div><div class="stat-l">아직 아무도 못 푼 문제</div></div>
+      </div>
+      ${!isStaff && st.mine != null ? `<div class="prog" title="${pct}%"><i style="width:${pct}%"></i></div><p class="muted small">전체의 ${pct}% 풀었어요</p>` : ''}
+      ${st.fallback ? '<p class="muted small">※ 일부 숫자는 v330_home.sql 을 실행하면 보여요.</p>' : `
+      <div class="grid2">
+        <div class="card"><h3>🆕 최근 한 주간 생긴 문제</h3><div class="list">${plist(st.new_list, '이번 주 새 문제는 없어요.')}</div></div>
+        <div class="card"><h3>🔥 아직 아무도 못 푼 문제</h3><div class="list">${plist(st.unsolved_list, '모든 문제가 누군가에게 풀렸어요!')}</div></div>
+      </div>`}`;
+    }
     return [`
       <h2>안녕, ${esc(selfName())}! 👋</h2>
+      ${probHtml}
       <div class="page-head"><h3>📢 최근 공지</h3><a href="#/board/notice">더 보기</a></div>
       <div class="card list">${notices}</div>
       <div class="grid2">
         ${tierCan('lecture') ? `<div class="card"><h3>🎬 최신 강의</h3>${lec ? `<p><span class="week">${lec.week}주차</span><a href="#/lecture/${lec.id}">${esc(lec.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>` : ''}
-        ${tierCan('problem') ? `<div class="card"><h3>📄 최신 문제</h3>${prob ? `<p>${prob.week ? `<span class="week">${prob.week}주차</span>` : ''}<a href="#/set/${prob.id}">${esc(prob.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>` : ''}
-      </div>`];
+        ${wantProb ? `<div class="card"><h3>📄 최신 문제집</h3>${prob ? `<p>${prob.week ? `<span class="week">${prob.week}주차</span>` : ''}<a href="#/set/${prob.id}">${esc(prob.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>` : ''}
+      </div>`, (v) => {
+      v.querySelectorAll('a.hp').forEach((a) => a.addEventListener('click', () => { scrollToEx = 'ex-' + a.dataset.ex; }));
+    }];
   }
 
   /* ---------- 강의 ---------- */
