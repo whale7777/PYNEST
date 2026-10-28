@@ -85,6 +85,7 @@
 - **난이도 6종**: Bronze 3 · Iron 15 · Gold 50 · Diamond 100 · Ruby 250 · Master 400 점 (티어 이름과 무관). 난이도마다 문제 카드 배경이 달라요.
 - **적용 순서**: Supabase SQL Editor 에서 `v320_tiers.sql` 한 번 실행 → 문제집 페이지에서 `mjudge1.json` 가져오기.
 - `mjudge1.json`: 자동 채점 300문제 (Bronze 29 · Iron 235 · Gold 20 · Diamond 6 · Ruby 7 · Master 3).
+  문제와 테스트케이스(정답)가 들어 있어서 **저장소에는 올리지 않고 따로 보관**해요. (`.gitignore` 로 실수로 올라가지 않게 막아뒀어요)
 
 ### V3.2.0 (2) — 라이브 문제 점수
 - `v320b_live_points.sql` 실행 → 라이브 문제 수정 창에 **난이도(점수)** · **랭킹 점수** 칸이 생겨요. 학생이 처음 맞히면 랭킹·티어 점수에 들어가요.
