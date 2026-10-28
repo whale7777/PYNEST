@@ -467,3 +467,19 @@ h2.md-h { font-size: 21px; } h3.md-h { font-size: 18px; } h4.md-h, h5.md-h { fon
 .prerow .pre-top input[type=text] { flex: 1 1 220px; width: auto; }
 .prerow .pre-on { margin: 0; white-space: nowrap; }
 .prerow textarea.code { min-height: 140px; width: 100%; }
+
+/* V3.9.0 — 승급 배너 · 고정 공지 */
+.tubanner { display: flex; align-items: stretch; margin: 0 0 14px; border-radius: 14px; overflow: hidden; border: 1px solid #fcd34d; background: linear-gradient(90deg, #fef3c7, #fde68a); color: #78350f; box-shadow: 0 2px 8px rgba(245, 158, 11, .18); }
+.tubanner .tub-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 12px 14px; color: inherit; text-decoration: none; }
+.tubanner .tub-ico { font-size: 22px; }
+.tubanner .tub-txt { overflow-wrap: anywhere; line-height: 1.45; }
+.tubanner .tub-go { margin-left: 4px; font-weight: 700; white-space: nowrap; }
+.tubanner .tub-x { border: 0; background: transparent; color: inherit; font-size: 18px; padding: 0 16px; cursor: pointer; opacity: .65; }
+.tubanner .tub-x:hover { opacity: 1; background: rgba(0, 0, 0, .06); }
+[data-theme="dark"] .tubanner { background: linear-gradient(90deg, #422006, #713f12); border-color: #a16207; color: #fde68a; }
+.row.pinned { background: color-mix(in srgb, #dc2626 8%, transparent); border-left: 4px solid #dc2626; }
+.row.pinned .row-main, .row.pinned .row-main b { color: #dc2626; font-weight: 700; }
+a.row.pinned:hover { background: color-mix(in srgb, #dc2626 14%, transparent); }
+[data-theme="dark"] .row.pinned .row-main, [data-theme="dark"] .row.pinned .row-main b { color: #f87171; }
+.post-title.pinned { color: #dc2626; }
+[data-theme="dark"] .post-title.pinned { color: #f87171; }

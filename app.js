@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.8.0';
+  const APP_VERSION = '3.9.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -502,17 +502,48 @@
     return { total: t.count || 0, week: w.count || 0, mine: null, unsolved: null, new_list: [], unsolved_list: [], fallback: true };
   }
 
+  /* ---------- 공지 상단 고정 · 티어 승급 배너 (v390_tierup.sql) ---------- */
+  let PIN_OK = false; // posts_view 에 pinned 칸이 있으면 true (v390 전이면 조용히 꺼져요)
+  const koSort = (a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ko');
+  // 공지 목록: 고정 글(가나다 순) 먼저, 나머지는 최신순
+  function orderNotices(rows) {
+    const pin = rows.filter((x) => x.pinned).sort(koSort);
+    return pin.concat(rows.filter((x) => !x.pinned));
+  }
+  async function loadNotices(cols) {
+    const r = await sb.from('posts_view').select(cols + ',pinned').eq('board', 'notice').order('created_at', { ascending: false });
+    if (!r.error) { PIN_OK = true; return r; }
+    return sb.from('posts_view').select(cols).eq('board', 'notice').order('created_at', { ascending: false });
+  }
+  const TU_KEY = 'pn_tuban';
+  const tuToken = (b) => `${b.post_id}:${b.count}`;
+  function tuBannerHtml(b) {
+    if (!b || !b.post_id) return '';
+    try { if (localStorage.getItem(TU_KEY) === tuToken(b)) return ''; } catch (e) { /* 저장소 막힘: 그냥 보여줘요 */ }
+    const L = b.list || [];
+    const names = L.slice(0, 3).map((x) => esc(x.name));
+    const more = b.count - names.length;
+    const who2 = names.join(' · ') + (more > 0 ? ` 외 ${more}명` : '');
+    const tiers = Array.from(new Set(L.map((x) => x.to)));
+    const what = tiers.length === 1 ? `<b>${esc(tiers[0])}</b> 티어로 ` : '';
+    return `<div class="tubanner" id="tuBan"><a class="tub-main" href="#/post/${b.post_id}"><span class="tub-ico">🎉</span><span class="tub-txt"><b>${who2}</b> 님이 ${what}승급했어요! <span class="tub-go">축하하러 가기 →</span></span></a><button type="button" class="tub-x" id="tuX" aria-label="닫기" title="닫기">✕</button></div>`;
+  }
+
   async function pageHome() {
     const wantProb = tierCan('problem');
-    const [n, l, p, st] = await Promise.all([
-      sb.from('posts_view').select('id,title,created_at').eq('board', 'notice').order('created_at', { ascending: false }).limit(3),
+    const [n, l, p, st, tu] = await Promise.all([
+      loadNotices('id,title,created_at'),
       sb.from('lectures').select('*').order('week', { ascending: false }).limit(1),
       sb.from('problem_sets').select('id,title,week').order('id', { ascending: false }).limit(1),
       wantProb ? homeStats() : Promise.resolve(null),
+      Promise.resolve(sb.rpc('tierup_banner')).then((r) => (r && !r.error ? r.data : null), () => null),
     ]);
     const lec = l.data && l.data[0];
     const prob = p.data && p.data[0];
-    const notices = (n.data || []).map((x) => `<a class="row" href="#/post/${x.id}"><div class="row-main">${esc(x.title)}</div><div class="muted small">${fmt(x.created_at)}</div></a>`).join('')
+    const allN = n.data || [];
+    const pinned = allN.filter((x) => x.pinned).sort(koSort);
+    const homeN = pinned.concat(allN.filter((x) => !x.pinned).slice(0, 3));
+    const notices = homeN.map((x) => `<a class="row${x.pinned ? ' pinned' : ''}" href="#/post/${x.id}"><div class="row-main">${x.pinned ? '<span class="pinmark">📌</span> ' : ''}${esc(x.title)}</div><div class="muted small">${fmt(x.created_at)}</div></a>`).join('')
       || '<p class="muted center pad">아직 공지가 없어요.</p>';
     const isStaff = !!staffRole();
     const plist = (arr, empty) => (arr && arr.length ? arr.map((x) => `<a class="row hp" href="#/set/${x.set_id}" data-ex="${x.id}"><div class="row-main"><span class="hp-d">${esc(x.difficulty || '')}</span> ${esc(x.title || '(제목 없음)')}</div><div class="muted small">${esc(x.set_name || '')}</div></a>`).join('') : `<p class="muted center pad">${empty}</p>`);
@@ -536,6 +567,7 @@
       </div>`}`;
     }
     return [`
+      ${tuBannerHtml(tu)}
       <h2>안녕, ${esc(selfName())}! 👋</h2>
       ${probHtml}
       <div class="page-head"><h3>📢 최근 공지</h3><a href="#/board/notice">더 보기</a></div>
@@ -545,6 +577,12 @@
         ${wantProb ? `<div class="card"><h3>📄 최신 문제집</h3>${prob ? `<p>${prob.week ? `<span class="week">${prob.week}주차</span>` : ''}<a href="#/set/${prob.id}">${esc(prob.title)}</a></p>` : '<p class="muted">아직 없어요.</p>'}</div>` : ''}
       </div>`, (v) => {
       v.querySelectorAll('a.hp').forEach((a) => a.addEventListener('click', () => { scrollToEx = 'ex-' + a.dataset.ex; }));
+      const tx = $('#tuX', v);
+      if (tx) tx.onclick = (e) => {
+        e.preventDefault();
+        try { localStorage.setItem(TU_KEY, tuToken(tu)); } catch (er) { /* 저장 못 해도 이번엔 닫혀요 */ }
+        $('#tuBan', v).remove();
+      };
     }];
   }
 
@@ -587,16 +625,22 @@
 
   async function pageBoard(key) {
     const B = BOARDS[key];
-    let q = sb.from('posts_view')
-      .select('id,title,created_at,author_name,author_id,anonymous,files,week')
-      .eq('board', key);
-    if (B.week) q = q.order('week', { ascending: false, nullsFirst: false });
-    const { data, error } = await q.order('created_at', { ascending: false });
+    const mk = (cols) => {
+      let q = sb.from('posts_view').select(cols).eq('board', key);
+      if (B.week) q = q.order('week', { ascending: false, nullsFirst: false });
+      return q.order('created_at', { ascending: false });
+    };
+    const base = 'id,title,created_at,author_name,author_id,anonymous,files,week';
+    let res = key === 'notice' ? await mk(base + ',pinned') : { error: true };
+    if (key === 'notice' && !res.error) PIN_OK = true;
+    if (res.error) res = await mk(base);
+    const { data: raw, error } = res;
     if (error) throw error;
+    const data = key === 'notice' ? orderNotices(raw) : raw;
     const canWrite = !B.adminOnly || can(B.perm);
     const rows = data.length ? data.map((p) => `
-      <a class="row" href="#/post/${p.id}">
-        <div class="row-main">${p.week ? `<span class="week">${p.week}주차</span>` : ''}<b>${esc(p.title)}</b>${(p.files || []).length ? ` <span title="첨부파일 ${(p.files || []).length}개">📎${(p.files || []).length}</span>` : ''}</div>
+      <a class="row${p.pinned ? ' pinned' : ''}" href="#/post/${p.id}">
+        <div class="row-main">${p.pinned ? '<span class="pinmark">📌</span> ' : ''}${p.week ? `<span class="week">${p.week}주차</span>` : ''}<b>${esc(p.title)}</b>${(p.files || []).length ? ` <span title="첨부파일 ${(p.files || []).length}개">📎${(p.files || []).length}</span>` : ''}</div>
         <div class="muted small meta">${who(p.author_id, p.author_name, false)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}</div>
       </a>`).join('') : '<p class="muted center pad">아직 글이 없어요.</p>';
     return [`
@@ -634,9 +678,10 @@
     return [`
       <p><a href="#/board/${p.board}">← ${B.name}</a></p>
       <div class="card">
-        <h2 class="post-title">${p.week ? `<span class="week">${p.week}주차</span>` : ''}${esc(p.title)}</h2>
+        <h2 class="post-title${p.pinned ? ' pinned' : ''}">${p.pinned ? '<span class="pinmark">📌</span> ' : ''}${p.week ? `<span class="week">${p.week}주차</span>` : ''}${esc(p.title)}</h2>
         <p class="muted small">${who(p.author_id, p.author_name)}${p.anonymous && can('review') ? ' (익명 작성)' : ''} · ${fmt(p.created_at)}${p.updated_at ? ' (수정됨)' : ''}
           ${p.is_mine ? ` <a href="#/edit/${p.id}">수정</a>` : ''}
+          ${p.board === 'notice' && p.is_mine && can('notice') && 'pinned' in p ? ` <button class="link" id="pinPost">${p.pinned ? '📌 고정 해제' : '📌 상단 고정'}</button>` : ''}
           ${p.is_mine || can('moderate') ? ' <button class="link danger" id="delPost">글 삭제</button>' : ''}</p>
         ${renderContent(p.content, p.board === 'notice')}
         ${files.length ? `<div class="attach">${files.map((f, i) => `<div class="file-row">📎 <button class="link" data-file="${i}">${esc(f.name || '첨부파일')}</button></div>`).join('')}</div>` : ''}
@@ -647,6 +692,15 @@
         const f = files[Number(b.dataset.file)];
         if (f) download(f.bucket || 'attachments', f.path, f.name || 'file');
       }));
+
+      const pp = $('#pinPost', v);
+      if (pp) pp.onclick = async () => {
+        pp.disabled = true;
+        const { data: ok, error: pe } = await sb.from('posts').update({ pinned: !p.pinned }).eq('id', id).select('id');
+        if (pe || !ok || !ok.length) { pp.disabled = false; return toast('고정을 바꾸지 못했어요', true); }
+        toast(p.pinned ? '고정을 풀었어요' : '맨 위에 빨갛게 고정했어요');
+        route(true);
+      };
 
       const dp = $('#delPost', v);
       if (dp) dp.onclick = async () => {
@@ -686,6 +740,8 @@
     const editing = !!post;
     if (B.adminOnly && !can(B.perm)) return ['<div class="card pad center">선생님만 쓸 수 있는 게시판이에요.</div>'];
     const old = editing ? (post.files || []) : [];
+    if (key === 'notice' && !PIN_OK) { const pr = await sb.from('posts_view').select('pinned').limit(1); if (!pr.error) PIN_OK = true; }
+    const pinBox = key === 'notice' && PIN_OK && can('notice');
     return [`
       <p><a href="#/${editing ? 'post/' + post.id : 'board/' + key}">← ${editing ? '글로 돌아가기' : B.name}</a></p>
       <div class="card">
@@ -702,6 +758,7 @@
           <label>파일 첨부 (선택, 여러 개 가능, 파일당 50MB 이하)<input type="file" id="wFile" multiple></label>
           <div class="form-actions" style="flex-direction:column;align-items:flex-start">
             <label class="inline"><input type="checkbox" id="wComments" ${!editing || post.allow_comments ? 'checked' : ''}> 댓글 허용</label>
+            ${pinBox ? `<label class="inline"><input type="checkbox" id="wPin" ${editing && post.pinned ? 'checked' : ''}> 📌 상단에 빨갛게 고정</label>` : ''}
             ${B.anon ? `<label class="inline"><input type="checkbox" id="wAnon" ${editing && post.anonymous ? 'checked' : ''}> 익명으로 올리기</label>` : ''}
             <button class="primary" id="wBtn" style="margin-top:6px">${editing ? '수정 저장' : '올리기'}</button>
           </div>
@@ -753,6 +810,7 @@
           files: kept.concat(uploaded),
         };
         if (B.week) row.week = week;
+        if ($('#wPin', v)) row.pinned = $('#wPin', v).checked;
 
         let newId = null;
         if (editing) {
