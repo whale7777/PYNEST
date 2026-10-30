@@ -1208,7 +1208,7 @@
     answersColumn = 'answers' in e;
     const [sr, all, subs] = await Promise.all([
       sb.from('problem_sets').select('*').eq('id', e.set_id).maybeSingle(),
-      fetchAll((a, b) => sb.from('exercises').select('id,position,chapter,section,difficulty,is_public').eq('set_id', e.set_id).order('position').order('id').range(a, b)),
+      fetchAll((a, b) => sb.from('exercises').select('id,position,chapter,section,difficulty,is_public,label,body').eq('set_id', e.set_id).order('position').order('id').range(a, b)),
       admin ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions')
         .select('*,submission_comments(id,content,created_at)').eq('exercise_id', eid).eq('user_id', me.id).order('id').range(a, b)),
     ]);
@@ -1230,12 +1230,13 @@
     const sampleHtml = samples.length && !hasIo ? `<h2 class="pro-h">예제</h2>${samples.slice(0, 5).map((t, i) => `
       <div class="pro-ex"><div><div class="pro-cap">예제 입력 ${i + 1} <button class="link" data-cp="in${i}">복사</button></div><pre><code>${esc(cp(t.input))}</code></pre></div>
       <div><div class="pro-cap">예제 출력 ${i + 1} <button class="link" data-cp="out${i}">복사</button></div><pre><code>${esc(cp(t.output))}</code></pre></div></div>`).join('')}` : '';
+    const pick = `<select class="pro-pick" data-pick title="번호로 문제 고르기">${order.map((x) => `<option value="${x.id}"${x.id === eid ? ' selected' : ''}>${dispNo(x)}번 · ${esc((x.label || firstLine(x.body) || '').slice(0, 40))}</option>`).join('')}</select>`;
     const nav = `<div class="pro-nav">
       ${prev ? `<a class="ghost btnlike" href="#/p/${prev.id}">← 이전 (${dispNo(prev)})</a>` : '<span></span>'}
-      <a class="ghost btnlike" href="#/set/${set.id}" data-back>📋 문제집으로</a>
+      <span class="pro-mid"><a class="ghost btnlike" href="#/set/${set.id}" data-back>📋 목록</a> ${pick}</span>
       ${next ? `<a class="ghost btnlike" href="#/p/${next.id}">다음 (${dispNo(next)}) →</a>` : '<span></span>'}</div>`;
     return [`
-      <p><a href="#/set/${set.id}" data-back>← ${esc(set.title)}</a></p>
+      <div class="pro-top"><a href="#/set/${set.id}" data-back>← ${esc(set.title)}</a>${pick}</div>
       <article class="pro">
         <h1 class="pro-title"><span class="pro-no">${dispNo(e)}번</span> ${e.label ? esc(e.label) : esc(shortOf(set))}</h1>
         <div class="pro-meta">
@@ -1255,6 +1256,7 @@
       </article>`,
     (v) => {
       v.querySelectorAll('[data-back]').forEach((a) => a.addEventListener('click', () => { scrollToEx = 'ex-' + eid; }));
+      v.querySelectorAll('[data-pick]').forEach((sel) => (sel.onchange = () => { location.hash = '#/p/' + sel.value; }));
       v.querySelectorAll('[data-cp]').forEach((b) => (b.onclick = async () => {
         const m = /^(in|out)(\d+)$/.exec(b.dataset.cp);
         const t = samples[Number(m[2])];

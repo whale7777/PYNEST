@@ -519,3 +519,8 @@ a.ex-no:hover { filter: brightness(1.1); }
 .li-head { font-weight: 700; }
 .li-row { padding-left: 22px; margin-top: 4px !important; }
 .li-t { overflow-wrap: anywhere; }
+
+.pro-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; max-width: 860px; margin: 0 auto 6px; }
+.pro-top a { overflow-wrap: anywhere; }
+select.pro-pick { width: auto; max-width: 100%; min-width: 180px; margin: 0; padding: 7px 10px; }
+.pro-mid { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
