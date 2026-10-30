@@ -483,3 +483,39 @@ a.row.pinned:hover { background: color-mix(in srgb, #dc2626 14%, transparent); }
 [data-theme="dark"] .row.pinned .row-main, [data-theme="dark"] .row.pinned .row-main b { color: #f87171; }
 .post-title.pinned { color: #dc2626; }
 [data-theme="dark"] .post-title.pinned { color: #f87171; }
+
+/* V4.0.0 — IDE 입력창 (ide.js) */
+.ide { position: relative; margin-top: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); --ig: rgba(128, 128, 128, .30); }
+.ide:focus-within { outline: 2px solid var(--primary); outline-offset: -1px; }
+.ide .ide-back, .ide textarea.ide-ta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; line-height: 1.5; letter-spacing: 0;
+  padding: 10px 12px; border: 0; margin: 0; tab-size: 4; white-space: pre; box-sizing: border-box;
+}
+.ide .ide-back { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: transparent; background: transparent; border-radius: 10px; }
+.ide .ide-back i { display: inline-block; height: 1.5em; vertical-align: top;
+  background-image: repeating-linear-gradient(to right, var(--ig) 0, var(--ig) 1px, transparent 1px, transparent 4ch); }
+.ide textarea.ide-ta { position: relative; display: block; width: 100%; background: transparent; overflow: auto; border-radius: 10px; outline: 0; }
+[data-theme="dark"] .ide { --ig: rgba(200, 210, 255, .20); }
+
+/* V4.0.0 — 문제 단독 화면(백준 스타일) · 라이브 문제 가져오기 */
+a.ex-no { text-decoration: none; }
+a.ex-no:hover { filter: brightness(1.1); }
+.pro { max-width: 860px; margin: 0 auto; padding: 4px 2px 40px; background: none; border: 0; box-shadow: none; }
+.pro-title { font-size: 26px; margin: 6px 0 10px; line-height: 1.3; }
+.pro-no { color: var(--primary); margin-right: 6px; }
+.pro-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 0 12px; border-bottom: 2px solid var(--text); margin-bottom: 4px; }
+.pro-h { font-size: 19px; margin: 26px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.pro-body { font-size: 16px; line-height: 1.85; }
+.pro-body .mk-p { line-height: 1.85; margin: 8px 0; }
+.pro-ex { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 10px; }
+.pro-ex pre { margin: 4px 0 0; min-height: 44px; }
+.pro-cap { font-weight: 700; font-size: 14px; }
+.pro-panel { border-top: 0; padding-top: 0; margin-top: 0; }
+.pro-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 32px; padding-top: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+@media (max-width: 560px) { .pro-ex { grid-template-columns: 1fr; } .pro-title { font-size: 22px; } }
+.li-list { max-height: 46vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; margin: 8px 0; }
+.li-group { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.li-group:last-child { border-bottom: 0; }
+.li-head { font-weight: 700; }
+.li-row { padding-left: 22px; margin-top: 4px !important; }
+.li-t { overflow-wrap: anywhere; }

@@ -588,6 +588,7 @@
         </div>
         <div class="judge-out" id="jo" ${memo.has(p.id) ? '' : 'hidden'}>${memo.get(p.id) || ''}</div>`;
       const cd = $('#cd', pv);
+      if (cd && window.PYIDE) window.PYIDE.attach(cd); // 괄호 자동 닫기 · 자동 들여쓰기 · 들여쓰기 줄
       const partEls = [...pv.querySelectorAll('textarea.pans')];
       const getCode = () => (cd ? cd.value : '');
       const getVals = () => partEls.map((t) => t.value);
@@ -595,6 +596,7 @@
       [cd, ...partEls].filter(Boolean).forEach((el) => {
         el.addEventListener('input', save);
         el.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Tab' && el._ide) return;
           if (ev.key === 'Tab') { ev.preventDefault(); const s0 = el.selectionStart; el.value = el.value.slice(0, s0) + '    ' + el.value.slice(el.selectionEnd); el.selectionStart = el.selectionEnd = s0 + 4; save(); }
         });
       });

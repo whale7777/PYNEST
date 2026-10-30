@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.9.0';
+  const APP_VERSION = '4.0.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -436,7 +436,7 @@
     if (!me || me.status !== 'approved' || !$('#view')) return;
     const y = window.scrollY;
     const [a, b, c] = (location.hash.replace(/^#\//, '') || 'home').split('/');
-    const key = a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' ? 'sets' : a;
+    const key = a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' || a === 'p' ? 'sets' : a;
     document.body.classList.remove('menu-open');
     document.querySelectorAll('#menu a').forEach((l) => l.classList.toggle('on', l.dataset.k === key));
 
@@ -449,6 +449,7 @@
       ranking: () => pageRanking(),
       u: () => pageProfile(b),
       set: () => pageSet(b),
+      p: () => pageProblem(b),
       review: () => pageReview(b, c),
       board: () => (BOARDS[b] ? pageBoard(b) : notFound()),
       post: () => pagePost(b),
@@ -469,7 +470,7 @@
       if (tok !== navTok) return;
     }
     // 학생 등급 제한 (직원은 해당 없음)
-    const need = { lectures: ['lecture', '강의'], lecture: ['lecture', '강의'], sets: ['problem', '문제'], set: ['problem', '문제'], problems: ['problem', '문제'] }[a];
+    const need = { lectures: ['lecture', '강의'], lecture: ['lecture', '강의'], sets: ['problem', '문제'], set: ['problem', '문제'], p: ['problem', '문제'], problems: ['problem', '문제'] }[a];
     if (need && !tierCan(need[0])) { v.innerHTML = lockedPage(need[1])[0]; return; }
     try {
       const [html, bind] = await (pages[a] || notFound)();
@@ -1076,7 +1077,7 @@
          <div class="card list" id="numList">${numBody()}</div>`
       : `<div class="sets">${cards}</div>`;
     return [`
-      <div class="page-head"><h2>📄 문제</h2>${can('content') ? '<button class="primary" id="newSet">＋ 새 문제집</button>' : ''}</div>
+      <div class="page-head"><h2>📄 문제</h2>${can('content') ? '<span><button class="ghost" id="newSetLive" title="라이브에서 냈던 문제를 골라 새 문제집으로 만들어요">📡 라이브 문제로 만들기</button> <button class="primary" id="newSet">＋ 새 문제집</button></span>' : ''}</div>
       <div class="tabs"><button data-sv="sets" class="${num ? '' : 'on'}">📚 문제집으로 보기</button><button data-sv="num" class="${num ? 'on' : ''}">🔢 번호로 보기</button></div>
       <p class="muted">${num ? `모든 문제를 <b>고유 번호</b> 순서로 보여줘요 (총 ${ex.length}문제). 눌러서 문제집 안의 그 문제로 이동해요.` : '문제를 하나씩 보고, <b class="redtxt">풀어보기</b>로 코드를 제출해요. 제출한 풀이는 선생님만 볼 수 있어요.'}</p>
       ${view}
@@ -1084,6 +1085,8 @@
     (v) => {
       const nb = $('#newSet', v);
       if (nb) nb.onclick = openNewSet;
+      const nl = $('#newSetLive', v);
+      if (nl) nl.onclick = () => openLiveImport(null, []);
       v.querySelectorAll('[data-sv]').forEach((b) => (b.onclick = () => {
         setsView = b.dataset.sv;
         try { localStorage.setItem('pn_sets_view', setsView); } catch (e) { /* 무시 */ }
@@ -1191,6 +1194,238 @@
     };
   }
 
+
+  /* ---------- 문제 단독 화면 (백준처럼 문제만 크게) ---------- */
+  async function pageProblem(rawId) {
+    const eid = Number(rawId);
+    if (!eid) return notFound();
+    const admin = can('content');
+    const er = await sb.from('exercises').select('*').eq('id', eid).maybeSingle();
+    if (er.error) throw er.error;
+    const e = er.data;
+    if (!e) return notFound();
+    testsColumn = 'tests' in e;
+    answersColumn = 'answers' in e;
+    const [sr, all, subs] = await Promise.all([
+      sb.from('problem_sets').select('*').eq('id', e.set_id).maybeSingle(),
+      fetchAll((a, b) => sb.from('exercises').select('id,position,chapter,section,difficulty,is_public').eq('set_id', e.set_id).order('position').order('id').range(a, b)),
+      admin ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions')
+        .select('*,submission_comments(id,content,created_at)').eq('exercise_id', eid).eq('user_id', me.id).order('id').range(a, b)),
+    ]);
+    const set = sr.data;
+    if (!set) return notFound();
+    const L = layoutEx(all.map((x) => ({ ...x })));
+    const order = L.normal.concat(L.elite);
+    const idx = order.findIndex((x) => x.id === eid);
+    const cur = order[idx];
+    e.no = cur ? cur.no : 1;
+    const prev = order[idx - 1];
+    const next = order[idx + 1];
+    const tests = e.tests || [];
+    const answers = e.answers || [];
+    const tags = (e.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
+    const samples = tests.filter((t) => !t.hidden);
+    const hasIo = /^```\s*(io|out)\b/m.test(String(e.body || ''));
+    const cp = (t) => String(t == null ? '' : t).replace(/\n$/, '');
+    const sampleHtml = samples.length && !hasIo ? `<h2 class="pro-h">예제</h2>${samples.slice(0, 5).map((t, i) => `
+      <div class="pro-ex"><div><div class="pro-cap">예제 입력 ${i + 1} <button class="link" data-cp="in${i}">복사</button></div><pre><code>${esc(cp(t.input))}</code></pre></div>
+      <div><div class="pro-cap">예제 출력 ${i + 1} <button class="link" data-cp="out${i}">복사</button></div><pre><code>${esc(cp(t.output))}</code></pre></div></div>`).join('')}` : '';
+    const nav = `<div class="pro-nav">
+      ${prev ? `<a class="ghost btnlike" href="#/p/${prev.id}">← 이전 (${dispNo(prev)})</a>` : '<span></span>'}
+      <a class="ghost btnlike" href="#/set/${set.id}" data-back>📋 문제집으로</a>
+      ${next ? `<a class="ghost btnlike" href="#/p/${next.id}">다음 (${dispNo(next)}) →</a>` : '<span></span>'}</div>`;
+    return [`
+      <p><a href="#/set/${set.id}" data-back>← ${esc(set.title)}</a></p>
+      <article class="pro">
+        <h1 class="pro-title"><span class="pro-no">${dispNo(e)}번</span> ${e.label ? esc(e.label) : esc(shortOf(set))}</h1>
+        <div class="pro-meta">
+          ${diffTag(e.difficulty)}
+          ${admin ? pubChip(e.is_public) : ''}
+          ${e.points ? `<span class="chip pts">${e.points}점</span>` : ''}
+          ${tests.length || answers.some((x) => x.type !== 'm') ? '<span class="chip judgechip" title="제출하면 자동으로 채점돼요">⚖️ 자동 채점</span>' : answers.length ? '<span class="chip judgechip">✍️ 서술</span>' : ''}
+          ${tags}${e.source ? `<span class="muted small">${esc(e.source)}</span>` : ''}
+        </div>
+        <h2 class="pro-h">문제</h2>
+        <div class="ex-body pro-body">${renderMarkup(e.body)}</div>
+        ${sampleHtml}
+        ${e.check_point ? `<div class="ex-check">💡 <b>확인 포인트</b> ${inline(e.check_point)}</div>` : ''}
+        ${admin ? `<p class="muted small">고유 번호 ${e.id}${tests.length ? ` · 테스트 ${tests.length}개` : ''}${answers.length ? ` · 정답 칸 ${answers.length}개` : ''} · 수정·삭제는 <a href="#/set/${set.id}" data-back>문제집 화면</a>에서 해요.</p>`
+          : `<h2 class="pro-h">풀어보기</h2><div class="ex-panel pro-panel" id="panel-${e.id}"></div>`}
+        ${nav}
+      </article>`,
+    (v) => {
+      v.querySelectorAll('[data-back]').forEach((a) => a.addEventListener('click', () => { scrollToEx = 'ex-' + eid; }));
+      v.querySelectorAll('[data-cp]').forEach((b) => (b.onclick = async () => {
+        const m = /^(in|out)(\d+)$/.exec(b.dataset.cp);
+        const t = samples[Number(m[2])];
+        try { await navigator.clipboard.writeText(cp(m[1] === 'in' ? t.input : t.output)); toast('복사했어요'); } catch (er) { toast('복사하지 못했어요', true); }
+      }));
+      if (!admin) {
+        const mount = makeSolver({ [eid]: e }, { [eid]: subs }, !!set.answer_public);
+        const pn = mount(eid);
+        if (pn) pn.hidden = false;
+      }
+    }];
+  }
+
+  /* ---------- 문제 넣기 도우미: JSON 으로 추가 · 라이브 문제 가져오기 ---------- */
+  // exercises 에 한꺼번에 넣어요 (칸이 아직 없는 DB 면 그 칸만 빼고 다시 시도)
+  async function insertExRows(rows) {
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100);
+      const omit = [];
+      let r = await sb.from('exercises').insert(chunk);
+      while (r.error && omit.length < 4) {
+        const msg = r.error.message || '';
+        const k = ['is_public', 'answers', 'tests', 'rank_points'].find((x) => !omit.includes(x) && msg.includes(x));
+        if (!k) break;
+        omit.push(k);
+        r = await sb.from('exercises').insert(chunk.map((row) => { const c = { ...row }; omit.forEach((o) => delete c[o]); return c; }));
+      }
+      if (r.error) return r.error;
+    }
+    return null;
+  }
+  const pubPickHtml = (name) => `<div class="pubpick"><div class="muted small">공개 설정</div>
+    <label class="inline"><input type="radio" name="${name}" value="0" checked> 🔒 <b>비공개</b>로 넣기 <span class="muted small">— 학생에게 안 보여요. 확인하고 나중에 공개해요</span></label>
+    <label class="inline"><input type="radio" name="${name}" value="1"> 🌐 <b>바로 게시</b> <span class="muted small">— 지금 바로 학생에게 보여요</span></label></div>`;
+
+  async function openAddJson(set, exs) {
+    const pr = await pubReady();
+    let parsed = null;
+    const m = modal(`
+      <h3>＋ JSON으로 문제 추가</h3>
+      <p class="muted small">"${esc(set.title)}" 문제집 <b>맨 뒤</b>에 문제를 붙여요. 지금 있는 문제와 학생 제출물은 그대로예요. 형식은 문제집 JSON(pynest-problemset-v1)과 같아요 — <code class="ic">problems</code> 나 <code class="ic">chapters</code>, <code class="ic">elite</code> 에 문제를 담으면 돼요.</p>
+      <label>JSON 붙여넣기<textarea id="ajText" class="code" style="min-height:220px" spellcheck="false" placeholder='{ "format": "pynest-problemset-v1", "problems": [ { "difficulty": "Beginner", "body": "...", "tests": [ { "input": "1 2", "output": "3" } ] } ] }'></textarea></label>
+      <label>또는 파일 선택 <input type="file" id="ajFile" accept=".json,application/json"></label>
+      <p class="muted small" id="ajInfo"></p>
+      ${pr ? pubPickHtml('ajPub') : ''}
+      <div class="form-actions"><button class="primary" id="ajBtn" disabled>추가하기</button><button type="button" class="ghost" id="ajCancel">취소</button></div>`);
+    const q = (x) => $(x, m.el);
+    const check = () => {
+      parsed = null;
+      const t = q('#ajText').value.trim();
+      q('#ajBtn').disabled = true;
+      if (!t) { q('#ajInfo').textContent = ''; return; }
+      try {
+        parsed = parseSetJson(t);
+        q('#ajInfo').textContent = `✅ 일반 ${parsed.rows.length - parsed.nElite}문제 + ELITE ${parsed.nElite}문제를 읽었어요.`;
+        q('#ajBtn').disabled = false;
+      } catch (err) { q('#ajInfo').textContent = '⚠️ ' + err.message; }
+    };
+    q('#ajText').oninput = check;
+    q('#ajFile').onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      q('#ajText').value = await f.text();
+      check();
+    };
+    q('#ajCancel').onclick = m.close;
+    q('#ajBtn').onclick = async () => {
+      if (!parsed) return;
+      const btn = q('#ajBtn');
+      btn.disabled = true;
+      const maxPos = exs.reduce((mx, e) => Math.max(mx, e.position), 0);
+      const lastNormal = exs.filter((e) => e.difficulty !== 'ELITE').pop();
+      const isPub = pr ? (m.el.querySelector('input[name="ajPub"]:checked') || { value: '1' }).value === '1' : true;
+      const rows = parsed.rows.map((r, i) => {
+        const o = { ...r, set_id: set.id, position: maxPos + (i + 1) * 1000 };
+        if (!o.chapter && !o.section && o.difficulty !== 'ELITE' && lastNormal) { o.chapter = lastNormal.chapter; o.section = lastNormal.section; }
+        if (pr) o.is_public = isPub;
+        return o;
+      });
+      const err = await insertExRows(rows);
+      if (err) { btn.disabled = false; return toast('문제를 넣지 못했어요: ' + err.message, true); }
+      m.close();
+      toast(`${rows.length}문제를 추가했어요${pr && !isPub ? ' (비공개 — 확인 후 공개해 주세요)' : ''}`);
+      route(true);
+    };
+  }
+
+  // 라이브에서 냈던 문제를 골라 문제집으로. target 이 있으면 그 문제집 뒤에 추가, 없으면 새 문제집을 만들어요.
+  async function openLiveImport(target, exs) {
+    const pr = await pubReady();
+    const m = modal('<h3>📡 라이브 문제 가져오기</h3><p class="loading">불러오는 중…</p>');
+    let sess;
+    let lps;
+    try {
+      [sess, lps] = await Promise.all([
+        fetchAll((a, b) => sb.from('live_sessions').select('id,title,created_at').order('created_at').range(a, b)),
+        fetchAll((a, b) => sb.from('live_problems').select('*').order('session_id').order('position').order('id').range(a, b)),
+      ]);
+    } catch (err) { m.close(); return toast('라이브 문제를 불러오지 못했어요', true); }
+    if (!lps.length) { m.close(); return toast('가져올 라이브 문제가 아직 없어요', true); }
+    const have = new Set((exs || []).map((e) => normFlat(e.body)));
+    const groups = sess.map((x) => ({ s: x, items: lps.filter((p) => p.session_id === x.id) })).filter((g) => g.items.length);
+    const stTxt = { open: '진행중', closed: '마감', draft: '비공개' };
+    const body = groups.map((g, gi) => `<div class="li-group">
+      <label class="inline li-head"><input type="checkbox" data-g="${gi}"> <b>${esc(g.s.title || '라이브')}</b> <span class="muted small">${fmt(g.s.created_at)} · ${g.items.length}문제</span></label>
+      ${g.items.map((p) => `<label class="inline li-row"><input type="checkbox" data-p="${p.id}" ${p.status === 'draft' || have.has(normFlat(p.body)) ? '' : 'checked'}>
+        <span class="muted small">${esc(stTxt[p.status] || p.status || '')}</span> ${p.difficulty ? diffTag(p.difficulty) : ''} <span class="li-t">${esc(p.title || firstLine(p.body))}</span>${have.has(normFlat(p.body)) ? ' <span class="chip">이미 있음</span>' : ''}</label>`).join('')}
+    </div>`).join('');
+    m.el.querySelector('.modal').innerHTML = `<button class="icon modal-x" type="button" title="닫기">✕</button>
+      <h3>📡 라이브 문제 가져오기</h3>
+      <p class="muted small">${target ? `"${esc(target.title)}" 문제집 <b>맨 뒤</b>에 넣어요.` : '골라서 <b>새 문제집</b>을 만들어요.'} 수업(라이브) 이름이 장(CHAPTER) 이름이 되고, 문제 내용·정답·채점 테스트·난이도가 그대로 복사돼요. 라이브 쪽 문제는 그대로 남아요.</p>
+      <div class="li-list">${body}</div>
+      <p class="muted small" id="liCnt"></p>
+      ${target ? '' : `<div class="grid2"><label>제목<input type="text" id="liTitle" required placeholder="예: 10월 라이브 문제 모음"></label><label>주차<input type="number" id="liWeek" min="1"></label></div>
+        <label>짧은 이름 <input type="text" id="liShort" placeholder="L1"></label>`}
+      ${pr ? pubPickHtml('liPub') : ''}
+      <div class="form-actions"><button class="primary" id="liBtn">${target ? '문제 추가하기' : '문제집 만들기'}</button><button type="button" class="ghost" id="liCancel">취소</button></div>`;
+    $('.modal-x', m.el).onclick = m.close;
+    const q = (x) => $(x, m.el);
+    const pick = () => [...m.el.querySelectorAll('input[data-p]:checked')].map((c) => Number(c.dataset.p));
+    const count = () => { q('#liCnt').textContent = `${pick().length}문제 선택`; };
+    m.el.querySelectorAll('input[data-g]').forEach((c) => (c.onchange = () => {
+      m.el.querySelectorAll('.li-group')[Number(c.dataset.g)].querySelectorAll('input[data-p]').forEach((x) => { x.checked = c.checked; });
+      count();
+    }));
+    m.el.querySelectorAll('input[data-p]').forEach((c) => (c.onchange = count));
+    count();
+    q('#liCancel').onclick = m.close;
+    q('#liBtn').onclick = async () => {
+      const ids = new Set(pick());
+      if (!ids.size) return toast('가져올 문제를 골라 주세요', true);
+      const isPub = pr ? (m.el.querySelector('input[name="liPub"]:checked') || { value: '1' }).value === '1' : true;
+      let title = '';
+      if (!target) { title = q('#liTitle').value.trim(); if (!title) return toast('문제집 제목을 입력하세요', true); }
+      const btn = q('#liBtn');
+      btn.disabled = true;
+      let setId = target ? target.id : null;
+      if (!target) {
+        const setRow = { title, short_name: q('#liShort').value.trim() || null, week: Number(q('#liWeek').value) || null, description: null };
+        if (pr) setRow.is_public = isPub;
+        const { data: ns, error } = await sb.from('problem_sets').insert(setRow).select('id').single();
+        if (error || !ns) { btn.disabled = false; return toast('문제집을 만들지 못했어요', true); }
+        setId = ns.id;
+      }
+      const base = (exs || []).reduce((mx, e) => Math.max(mx, e.position), 0);
+      let n = 0;
+      const rows = [];
+      groups.forEach((g) => g.items.forEach((p) => {
+        if (!ids.has(p.id)) return;
+        n += 1;
+        const r = {
+          set_id: setId, position: base + n * 1000, chapter: g.s.title || '라이브', section: null,
+          difficulty: normDiff(p.difficulty), label: p.title ? String(p.title).slice(0, 40) : null, points: null, tags: [],
+          source: '라이브: ' + (g.s.title || ''), body: p.body, check_point: null, tests: normTests(p.tests), answers: normAnswers(p.answers),
+        };
+        if (p.rank_points != null) r.rank_points = p.rank_points;
+        if (pr) r.is_public = isPub;
+        rows.push(r);
+      }));
+      const err = await insertExRows(rows);
+      if (err) {
+        if (!target) await sb.from('problem_sets').delete().eq('id', setId);
+        btn.disabled = false;
+        return toast('문제를 넣지 못했어요: ' + err.message, true);
+      }
+      m.close();
+      toast(`${rows.length}문제를 ${target ? '추가' : '넣어 문제집을 만들'}었어요${pr && !isPub ? ' (비공개 — 확인 후 공개해 주세요)' : ''}`);
+      if (target) route(true); else location.hash = '#/set/' + setId;
+    };
+  }
+
   /* ---------- 문제집 화면 ---------- */
   async function pageSet(rawId) {
     const id = Number(rawId);
@@ -1250,7 +1485,7 @@
       const tags = (e.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
       return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : dxCls(e.difficulty)}"${dxStyle(e.difficulty)} id="ex-${e.id}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
         <header class="ex-head">
-          <span class="ex-no">${dispNo(e)}</span>
+          <a class="ex-no" href="#/p/${e.id}" title="이 문제만 크게 보기">${dispNo(e)}</a>
           ${diffTag(e.difficulty)}
           ${admin ? pubChip(e.is_public) : ''}
           ${e.label ? `<span class="chip">${esc(e.label)}</span>` : ''}
@@ -1271,6 +1506,7 @@
         ${(e.answers || []).length ? `<details class="keybox"><summary>🔑 정답 보기</summary><pre><code>${esc(answersToText(e.answers))}</code></pre></details>` : ''}` : `
         <div class="ex-foot">
           <button class="solve" data-solve="${e.id}">✍️ 풀어보기</button>
+          <a class="ghost btnlike" href="#/p/${e.id}" title="이 문제만 따로 크게 보기">↗ 문제만 보기</a>
           ${last ? `<span class="done">✅ 제출함 · v${last.version}</span> ${judgeBadge(last.judge)}${hasC ? ' <span class="badge">💬 선생님 댓글</span>' : ''}` : ''}
         </div>
         <div class="ex-panel" id="panel-${e.id}" hidden></div>`}
@@ -1305,7 +1541,7 @@
       <div class="form-actions" style="margin:0 0 12px">
         ${files.join('')}
         ${admin && 'is_public' in set ? (set.is_public === false ? '<button class="primary" id="togPub">🌐 공개하기</button>' : '<button class="ghost" id="togPub">🔒 비공개로 바꾸기</button>') : ''}${exs.some((e) => e.is_public === false) && admin ? '<button class="ghost" id="pubAllEx" title="이 문제집의 비공개 문제를 모두 공개해요">🌐 비공개 문제 모두 공개</button>' : ''}
-        ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><button class="ghost" id="autoTests" title="입출력 예시가 있는 문제에 채점 테스트를 한꺼번에 만들어요">⚖️ 예시로 채점 만들기</button><button class="ghost" id="impKey" title="JSON 파일의 정답·채점 테스트를 같은 문제에 덮어써요 (학생 제출물은 그대로)">🔑 정답·채점 가져오기</button><input type="file" id="impKeyFile" accept=".json,application/json" hidden><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
+        ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="addJson" title="JSON을 붙여넣거나 파일로 올려 문제를 이 문제집 맨 뒤에 추가해요">＋ JSON으로 추가</button><button class="ghost" id="addLive" title="라이브에서 냈던 문제를 골라 이 문제집에 추가해요">📡 라이브 문제 가져오기</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><button class="ghost" id="autoTests" title="입출력 예시가 있는 문제에 채점 테스트를 한꺼번에 만들어요">⚖️ 예시로 채점 만들기</button><button class="ghost" id="impKey" title="JSON 파일의 정답·채점 테스트를 같은 문제에 덮어써요 (학생 제출물은 그대로)">🔑 정답·채점 가져오기</button><input type="file" id="impKeyFile" accept=".json,application/json" hidden><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
       </div>
       ${hwHtml}
       <details class="card toc" open><summary>📑 목차 <span class="muted small">(누르면 그 위치로 이동해요)</span></summary>${toc || '<p class="muted">문제가 없어요.</p>'}</details>
@@ -1346,7 +1582,21 @@
       const exMap = {};
       exs.forEach((x) => { exMap[x.id] = x; });
       const reveal = !!set.answer_public;
-      const mount = (eid) => {
+      const mount = makeSolver(exMap, subsBy, reveal);
+      v.querySelectorAll('[data-solve]').forEach((b) => (b.onclick = () => {
+        const eid = Number(b.dataset.solve);
+        const p = mount(eid);
+        if (!p) return;
+        p.hidden = !p.hidden;
+        if (p.hidden) openPanels.delete(eid); else { openPanels.add(eid); const f = $('textarea', p); if (f) f.focus(); }
+      }));
+      openPanels.forEach((eid) => { const p = mount(eid); if (p) p.hidden = false; });
+    }];
+  }
+
+  /* 문제 풀이 칸(코드 입력 · 실행 · 채점 · 제출) — 문제집 화면과 문제 단독 화면이 같이 써요 */
+  function makeSolver(exMap, subsBy, reveal) {
+    return (eid) => {
         const p = document.getElementById('panel-' + eid);
         if (!p || p.dataset.ready) return p;
         const ex = exMap[eid];
@@ -1403,7 +1653,7 @@
             }
           };
         };
-        if (ta) tabKey(ta);
+        if (ta) { if (window.PYIDE) window.PYIDE.attach(ta); else tabKey(ta); }
         partEls.forEach(tabKey);
         const jo = $('.judge-out', p);
         const showJ = (html) => { jo.hidden = false; jo.innerHTML = html; };
@@ -1481,16 +1731,7 @@
           submitIt(false);
         };
         return p;
-      };
-      v.querySelectorAll('[data-solve]').forEach((b) => (b.onclick = () => {
-        const eid = Number(b.dataset.solve);
-        const p = mount(eid);
-        if (!p) return;
-        p.hidden = !p.hidden;
-        if (p.hidden) openPanels.delete(eid); else { openPanels.add(eid); const f = $('textarea', p); if (f) f.focus(); }
-      }));
-      openPanels.forEach((eid) => { const p = mount(eid); if (p) p.hidden = false; });
-    }];
+    };
   }
 
   /* ---------- 자동 채점 (학생 브라우저에서 파이썬 실행: Pyodide) ---------- */
@@ -2068,6 +2309,8 @@ onmessage = (ev) => {
     const ae = $('#addElite', v);
     if (ae) ae.onclick = () => openExEditor(set, exs, null, { position: maxPos + 1000, difficulty: 'ELITE', chapter: '', section: '' });
     $('#setCfg', v).onclick = () => openSetCfg(set);
+    $('#addJson', v).onclick = () => openAddJson(set, exs);
+    $('#addLive', v).onclick = () => openLiveImport(set, exs);
     const tp = $('#togPub', v);
     if (tp) tp.onclick = async () => {
       const to = set.is_public === false;
