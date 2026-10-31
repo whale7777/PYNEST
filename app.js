@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.0.0';
+  const APP_VERSION = '4.1.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -2955,10 +2955,36 @@ onmessage = (ev) => {
         <p class="muted small" id="nickNote">불러오는 중…</p>
       </div>
       <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>
+      <div class="card" id="ideCard"><h3>⌨️ 코드 입력창 (IDE) 기능</h3>
+        <p class="muted small">코드 쓰는 칸의 편의 기능을 골라서 켜고 꺼요. 이 기기(브라우저)에 저장되고, 문제집·라이브 모두 같이 적용돼요.</p>
+        <div id="ideOpts"></div>
+        <label>써보기<textarea id="ideTry" class="code" rows="6" placeholder="여기서 바로 시험해 보세요. 예) print( 를 치고 Enter, if x: 를 치고 Enter"></textarea></label>
+      </div>
       <div class="card" id="kkCard"><h3>💬 카카오톡 연동</h3><p class="muted small">PyNest 카카오톡 채널 챗봇에서 랭킹·내 프로필·티어를 볼 수 있어요.</p><div id="kkBody" class="muted small">불러오는 중…</div></div>
       <p class="muted small center">PyNest V${APP_VERSION}</p>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
+      if (window.PYIDE) {
+        const IDE_OPTS = [
+          ['close', '괄호·따옴표 자동 닫기', '( 를 치면 ) 가 같이 생기고, ) 를 치면 건너뛰어요. 지울 때는 한 쌍이 같이 지워져요'],
+          ['split', '괄호 사이에서 Enter → 닫는 괄호를 아래 줄로', '끄면 괄호 안 내용만 내려오고 닫는 괄호는 그 줄 끝에 그대로 있어요  f(↵  →  f(\\n    )'],
+          ['indent', '줄바꿈 자동 들여쓰기', '콜론(:) 뒤에는 4칸 더, return·pass·break 뒤에는 4칸 덜 들여써요'],
+          ['tab', 'Tab / Shift+Tab 들여쓰기', '여러 줄을 선택하고 눌러도 돼요. 끄면 Tab 이 다음 칸으로 이동해요'],
+          ['bksp', '스마트 Backspace', '앞쪽 공백은 4칸씩 지워요'],
+          ['comment', 'Ctrl(⌘)+/ 주석 켜기/끄기', ''],
+          ['guide', '들여쓰기 세로줄', '4칸마다 연한 줄을 보여줘요'],
+        ];
+        const cur = window.PYIDE.get();
+        $('#ideOpts', v).innerHTML = IDE_OPTS.map(([k, t, d]) => `<label class="inline ideopt"><input type="checkbox" data-ide="${k}" ${cur[k] !== false ? 'checked' : ''}> <span><b>${esc(t)}</b>${d ? `<br><span class="muted small">${esc(d)}</span>` : ''}</span></label>`).join('')
+          + '<div class="form-actions"><button class="ghost" id="ideReset" type="button">기본값으로</button></div>';
+        v.querySelectorAll('[data-ide]').forEach((c) => (c.onchange = () => window.PYIDE.set({ [c.dataset.ide]: c.checked })));
+        $('#ideReset', v).onclick = () => {
+          window.PYIDE.set(window.PYIDE.defaults);
+          v.querySelectorAll('[data-ide]').forEach((c) => { c.checked = window.PYIDE.defaults[c.dataset.ide] !== false; });
+          toast('기본값으로 돌렸어요');
+        };
+        window.PYIDE.attach($('#ideTry', v));
+      } else { const ic = $('#ideCard', v); if (ic) ic.remove(); }
       const nickDraw = async () => {
         const { data: nr, error: ne } = await sb.from('nicknames').select('nickname,set_by').eq('user_id', me.id).maybeSingle();
         if (ne) { $('#nickNote', v).textContent = '아직 준비되지 않았어요. (관리자가 v350_nickname_signup.sql 을 실행하면 쓸 수 있어요)'; return; }

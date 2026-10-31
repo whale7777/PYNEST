@@ -524,3 +524,6 @@ a.ex-no:hover { filter: brightness(1.1); }
 .pro-top a { overflow-wrap: anywhere; }
 select.pro-pick { width: auto; max-width: 100%; min-width: 180px; margin: 0; padding: 7px 10px; }
 .pro-mid { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+.ideopt { align-items: flex-start; margin: 10px 0 !important; }
+.ideopt input { margin-top: 3px; }

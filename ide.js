@@ -8,6 +8,19 @@
  */
 (function () {
   'use strict';
+  /* 설정(이 브라우저에 저장) — 설정 화면에서 켜고 끌 수 있어요. 바꾸면 열려 있는 입력창에도 바로 적용돼요. */
+  const KEY = 'pn_ide';
+  const DEF = { close: true, split: true, indent: true, tab: true, bksp: true, guide: true, comment: true };
+  let cache = null;
+  const load = () => {
+    let o = {};
+    try { o = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { o = {}; }
+    cache = Object.assign({}, DEF, o);
+    return cache;
+  };
+  const opt = (k) => (cache || load())[k] !== false;
+  const painters = new Set();
+
   const IND = 4;
   const SP = ' '.repeat(IND);
   const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
@@ -38,6 +51,7 @@
     let raf = 0;
     const paint = () => {
       raf = 0;
+      if (!opt('guide')) { back.innerHTML = ''; return; }
       const lines = ta.value.split('\n');
       let html = '';
       for (let i = 0; i < lines.length; i += 1) {
@@ -59,6 +73,7 @@
       Object.defineProperty(ta, 'value', { configurable: true, get() { return desc.get.call(this); }, set(v) { desc.set.call(this, v); later(); } });
     }
     paint();
+    painters.add(paint);
 
     /* ----- 편집 도우미 ----- */
     // 되돌리기(Ctrl+Z)가 되도록 브라우저 편집 명령을 써요
@@ -96,6 +111,7 @@
 
       /* 글자 입력: 괄호/따옴표 */
       if (t === 'insertText' && e.data && e.data.length === 1) {
+        if (!opt('close')) return;
         const ch = e.data;
         const next = v[b];
         if (a === b && CLOSE[ch] && next === ch) { // 이미 닫는 글자가 있으면 건너뛰기
@@ -127,6 +143,7 @@
 
       /* 줄바꿈: 자동 들여쓰기 */
       if (t === 'insertLineBreak' || t === 'insertParagraph') {
+        if (!opt('indent')) return;
         e.preventDefault();
         const ls = lineStartOf(v, a);
         const before = v.slice(ls, a);
@@ -139,7 +156,7 @@
         else if (/[([{]$/.test(code)) ind = indent + IND;
         else if (/^\s*(return|pass|break|continue|raise)\b/.test(before) && a === b && v.slice(a, lineEndOf(v, a)).trim() === '' && indent >= IND) ind = indent - IND;
         const pad = ' '.repeat(ind);
-        if (/[([{]$/.test(code) && nextCh && PAIRS[code.slice(-1)] === nextCh && a === b) {
+        if (opt('split') && /[([{]$/.test(code) && nextCh && PAIRS[code.slice(-1)] === nextCh && a === b) {
           // (|)  →  줄을 비우고 닫는 괄호를 아래로
           put('\n' + pad + '\n' + ' '.repeat(indent));
           const p = a + 1 + pad.length;
@@ -151,7 +168,7 @@
       }
 
       /* Backspace: 한 쌍 지우기 · 앞쪽 공백은 4칸씩 */
-      if (t === 'deleteContentBackward' && a === b && a > 0) {
+      if (t === 'deleteContentBackward' && a === b && a > 0 && opt('bksp')) {
         const prev = v[a - 1];
         const next = v[a];
         if (PAIRS[prev] && PAIRS[prev] === next && !(isQuote(prev) && isWord(v[a - 2]))) {
@@ -180,7 +197,7 @@
       const b = ta.selectionEnd;
 
       /* Tab / Shift+Tab */
-      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey && opt('tab')) {
         e.preventDefault();
         const multi = v.slice(a, b).includes('\n');
         if (!e.shiftKey && !multi) { put(a === b ? SP.slice(0, IND - ((a - lineStartOf(v, a)) % IND)) : SP); return; }
@@ -199,7 +216,7 @@
       }
 
       /* Ctrl(⌘)+/ : 주석 */
-      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      if ((e.ctrlKey || e.metaKey) && e.key === '/' && opt('comment')) {
         e.preventDefault();
         const ls = lineStartOf(v, a);
         const le = lineEndOf(v, b > a && v[b - 1] === '\n' ? b - 1 : b);
@@ -218,5 +235,14 @@
     });
   }
 
-  window.PYIDE = { attach };
+  window.PYIDE = {
+    attach,
+    defaults: DEF,
+    get: () => Object.assign({}, cache || load()),
+    set(o) {
+      cache = Object.assign({}, cache || load(), o);
+      try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch (e) { /* 저장 못 해도 이번 화면엔 적용돼요 */ }
+      painters.forEach((f) => f());
+    },
+  };
 })();
