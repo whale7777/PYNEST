@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.1.0';
+  const APP_VERSION = '3.9.10b';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -3596,6 +3596,35 @@ onmessage = (ev) => {
     renderShell();
     route();
   }
+
+  /* 하단 버전 표시 — 누르면 업데이트 시각, 5번 연속 누르면 패치 노트 (이스터에그) */
+  (function verFoot() {
+    const el = document.getElementById('verfoot');
+    if (!el) return;
+    const list = window.PYNEST_PATCHES || [];
+    const cur = list[0] || { v: APP_VERSION, at: '' };
+    el.innerHTML = `<button type="button" class="vf-btn" title="">PyNest V${esc(cur.v)}</button><span class="vf-at"></span>`;
+    const btn = el.firstChild;
+    const at = el.lastChild;
+    let n = 0;
+    let tm = 0;
+    let hide = 0;
+    btn.onclick = () => {
+      n += 1;
+      clearTimeout(tm);
+      tm = setTimeout(() => { n = 0; }, 2500);
+      at.textContent = cur.at ? ` · 업데이트 ${cur.at}` : '';
+      clearTimeout(hide);
+      hide = setTimeout(() => { at.textContent = ''; }, 4000);
+      if (n >= 5) {
+        n = 0;
+        at.textContent = '';
+        const m = modal(`<h2>📜 패치 노트</h2><p class="muted small">V1.0.0 부터 지금까지 (한국 시간)</p>
+          <div class="pn-list">${list.map((p) => `<section class="pn-ver"><h3>V${esc(p.v)} <span class="muted small">${esc(p.at)}</span></h3><p class="pn-t">${esc(p.t)}</p><ul>${p.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}</div>`);
+        m.el.addEventListener('click', (e) => { if (e.target === m.el) m.close(); });
+      }
+    };
+  })();
 
   sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT' && !signingUp) { me = null; renderAuth(); }
