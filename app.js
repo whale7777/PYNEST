@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.9.10b';
+  const APP_VERSION = '3.9.11';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -865,6 +865,17 @@
   const reviewVer = new Map(); // 제출함에서 보고 있는 버전
   let reviewSet = '';
   let scrollToEx = null;
+  /* 설명 글(set_notes) · 편집 기능 켜고 끄기(관리자 ▸ ✏️ 편집, 이 브라우저에 저장) */
+  let curNotes = [];
+  let NOTES_OK = null;
+  const ADM_KEY = 'pn_adm';
+  const admOpt = (k) => { try { return (JSON.parse(localStorage.getItem(ADM_KEY) || '{}') || {})[k] !== false; } catch (e) { return true; } };
+  const admSet = (k, v) => {
+    let o = {};
+    try { o = JSON.parse(localStorage.getItem(ADM_KEY) || '{}') || {}; } catch (e) { o = {}; }
+    o[k] = v;
+    try { localStorage.setItem(ADM_KEY, JSON.stringify(o)); } catch (e) { /* 저장 못 해도 이번엔 적용돼요 */ }
+  };
   let hwFilter = null; // 숙제만 보기 (숙제 id)
   let testsColumn = null; // exercises.tests 열이 있는지 (update4.sql)
   let answersColumn = null; // exercises.answers 열이 있는지 (update5.sql)
@@ -951,6 +962,35 @@
     });
     return { normal, elite, chapters };
   }
+  /* 문제 사이사이에 설명 글을 끼워 넣은 순서 (화면·내보내기 공용) */
+  function mergeFlow(L, notes) {
+    const nn = (notes || []).filter((n) => n.area !== 'elite');
+    let p = 0;
+    L.chapters.forEach((ch) => ch.sections.forEach((sc) => {
+      sc.flow = [];
+      sc.items.forEach((e) => {
+        while (p < nn.length && nn[p].position < e.position) sc.flow.push({ note: nn[p++] });
+        sc.flow.push({ ex: e });
+      });
+    }));
+    L.tail = nn.slice(p);
+    const en = (notes || []).filter((n) => n.area === 'elite');
+    let q = 0;
+    L.eliteFlow = [];
+    L.elite.forEach((e) => {
+      while (q < en.length && en[q].position < e.position) L.eliteFlow.push({ note: en[q++] });
+      L.eliteFlow.push({ ex: e });
+    });
+    en.slice(q).forEach((n) => L.eliteFlow.push({ note: n }));
+    return L;
+  }
+  // 한 구역(normal / elite)의 문제+글을 순서대로
+  function zoneItems(exs, notes, zone) {
+    const a = exs.filter((e) => (e.difficulty === 'ELITE') === (zone === 'elite')).map((e) => ({ kind: 'ex', id: e.id, pos: e.position, o: e }));
+    const b = (notes || []).filter((n) => (n.area === 'elite') === (zone === 'elite')).map((n) => ({ kind: 'note', id: n.id, pos: n.position, o: n }));
+    return a.concat(b).sort((x, y) => x.pos - y.pos || (x.kind === y.kind ? x.id - y.id : x.kind === 'ex' ? -1 : 1));
+  }
+  const noteHtml = (text) => renderContent(text, true);
   const dispNo = (e) => (e.difficulty === 'ELITE' ? `E${e.no}` : String(e.no));
   const splitChapter = (s) => { const i = s.indexOf(' · '); return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i + 3)]; };
   const shortOf = (s) => s.short_name || ((String(s.title).match(/\[(.+?)\]/) || [])[1]) || s.title;
@@ -976,9 +1016,20 @@
     if (!d || typeof d !== 'object') throw new Error('올바른 문제집 파일이 아니에요');
     if (d.format && d.format !== 'pynest-problemset-v1') throw new Error('지원하지 않는 형식이에요: ' + d.format);
     const rows = [];
+    const notes = [];
+    let seq = 0;
+    const isText = (p) => p && typeof p === 'object' && ['text', 'note', 'md', 'markdown'].includes(String(p.type || '').toLowerCase());
+    const addNote = (p, elite) => {
+      const body = String(typeof p === 'string' ? p : (p.body ?? p.text ?? p.content ?? '')).trim();
+      if (!body) return; // 빈 글은 건너뛰어요
+      seq += 1;
+      notes.push({ body, area: elite ? 'elite' : 'normal', position: seq * 1000 });
+    };
     const add = (p, chapter, section, forceElite) => {
+      if (isText(p)) return addNote(p, forceElite);
       const body = String(p.body ?? '').trim();
       if (!body) throw new Error(`${rows.length + 1}번째 문제의 body(문제 내용)가 비어 있어요`);
+      seq += 1;
       const pts = p.points === '' || p.points == null ? null : Number(p.points);
       rows.push({
         chapter: chapter || null, section: section || null,
@@ -986,33 +1037,47 @@
         label: p.label || null, points: Number.isFinite(pts) ? pts : null,
         tags: Array.isArray(p.tags) ? p.tags.map(String) : [],
         source: p.source || null, body, check_point: p.check || p.check_point || null,
-        tests: normTests(p.tests), answers: normAnswers(p.answers),
+        tests: normTests(p.tests), answers: normAnswers(p.answers), position: seq * 1000,
       });
     };
     (d.chapters || []).forEach((ch) => {
       const cname = [ch.title, ch.subtitle].filter(Boolean).join(' · ');
-      (ch.sections || []).forEach((s) => (s.problems || []).forEach((p) => add(p, cname, s.title, false)));
+      if (ch.intro) addNote(ch.intro, false); // 챕터 앞 설명 글
+      (ch.sections || []).forEach((s) => {
+        if (s.intro) addNote(s.intro, false); // 섹션 앞 설명 글
+        (s.problems || []).forEach((p) => add(p, cname, s.title, false));
+      });
     });
     (d.problems || []).forEach((p) => add(p, p.chapter, p.section, false));
+    if (d.elite_intro) addNote(d.elite_intro, true);
     (d.elite || []).forEach((p) => add(p, null, null, true));
-    if (!rows.length) throw new Error('문제가 하나도 없어요');
-    rows.forEach((r, i) => { r.position = (i + 1) * 1000; });
+    if (!rows.length && !notes.length) throw new Error('문제도 설명 글도 하나도 없어요');
     return {
-      title: d.title || '', short: d.short_name || '', week: d.week || '', desc: d.description || '', rows,
+      title: d.title || '', short: d.short_name || '', week: d.week || '', desc: d.description || '', rows, notes,
       nElite: rows.filter((r) => r.difficulty === 'ELITE').length,
     };
   }
 
-  function exportSet(set, list) {
-    const L = layoutEx(list.map((e) => ({ ...e })));
+  function exportSet(set, list, notes) {
+    const L = mergeFlow(layoutEx(list.map((e) => ({ ...e }))), notes);
     const prob = (e) => ({ difficulty: e.difficulty, label: e.label || '', points: e.points, tags: e.tags || [], source: e.source || '', body: e.body, check: e.check_point || '', tests: e.tests || [], answers: e.answers || [] });
+    const text = (n) => ({ type: 'text', body: n.body });
+    const flowOut = (f) => f.map((x) => (x.note ? text(x.note) : prob(x.ex)));
+    const chapters = L.chapters.map((ch) => {
+      const [title, subtitle] = splitChapter(ch.name);
+      return { title, subtitle, sections: ch.sections.map((sc) => ({ title: sc.name, problems: flowOut(sc.flow) })) };
+    });
+    // 마지막 문제 뒤의 글은 마지막 섹션 끝에 (문제가 하나도 없으면 problems 에)
+    const extra = {};
+    if (L.tail.length) {
+      const lc = chapters[chapters.length - 1];
+      if (lc) lc.sections[lc.sections.length - 1].problems.push(...L.tail.map(text));
+      else extra.problems = L.tail.map(text);
+    }
     const out = {
       format: 'pynest-problemset-v1', title: set.title, short_name: set.short_name || '', week: set.week, description: set.description || '',
-      chapters: L.chapters.map((ch) => {
-        const [title, subtitle] = splitChapter(ch.name);
-        return { title, subtitle, sections: ch.sections.map((sc) => ({ title: sc.name, problems: sc.items.map(prob) })) };
-      }),
-      elite: L.elite.map(prob),
+      chapters, ...extra,
+      elite: flowOut(L.eliteFlow),
     };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
@@ -1149,7 +1214,7 @@
       if (!f) { q('#nsInfo').textContent = ''; return; }
       try {
         parsed = parseSetJson(await f.text());
-        q('#nsInfo').textContent = `✅ 일반 ${parsed.rows.length - parsed.nElite}문제 + ELITE ${parsed.nElite}문제를 읽었어요.`;
+        q('#nsInfo').textContent = `✅ 일반 ${parsed.rows.length - parsed.nElite}문제 + ELITE ${parsed.nElite}문제${parsed.notes.length ? ` + 설명 글 ${parsed.notes.length}개` : ''}를 읽었어요.`;
         if (parsed.title) q('#nsTitle').value = parsed.title;
         if (parsed.week) q('#nsWeek').value = parsed.week;
         q('#nsShort').value = parsed.short || ((parsed.title.match(/\[(.+?)\]/) || [])[1] || '');
@@ -1187,6 +1252,10 @@
             return toast('문제를 넣지 못했어요: ' + ie.message, true);
           }
         }
+      }
+      if (parsed && parsed.notes.length) {
+        const ne = await insertNoteRows(parsed.notes.map((n) => ({ ...n, set_id: s.id })));
+        if (ne) toast('설명 글은 v3911_notes.sql 을 실행한 뒤에 저장돼요', true);
       }
       m.close();
       toast(pr && setRow.is_public === false ? '비공개로 만들었어요. 확인한 뒤 [🌐 공개하기]를 눌러주세요' : '문제집을 만들었어요');
@@ -1311,7 +1380,7 @@
       if (!t) { q('#ajInfo').textContent = ''; return; }
       try {
         parsed = parseSetJson(t);
-        q('#ajInfo').textContent = `✅ 일반 ${parsed.rows.length - parsed.nElite}문제 + ELITE ${parsed.nElite}문제를 읽었어요.`;
+        q('#ajInfo').textContent = `✅ 일반 ${parsed.rows.length - parsed.nElite}문제 + ELITE ${parsed.nElite}문제${parsed.notes.length ? ` + 설명 글 ${parsed.notes.length}개` : ''}를 읽었어요.`;
         q('#ajBtn').disabled = false;
       } catch (err) { q('#ajInfo').textContent = '⚠️ ' + err.message; }
     };
@@ -1327,19 +1396,24 @@
       if (!parsed) return;
       const btn = q('#ajBtn');
       btn.disabled = true;
-      const maxPos = exs.reduce((mx, e) => Math.max(mx, e.position), 0);
+      const maxPos = Math.max(exs.reduce((mx, e) => Math.max(mx, e.position), 0), curNotes.reduce((mx, n) => Math.max(mx, n.position), 0));
       const lastNormal = exs.filter((e) => e.difficulty !== 'ELITE').pop();
       const isPub = pr ? (m.el.querySelector('input[name="ajPub"]:checked') || { value: '1' }).value === '1' : true;
-      const rows = parsed.rows.map((r, i) => {
-        const o = { ...r, set_id: set.id, position: maxPos + (i + 1) * 1000 };
+      const rows = parsed.rows.map((r) => {
+        const o = { ...r, set_id: set.id, position: maxPos + r.position };
         if (!o.chapter && !o.section && o.difficulty !== 'ELITE' && lastNormal) { o.chapter = lastNormal.chapter; o.section = lastNormal.section; }
         if (pr) o.is_public = isPub;
         return o;
       });
-      const err = await insertExRows(rows);
+      const err = rows.length ? await insertExRows(rows) : null;
       if (err) { btn.disabled = false; return toast('문제를 넣지 못했어요: ' + err.message, true); }
+      let noteMsg = '';
+      if (parsed.notes.length) {
+        const ne = await insertNoteRows(parsed.notes.map((n) => ({ ...n, set_id: set.id, position: maxPos + n.position, is_public: pr ? isPub : true })));
+        noteMsg = ne ? ' (설명 글은 v3911_notes.sql 을 실행한 뒤에 넣을 수 있어요)' : ` + 설명 글 ${parsed.notes.length}개`;
+      }
       m.close();
-      toast(`${rows.length}문제를 추가했어요${pr && !isPub ? ' (비공개 — 확인 후 공개해 주세요)' : ''}`);
+      toast(`${rows.length}문제를 추가했어요${noteMsg}${pr && !isPub ? ' (비공개 — 확인 후 공개해 주세요)' : ''}`);
       route(true);
     };
   }
@@ -1432,20 +1506,24 @@
   async function pageSet(rawId) {
     const id = Number(rawId);
     const admin = can('content');
-    const [sr, exs, subs, hwr] = await Promise.all([
+    const [sr, exs, subs, hwr, nr] = await Promise.all([
       sb.from('problem_sets').select('*').eq('id', id).maybeSingle(),
       fetchAll((a, b) => sb.from('exercises').select('*').eq('set_id', id).order('position').order('id').range(a, b)),
       admin ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions')
         .select('*,submission_comments(id,content,created_at)')
         .eq('set_id', id).eq('user_id', me.id).order('id').range(a, b)),
       sb.from('homeworks').select('*,homework_items(exercise_id)').eq('set_id', id).order('id'),
+      sb.from('set_notes').select('*').eq('set_id', id).order('position').order('id'),
     ]);
     if (sr.error) throw sr.error;
     const set = sr.data;
     if (!set) return notFound();
+    NOTES_OK = !nr.error; // v3911_notes.sql 전이면 설명 글만 조용히 없어요
+    const notes = NOTES_OK ? nr.data : [];
+    curNotes = notes;
     if (exs.length) { testsColumn = 'tests' in exs[0]; answersColumn = 'answers' in exs[0]; }
     if (set && 'is_public' in set) PUB_READY = true;
-    const L = layoutEx(exs);
+    const L = mergeFlow(layoutEx(exs), notes);
     const subsBy = {};
     subs.forEach((s) => { (subsBy[s.exercise_id] = subsBy[s.exercise_id] || []).push(s); });
 
@@ -1479,13 +1557,22 @@
       return `<div class="toc-ch"><button class="toc-link ch" data-go="ch-${ch.idx}">${esc(t || '문제')}${sub ? ` <span class="muted small">${esc(sub)}</span>` : ''}</button>${secs}</div>`;
     }).join('') + (L.elite.length ? `<div class="toc-ch"><button class="toc-link elite" data-go="elite">✦ ELITE <span class="small">${L.elite.length}문제</span></button></div>` : '');
 
+    /* 설명 글 카드 */
+    const gripBtn = admin && admOpt('drag') ? '<button class="icon drag-grip" type="button" title="끌어서 순서 바꾸기">⠿</button>' : '';
+    const dblTip = admin && admOpt('dbl') ? ' title="더블클릭하면 바로 고칠 수 있어요"' : '';
+    const noteCard = (n) => `<article class="ex note${n.is_public === false ? ' note-priv' : ''}" id="note-${n.id}" data-kind="note" data-id="${n.id}" data-zone="${n.area === 'elite' ? 'elite' : 'normal'}">
+      ${admin ? `<header class="ex-head"><span class="chip">📝 설명 글</span>${pubChip(n.is_public)}<span class="spacer"></span>
+        <span class="tools">${gripBtn}<button class="icon" data-nedit="${n.id}" title="수정">✏️</button><button class="icon" data-nadd="note:${n.id}" title="이 글 아래에 설명 글 추가">📝</button><button class="icon" data-addnote="${n.id}" title="이 글 아래에 문제 추가">＋</button><button class="icon" data-ndel="${n.id}" title="삭제">🗑</button></span></header>` : ''}
+      <div class="ex-body note-body"${dblTip}>${noteHtml(n.body)}</div></article>`;
+    const flowHtml = (f, card0) => f.map((x) => (x.note ? noteCard(x.note) : card0(x.ex))).join('');
+
     /* 문제 카드 */
     const card = (e) => {
       const vers = subsBy[e.id] || [];
       const last = vers[vers.length - 1];
       const hasC = vers.some((s) => (s.submission_comments || []).length);
       const tags = (e.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
-      return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : dxCls(e.difficulty)}"${dxStyle(e.difficulty)} id="ex-${e.id}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
+      return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : dxCls(e.difficulty)}"${dxStyle(e.difficulty)} id="ex-${e.id}" data-kind="ex" data-id="${e.id}" data-zone="${e.difficulty === 'ELITE' ? 'elite' : 'normal'}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
         <header class="ex-head">
           <a class="ex-no" href="#/p/${e.id}" title="이 문제만 크게 보기">${dispNo(e)}</a>
           ${diffTag(e.difficulty)}
@@ -1497,12 +1584,12 @@
           ${(hwOf[e.id] || []).map((h) => `<span class="chip hwchip">📌 ${esc(h.title)}</span>`).join('')}
           ${e.source ? `<span class="muted small">${esc(e.source)}</span>` : ''}
           <span class="spacer"></span>
-          ${admin ? `<span class="tools">
+          ${admin ? `<span class="tools">${gripBtn}
             <button class="icon" data-up="${e.id}" title="위로">↑</button><button class="icon" data-down="${e.id}" title="아래로">↓</button>
-            <button class="icon" data-edit="${e.id}" title="수정">✏️</button><button class="icon" data-add="${e.id}" title="이 문제 아래에 추가">＋</button>
+            <button class="icon" data-edit="${e.id}" title="수정">✏️</button><button class="icon" data-add="${e.id}" title="이 문제 아래에 추가">＋</button>${NOTES_OK ? `<button class="icon" data-nadd="ex:${e.id}" title="이 문제 아래에 설명 글 추가">📝</button>` : ''}
             <button class="icon" data-del="${e.id}" title="삭제">🗑</button></span>` : ''}
         </header>
-        <div class="ex-body">${renderMarkup(e.body)}</div>
+        <div class="ex-body"${dblTip}>${renderMarkup(e.body)}</div>
         ${e.check_point ? `<div class="ex-check">💡 <b>확인 포인트</b> ${inline(e.check_point)}</div>` : ''}
         ${admin ? `<div class="muted small">고유 번호 ${e.id}${(e.tests || []).length ? ` · 테스트 ${e.tests.length}개` : ''}${(e.answers || []).length ? ` · 정답 칸 ${e.answers.length}개` : ''}</div>
         ${(e.answers || []).length ? `<details class="keybox"><summary>🔑 정답 보기</summary><pre><code>${esc(answersToText(e.answers))}</code></pre></details>` : ''}` : `
@@ -1518,14 +1605,14 @@
     const normalHtml = L.chapters.map((ch) => {
       const [t, sub] = splitChapter(ch.name);
       return `<h2 class="ch-h" id="ch-${ch.idx}"><span class="ch-no">CHAPTER ${ch.idx + 1}</span>${esc(t)}${sub ? `<small>${esc(sub)}</small>` : ''}</h2>`
-        + ch.sections.map((sc) => `${sc.name ? `<h3 class="sec-h" id="sec-${ch.idx}-${sc.idx}">${esc(sc.name)}</h3>` : ''}${sc.items.map(card).join('')}`).join('');
-    }).join('');
+        + ch.sections.map((sc) => `${sc.name ? `<h3 class="sec-h" id="sec-${ch.idx}-${sc.idx}">${esc(sc.name)}</h3>` : ''}${flowHtml(sc.flow, card)}`).join('');
+    }).join('') + L.tail.map(noteCard).join('');
 
-    const eliteHtml = (L.elite.length || admin) ? `
+    const eliteHtml = (L.elite.length || L.eliteFlow.length || admin) ? `
       <section class="elite-zone" id="elite">
         <div class="elite-title">✦ ELITE ✦</div>
         <p class="elite-sub">가장 어려운 문제들이에요. 코드를 읽고, 추론하고, 설명해 보세요.</p>
-        ${L.elite.map(card).join('')}
+        ${flowHtml(L.eliteFlow, card)}
         ${admin ? '<div class="center"><button class="ghost" id="addElite">＋ ELITE 문제 추가</button></div>' : ''}
       </section>` : '';
 
@@ -1543,7 +1630,7 @@
       <div class="form-actions" style="margin:0 0 12px">
         ${files.join('')}
         ${admin && 'is_public' in set ? (set.is_public === false ? '<button class="primary" id="togPub">🌐 공개하기</button>' : '<button class="ghost" id="togPub">🔒 비공개로 바꾸기</button>') : ''}${exs.some((e) => e.is_public === false) && admin ? '<button class="ghost" id="pubAllEx" title="이 문제집의 비공개 문제를 모두 공개해요">🌐 비공개 문제 모두 공개</button>' : ''}
-        ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="addJson" title="JSON을 붙여넣거나 파일로 올려 문제를 이 문제집 맨 뒤에 추가해요">＋ JSON으로 추가</button><button class="ghost" id="addLive" title="라이브에서 냈던 문제를 골라 이 문제집에 추가해요">📡 라이브 문제 가져오기</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><button class="ghost" id="autoTests" title="입출력 예시가 있는 문제에 채점 테스트를 한꺼번에 만들어요">⚖️ 예시로 채점 만들기</button><button class="ghost" id="impKey" title="JSON 파일의 정답·채점 테스트를 같은 문제에 덮어써요 (학생 제출물은 그대로)">🔑 정답·채점 가져오기</button><input type="file" id="impKeyFile" accept=".json,application/json" hidden><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
+        ${admin ? '<button class="ghost" id="addEx">＋ 문제 추가</button><button class="ghost" id="addNote" title="문제 사이에 마크다운으로 쓰는 설명 글을 넣어요">📝 설명 글 추가</button><button class="ghost" id="addJson" title="JSON을 붙여넣거나 파일로 올려 문제를 이 문제집 맨 뒤에 추가해요">＋ JSON으로 추가</button><button class="ghost" id="addLive" title="라이브에서 냈던 문제를 골라 이 문제집에 추가해요">📡 라이브 문제 가져오기</button><button class="ghost" id="setCfg">⚙️ 문제집 설정</button><button class="ghost" id="expSet">⬇️ JSON 내보내기</button><button class="ghost" id="autoTests" title="입출력 예시가 있는 문제에 채점 테스트를 한꺼번에 만들어요">⚖️ 예시로 채점 만들기</button><button class="ghost" id="impKey" title="JSON 파일의 정답·채점 테스트를 같은 문제에 덮어써요 (학생 제출물은 그대로)">🔑 정답·채점 가져오기</button><input type="file" id="impKeyFile" accept=".json,application/json" hidden><a class="ghost btnlike" href="#/review">📥 제출함</a>' : ''}
       </div>
       ${hwHtml}
       <details class="card toc" open><summary>📑 목차 <span class="muted small">(누르면 그 위치로 이동해요)</span></summary>${toc || '<p class="muted">문제가 없어요.</p>'}</details>
@@ -2298,11 +2385,245 @@ onmessage = (ev) => {
       <p class="muted small">한 번이라도 제출한 문제는 푼 걸로 세요.</p>`);
   }
 
+  /* ---------- 설명 글 · 끌어서 옮기기 · 더블클릭 수정 ---------- */
+  async function insertNoteRows(rows) {
+    for (let i = 0; i < rows.length; i += 100) {
+      const { error } = await sb.from('set_notes').insert(rows.slice(i, i + 100));
+      if (error) return error;
+    }
+    return null;
+  }
+  const NOTES_SQL_MSG = '설명 글은 먼저 v3911_notes.sql 을 Supabase SQL Editor 에서 한 번 실행해야 써요';
+
+  function openNoteEditor(set, note, defaults) {
+    const m = modal(`<h3>${note ? '📝 설명 글 수정' : '📝 설명 글 추가'}</h3>
+      <p class="muted small">마크다운으로 써요 — <code class="ic"># 제목</code> · <code class="ic">**굵게**</code> · <code class="ic">- 목록</code> · <code class="ic">1. 번호</code> · <code class="ic">\`코드\`</code> · 코드 블록(\`\`\`) · 표 · <code class="ic">&gt; 인용</code> · <code class="ic">---</code></p>
+      <label>내용<textarea id="ntBody" class="code" style="min-height:200px" spellcheck="false" placeholder="여기에 설명을 써요. 문제 사이에 끼어 들어가요.">${esc(note ? note.body : '')}</textarea></label>
+      <div class="muted small">미리보기</div><div id="ntPrev" class="note-body note-prev"></div>
+      <label class="inline"><input type="checkbox" id="ntPub" ${!note || note.is_public !== false ? 'checked' : ''}> 학생에게 보이기 <span class="muted small">(문제집 자체가 비공개면 이 설정과 상관없이 안 보여요)</span></label>
+      <div class="form-actions"><button class="primary" id="ntSave">저장</button><button type="button" class="ghost" id="ntCancel">취소</button></div>`);
+    const q = (x) => $(x, m.el);
+    const prev = () => { q('#ntPrev').innerHTML = noteHtml(q('#ntBody').value) || '<span class="muted">(비어 있어요)</span>'; };
+    q('#ntBody').oninput = prev;
+    prev();
+    q('#ntBody').focus();
+    q('#ntCancel').onclick = m.close;
+    q('#ntSave').onclick = async () => {
+      const body = q('#ntBody').value.trim();
+      if (!body) return toast('내용을 써 주세요', true);
+      if (body.length > 30000) return toast('너무 길어요 (3만 자 이하)', true);
+      const btn = q('#ntSave');
+      btn.disabled = true;
+      const row = { body, is_public: q('#ntPub').checked };
+      const r = note
+        ? await sb.from('set_notes').update({ ...row, updated_at: new Date().toISOString() }).eq('id', note.id).select('id').single()
+        : await sb.from('set_notes').insert({ ...row, set_id: set.id, position: defaults.position, area: defaults.area }).select('id').single();
+      if (r.error) { btn.disabled = false; return toast('저장하지 못했어요: ' + r.error.message, true); }
+      scrollToEx = 'note-' + r.data.id;
+      m.close();
+      toast('저장했어요');
+      route(true);
+    };
+  }
+
+  function bindNotesDragEdit(v, set, exs) {
+    const notes = curNotes;
+    const list = $('#exlist', v);
+    if (!list) return;
+    const zoneOf = (el) => (el.dataset.zone === 'elite' ? 'elite' : 'normal');
+    const itemOf = (el) => ({ kind: el.dataset.kind, id: Number(el.dataset.id) });
+    const zi = (zone) => zoneItems(exs, notes, zone);
+    const posAfter = (zone, kind, id) => {
+      const arr = zi(zone);
+      const i = arr.findIndex((x) => x.kind === kind && x.id === id);
+      const nx = arr[i + 1];
+      return nx ? (arr[i].pos + nx.pos) / 2 : arr[i].pos + 1000;
+    };
+    const needNotes = () => { if (NOTES_OK) return true; toast(NOTES_SQL_MSG, true); return false; };
+
+    /* 설명 글 추가·수정·삭제 */
+    const an = $('#addNote', v);
+    if (an) an.onclick = () => {
+      if (!needNotes()) return;
+      const arr = zi('normal');
+      openNoteEditor(set, null, { position: arr.length ? arr[arr.length - 1].pos + 1000 : 1000, area: 'normal' });
+    };
+    v.querySelectorAll('[data-nadd]').forEach((b) => (b.onclick = () => {
+      if (!needNotes()) return;
+      const [kind, id] = b.dataset.nadd.split(':');
+      const el = b.closest('.ex');
+      openNoteEditor(set, null, { position: posAfter(zoneOf(el), kind, Number(id)), area: zoneOf(el) });
+    }));
+    v.querySelectorAll('[data-nedit]').forEach((b) => (b.onclick = () => openNoteEditor(set, notes.find((n) => n.id === Number(b.dataset.nedit)), null)));
+    v.querySelectorAll('[data-ndel]').forEach((b) => (b.onclick = async () => {
+      if (!confirm('이 설명 글을 삭제할까요?')) return;
+      const { error } = await sb.from('set_notes').delete().eq('id', Number(b.dataset.ndel));
+      if (error) return toast('삭제하지 못했어요', true);
+      toast('삭제했어요');
+      route(true);
+    }));
+    v.querySelectorAll('[data-addnote]').forEach((b) => (b.onclick = () => { // 설명 글 아래에 문제 추가
+      const n = notes.find((x) => x.id === Number(b.dataset.addnote));
+      const zone = n.area === 'elite' ? 'elite' : 'normal';
+      const arr = zi(zone);
+      const i = arr.findIndex((x) => x.kind === 'note' && x.id === n.id);
+      const g = arr.slice(i + 1).find((x) => x.kind === 'ex') || arr.slice(0, i).reverse().find((x) => x.kind === 'ex');
+      openExEditor(set, exs, null, {
+        position: posAfter(zone, 'note', n.id), difficulty: zone === 'elite' ? 'ELITE' : (g ? g.o.difficulty : 'Beginner'),
+        chapter: zone === 'elite' || !g ? '' : g.o.chapter, section: zone === 'elite' || !g ? '' : g.o.section,
+      });
+    }));
+
+    /* 글을 더블클릭해서 그 자리에서 수정 */
+    if (admOpt('dbl')) {
+      list.addEventListener('dblclick', (ev) => {
+        const body = ev.target.closest('.ex-body');
+        if (!body || !list.contains(body) || body.querySelector('textarea.inline-edit')) return;
+        if (ev.target.closest('a,button,textarea,input,summary,select')) return;
+        const card = body.closest('.ex');
+        if (!card) return;
+        const { kind, id } = itemOf(card);
+        const obj = kind === 'note' ? notes.find((n) => n.id === id) : exs.find((e) => e.id === id);
+        if (!obj) return;
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+        const keep = body.innerHTML;
+        body.innerHTML = `<textarea class="inline-edit code" spellcheck="false"></textarea>
+          <div class="form-actions"><button class="primary" type="button" data-ie-save>저장</button><button class="ghost" type="button" data-ie-cancel>취소</button><span class="muted small">Ctrl+Enter 저장 · Esc 취소</span></div>`;
+        const ta = $('textarea', body);
+        ta.value = obj.body;
+        ta.rows = Math.min(30, Math.max(4, obj.body.split('\n').length + 2));
+        ta.focus();
+        const cancel = () => { body.innerHTML = keep; };
+        const save = async () => {
+          const val = ta.value.trim();
+          if (!val) return toast('내용이 비어 있어요', true);
+          if (val === obj.body.trim()) return cancel();
+          ta.disabled = true;
+          const { error } = await sb.from(kind === 'note' ? 'set_notes' : 'exercises').update({ body: val }).eq('id', id);
+          if (error) { ta.disabled = false; return toast('저장하지 못했어요: ' + error.message, true); }
+          obj.body = val;
+          body.innerHTML = kind === 'note' ? noteHtml(val) : renderMarkup(val);
+          toast('저장했어요');
+        };
+        $('[data-ie-save]', body).onclick = save;
+        $('[data-ie-cancel]', body).onclick = cancel;
+        ta.onkeydown = (e) => {
+          if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+          else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+        };
+      });
+    }
+
+    /* 끌어서 순서 바꾸기 (마우스·터치 둘 다) */
+    if (!admOpt('drag')) return;
+    list.querySelectorAll('.drag-grip').forEach((g) => (g.onpointerdown = (ev) => {
+      if (ev.button != null && ev.button !== 0) return;
+      const el = g.closest('.ex');
+      if (!el) return;
+      ev.preventDefault();
+      const me2 = itemOf(el);
+      const myZone = zoneOf(el);
+      const strict = me2.kind === 'ex'; // 문제는 같은 구역(일반/ELITE) 안에서만
+      let tgt = null;
+      let before = true;
+      let lastY = ev.clientY;
+      let raf = 0;
+      el.classList.add('dragging');
+      document.body.classList.add('dragging-ex');
+      const clear = () => list.querySelectorAll('.drop-before,.drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after'));
+      const pick = (y) => {
+        let best = null;
+        let bd = 1e9;
+        list.querySelectorAll('.ex[data-kind]').forEach((c) => {
+          if (c === el || (strict && zoneOf(c) !== myZone)) return;
+          const r = c.getBoundingClientRect();
+          if (!r.height) return;
+          const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+          if (d < bd) { bd = d; best = c; }
+        });
+        clear();
+        tgt = best;
+        if (best) {
+          const r = best.getBoundingClientRect();
+          before = y < r.top + r.height / 2;
+          best.classList.add(before ? 'drop-before' : 'drop-after');
+        }
+      };
+      const loop = () => {
+        raf = requestAnimationFrame(loop);
+        if (lastY < 70) window.scrollBy(0, -Math.ceil((70 - lastY) / 4));
+        else if (lastY > window.innerHeight - 70) window.scrollBy(0, Math.ceil((lastY - (window.innerHeight - 70)) / 4));
+        pick(lastY);
+      };
+      raf = requestAnimationFrame(loop);
+      const onMove = (e) => { lastY = e.clientY; };
+      const end = () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('keydown', onKey);
+        el.classList.remove('dragging');
+        document.body.classList.remove('dragging-ex');
+        clear();
+      };
+      const onCancel = () => end();
+      const onKey = (e) => { if (e.key === 'Escape') end(); };
+      const onUp = async () => {
+        const t = tgt;
+        const bef = before;
+        end();
+        if (!t) return;
+        const dz = zoneOf(t);
+        const ti = itemOf(t);
+        const arr = zi(dz).filter((x) => !(x.kind === me2.kind && x.id === me2.id));
+        let at = arr.findIndex((x) => x.kind === ti.kind && x.id === ti.id);
+        if (at < 0) return;
+        if (!bef) at += 1;
+        const prev = arr[at - 1];
+        const next = arr[at];
+        let pos;
+        let renum = false;
+        if (prev && next) { pos = (prev.pos + next.pos) / 2; if (next.pos - prev.pos < 1e-6) renum = true; }
+        else if (prev) pos = prev.pos + 1000;
+        else if (next) pos = next.pos > 2 ? next.pos / 2 : next.pos - 1000;
+        else pos = 1000;
+        const moved = zi(myZone).find((x) => x.kind === me2.kind && x.id === me2.id);
+        let extra = {};
+        if (me2.kind === 'note') extra = { area: dz };
+        else if (dz === 'normal') {
+          const g = arr.slice(at).find((x) => x.kind === 'ex') || arr.slice(0, at).reverse().find((x) => x.kind === 'ex');
+          if (g) extra = { chapter: g.o.chapter, section: g.o.section };
+        }
+        const tbl = (k) => (k === 'ex' ? 'exercises' : 'set_notes');
+        const ops = [];
+        if (!renum) ops.push(() => sb.from(tbl(me2.kind)).update({ position: pos, ...extra }).eq('id', me2.id));
+        else {
+          const full = arr.slice();
+          full.splice(at, 0, moved);
+          full.forEach((x, i) => ops.push(() => sb.from(tbl(x.kind)).update(x === moved ? { position: (i + 1) * 1000, ...extra } : { position: (i + 1) * 1000 }).eq('id', x.id)));
+        }
+        for (let i = 0; i < ops.length; i += 10) {
+          const res = await Promise.all(ops.slice(i, i + 10).map((f) => f()));
+          if (res.some((r) => r.error)) return toast('순서를 바꾸지 못했어요', true);
+        }
+        scrollToEx = el.id;
+        route(true);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+      window.addEventListener('keydown', onKey);
+    }));
+  }
+
   /* ---------- 문제집 : 선생님 도구 (추가/수정/삭제/순서/설정) ---------- */
   function bindSetAdmin(v, set, exs, hws, L) {
     const byId = (i) => exs.find((e) => e.id === Number(i));
     const lastNormal = exs.filter((e) => e.difficulty !== 'ELITE').pop();
-    const maxPos = exs.reduce((m, e) => Math.max(m, e.position), 0);
+    const maxPos = Math.max(exs.reduce((m, e) => Math.max(m, e.position), 0), curNotes.reduce((m, n) => Math.max(m, n.position), 0));
+    bindNotesDragEdit(v, set, exs);
 
     $('#addEx', v).onclick = () => openExEditor(set, exs, null, {
       position: maxPos + 1000, difficulty: 'Beginner',
@@ -2342,7 +2663,7 @@ onmessage = (ev) => {
       if (error) return toast('삭제하지 못했어요', true);
       route(true);
     }));
-    $('#expSet', v).onclick = () => exportSet(set, exs);
+    $('#expSet', v).onclick = () => exportSet(set, exs, curNotes);
     $('#impKey', v).onclick = () => {
       if (testsColumn === false || answersColumn === false) return toast('먼저 update4.sql, update5.sql을 실행해 주세요', true);
       $('#impKeyFile', v).click();
@@ -2390,10 +2711,10 @@ onmessage = (ev) => {
     v.querySelectorAll('[data-edit]').forEach((b) => (b.onclick = () => openExEditor(set, exs, byId(b.dataset.edit), null)));
     v.querySelectorAll('[data-add]').forEach((b) => (b.onclick = () => {
       const e = byId(b.dataset.add);
-      const peers = exs.filter((x) => (x.difficulty === 'ELITE') === (e.difficulty === 'ELITE'));
-      const nx = peers[peers.findIndex((x) => x.id === e.id) + 1];
+      const zi = zoneItems(exs, curNotes, e.difficulty === 'ELITE' ? 'elite' : 'normal');
+      const nx = zi[zi.findIndex((x) => x.kind === 'ex' && x.id === e.id) + 1];
       openExEditor(set, exs, null, {
-        position: nx ? (e.position + nx.position) / 2 : e.position + 1000,
+        position: nx ? (e.position + nx.pos) / 2 : e.position + 1000,
         difficulty: e.difficulty, chapter: e.chapter, section: e.section,
       });
     }));
@@ -3150,12 +3471,13 @@ onmessage = (ev) => {
     if (can('content')) tabs.push(['lectures', '🎬 강의']);
     if (can('content')) tabs.push(['diff', '🎯 난이도']);
     if (can('content')) tabs.push(['pre', '🧩 공용 함수']);
+    if (can('content')) tabs.push(['edit', '✏️ 편집']);
     if (isAdmin()) tabs.push(['tier', '🏅 티어']);
     if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, tier: adminTiers, nick: adminNick, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, nick: adminNick, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -3268,6 +3590,20 @@ onmessage = (ev) => {
 
   // 🏅 티어 — 이름 · 시작 점수 · 색 · 뱃지 문양을 직접 추가/수정/삭제 (OWNER / ADMIN)
   /* ---------- 공용 함수 (학생 코드 앞에 미리 불러오는 함수) ---------- */
+  /* 문제집 편집 기능 켜고 끄기 (이 브라우저에 저장돼요) */
+  async function adminEdit() {
+    const OPTS = [
+      ['drag', '↕️ 끌어서 순서 바꾸기', '문제·설명 글 카드 오른쪽 위 ⠿ 를 잡고 끌어요. 문제는 일반/ELITE 구역 안에서, 설명 글은 어디로든 옮길 수 있어요. 마우스·터치 둘 다 돼요.'],
+      ['dbl', '🖱️ 더블클릭으로 바로 수정', '문제·설명 글의 본문을 더블클릭하면 그 자리에서 고쳐요. Ctrl+Enter 저장, Esc 취소. (✏️ 버튼은 그대로 써도 돼요)'],
+    ];
+    return [`<div class="card pad"><h3>✏️ 문제집 편집 기능</h3>
+      <p class="muted small">문제집 화면에서 쓰는 편집 도우미를 켜고 꺼요. 이 브라우저에만 저장되고, 바꾸면 문제집 화면을 다시 열 때부터 적용돼요. 학생 화면에는 영향이 없어요.</p>
+      ${OPTS.map(([k, t, d]) => `<label class="inline ideopt"><input type="checkbox" data-adm="${k}" ${admOpt(k) ? 'checked' : ''}> <span><b>${esc(t)}</b><br><span class="muted small">${esc(d)}</span></span></label>`).join('')}
+    </div>`, (v) => {
+      v.querySelectorAll('[data-adm]').forEach((c) => (c.onchange = () => { admSet(c.dataset.adm, c.checked); toast(c.checked ? '켰어요' : '껐어요'); }));
+    }];
+  }
+
   async function adminPre() {
     const { data, error } = await sb.from('prelude_funcs').select('*').order('position').order('id');
     if (error) return sqlHint('공용 함수 표가 아직 없어요.', 'v370_prelude.sql');
