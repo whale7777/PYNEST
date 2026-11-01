@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '3.9.11';
+  const APP_VERSION = '4.1.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -395,7 +395,7 @@
 
   /* ---------- 앱 뼈대 ---------- */
   const NAV = [
-    ['home', '🏠', '홈'], ['lectures', '🎬', '강의'], ['sets', '📄', '문제'], ['ranking', '🏆', '랭킹'],
+    ['home', '🏠', '홈'], ['learn', '📚', '학습'], ['lectures', '🎬', '강의'], ['sets', '📄', '문제'], ['ranking', '🏆', '랭킹'],
     ['board/notice', '📢', '공지'], ['board/qna', '❓', '질문'], ['board/assignment', '📝', '과제'],
     ['board/free', '💬', '자유'],
     ['golive/', '📡', '라이브 · 저지', 'ext'],
@@ -450,6 +450,7 @@
       u: () => pageProfile(b),
       set: () => pageSet(b),
       p: () => pageProblem(b),
+      learn: () => pageLearn(b, c),
       review: () => pageReview(b, c),
       board: () => (BOARDS[b] ? pageBoard(b) : notFound()),
       post: () => pagePost(b),
@@ -3256,6 +3257,715 @@ onmessage = (ev) => {
         route(true);
       }));
     }];
+  }
+
+  /* ====================================================================
+     📚 학습 (V4.1.0) — 설명 → O/X·확인 문제 → 실습, 단계별로 진행
+     JSON 형식: pynest-learn-v1 (LEARN_JSON_GUIDE.md)
+     ==================================================================== */
+  let LEARN_OK = null;
+  const LEARN_KINDS = ['ox', 'choice', 'short', 'fill'];
+  const XP_EXPLAIN = 1;
+  const XP_QUIZ = 10;
+  const XP_PRACTICE = 30;
+  const learnTxt = (x) => String(x ?? '').replace(/\r/g, '');
+  const KST_DAY = (t = Date.now()) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
+  const lrNorm = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  function streakOf(days) {
+    let n = 0;
+    let t = Date.now();
+    if (!days.has(KST_DAY(t))) t -= 86400e3; // 오늘 아직 안 했으면 어제부터 세요
+    while (days.has(KST_DAY(t))) { n += 1; t -= 86400e3; }
+    return n;
+  }
+
+  /* ----- JSON 읽기 ----- */
+  function normLearnStep(s, at) {
+    const bad = (m) => { throw new Error(`${at}: ${m}`); };
+    if (!s || typeof s !== 'object') bad('단계가 객체({ })가 아니에요');
+    let type = String(s.type || '').toLowerCase();
+    let kind = String(s.kind || '').toLowerCase();
+    if (LEARN_KINDS.includes(type)) { kind = type; type = 'quiz'; } // {"type":"ox"} 처럼 줄여 써도 돼요
+    if (['code', 'text', 'concept', 'md'].includes(type)) type = 'explain';
+    if (type === 'exercise' || type === 'problem') type = 'practice';
+    const title = String(s.title || '');
+    if (type === 'explain') {
+      const body = learnTxt(s.body ?? s.text ?? '').trim();
+      const code = s.code == null ? '' : learnTxt(s.code).replace(/\s+$/, '');
+      if (!body && !code) bad('explain 에는 body(설명) 가 필요해요');
+      return { type, title, body, code, run: s.run !== false };
+    }
+    if (type === 'quiz') {
+      const question = learnTxt(s.question ?? s.body ?? '').trim();
+      if (!question && kind !== 'fill') bad('quiz 에는 question 이 필요해요');
+      const out = { type, kind, title, question, explanation: learnTxt(s.explanation ?? '').trim() };
+      if (kind === 'ox') {
+        const a = s.answer;
+        const t = typeof a === 'string' ? ['o', 'true', '참', '맞다', '맞음', 'yes'].includes(a.trim().toLowerCase()) : !!a;
+        if (typeof a === 'string' && !['o', 'x', 'true', 'false', '참', '거짓', '맞다', '틀리다', '맞음', '틀림', 'yes', 'no'].includes(a.trim().toLowerCase())) bad('ox 의 answer 는 true/false (또는 "O"/"X") 로 써요');
+        if (a === undefined || a === null) bad('ox 에는 answer(true/false) 가 필요해요');
+        out.answer = t;
+      } else if (kind === 'choice') {
+        const opts = (Array.isArray(s.options) ? s.options : []).map((x) => String(x));
+        if (opts.length < 2 || opts.length > 8) bad('choice 의 options 는 2~8개여야 해요');
+        const arr = (Array.isArray(s.answer) ? s.answer : [s.answer]).map(Number);
+        if (!arr.length || arr.some((n) => !Number.isInteger(n) || n < 1 || n > opts.length)) bad(`choice 의 answer 는 1~${opts.length} 번호예요 (여러 개면 [1,3])`);
+        out.options = opts;
+        out.answer = [...new Set(arr)].sort((a, b) => a - b);
+      } else if (kind === 'short') {
+        const a = String(s.answer ?? '').trim();
+        if (!a) bad('short 에는 answer(정답 글자) 가 필요해요');
+        out.answer = a;
+        out.alts = (Array.isArray(s.alts) ? s.alts : []).map(String).filter((x) => x.trim());
+      } else if (kind === 'fill') {
+        const code = learnTxt(s.code ?? s.question ?? '').replace(/\s+$/, '');
+        const n = code.split('___').length - 1;
+        if (!n) bad('fill 의 code 에는 빈칸 ___ 이 하나 이상 있어야 해요');
+        const ans = (Array.isArray(s.answers) ? s.answers : [s.answer]).map((x) => (Array.isArray(x) ? x : [x]).map(String).filter((y) => y.trim() !== ''));
+        if (ans.length !== n || ans.some((x) => !x.length)) bad(`fill 의 answers 는 빈칸 개수(${n}개)만큼 필요해요 (칸마다 정답 하나, 또는 ["정답","다른정답"])`);
+        out.code = code;
+        out.answers = ans;
+      } else bad('quiz 의 kind 는 ox / choice / short / fill 중 하나예요');
+      return out;
+    }
+    if (type === 'practice') {
+      const body = learnTxt(s.body ?? s.question ?? '').trim();
+      if (!body) bad('practice 에는 body(문제 내용) 가 필요해요');
+      return {
+        type, title, body, starter: learnTxt(s.starter ?? '').replace(/\s+$/, ''), tests: normTests(s.tests),
+        hints: (Array.isArray(s.hints) ? s.hints : []).map((h) => learnTxt(h).trim()).filter(Boolean),
+        solution: learnTxt(s.solution ?? '').replace(/\s+$/, ''), explanation: learnTxt(s.explanation ?? '').trim(),
+        stdin: learnTxt(s.stdin ?? ''),
+      };
+    }
+    return bad('type 은 explain / quiz / practice 중 하나예요');
+  }
+  function normLearnLesson(l, i) {
+    const at = `${i + 1}번째 레슨`;
+    if (!l || typeof l !== 'object') throw new Error(`${at}이 객체가 아니에요`);
+    const title = String(l.title || '').trim();
+    if (!title) throw new Error(`${at}에 title 이 필요해요`);
+    if (!Array.isArray(l.steps) || !l.steps.length) throw new Error(`${at}("${title}")에 steps 가 하나도 없어요`);
+    if (l.steps.length > 80) throw new Error(`${at}("${title}")의 단계가 너무 많아요 (80개 이하)`);
+    const m = Number(l.minutes);
+    return {
+      title, summary: learnTxt(l.summary ?? '').trim(), minutes: Number.isFinite(m) && m > 0 ? Math.round(m) : null,
+      steps: l.steps.map((s, k) => normLearnStep(s, `"${title}" ${k + 1}번째 단계`)),
+    };
+  }
+  function parseLearnJson(text) {
+    let d;
+    try { d = JSON.parse(text); } catch (e) { throw new Error('JSON 형식 오류예요 (쉼표·따옴표를 확인해 보세요)'); }
+    if (!d || typeof d !== 'object') throw new Error('올바른 학습 파일이 아니에요');
+    if (d.format && d.format !== 'pynest-learn-v1') throw new Error('지원하지 않는 형식이에요: ' + d.format);
+    const lessons = (Array.isArray(d.lessons) ? d.lessons : d.title && d.steps ? [d] : []).map(normLearnLesson);
+    if (!lessons.length) throw new Error('레슨(lessons)이 하나도 없어요');
+    const c = d.course && typeof d.course === 'object' ? d.course : null;
+    return {
+      course: c ? { title: String(c.title || '').trim(), description: learnTxt(c.description ?? '').trim(), sequential: c.sequential !== false } : null,
+      lessons, nSteps: lessons.reduce((n, l) => n + l.steps.length, 0),
+    };
+  }
+  function exportLearn(course, lessons) {
+    const out = {
+      format: 'pynest-learn-v1',
+      course: { title: course.title, description: course.description || '', sequential: course.sequential !== false },
+      lessons: lessons.map((l) => ({ title: l.title, minutes: l.minutes || undefined, summary: l.summary || '', steps: l.steps })),
+    };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
+    a.download = `learn-${course.title.replace(/[^\w가-힣-]+/g, '_').slice(0, 40) || 'course'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  /* ----- 공통 조각 ----- */
+  const learnMissing = () => [`<div class="card pad center"><h2>📚 학습</h2><p class="muted">${can('content') ? '먼저 <b>v410_learn.sql</b> 을 Supabase SQL Editor 에서 한 번 실행해 주세요.' : '학습 기능을 준비하고 있어요. 조금만 기다려 주세요!'}</p></div>`];
+  const lrMd = (t) => renderContent(t, true);
+  const learnAddXp = (n) => { if (n > 0) { try { Promise.resolve(sb.rpc('learn_add_xp', { p_xp: n })).catch(() => {}); } catch (e) { /* 무시 */ } } };
+  const codeKey = (lid, i) => `pn_lc_${me.id.slice(0, 8)}_${lid}_${i}`;
+  const lrSave = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* 무시 */ } };
+  const lrLoad = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+
+  // 실행해 볼 수 있는 코드 칸 (설명 단계용·실습용 공통). opts: {key, rows, stdin}
+  function lrCodeBox(root, initial, opts = {}) {
+    const ta = $('textarea.lr-code', root);
+    ta.value = initial;
+    if (window.PYIDE) window.PYIDE.attach(ta);
+    const out = $('.lr-out', root);
+    const run = $('[data-lrrun]', root);
+    const stdin = $('.lr-stdin', root);
+    if (opts.key) ta.addEventListener('input', () => lrSave(opts.key, ta.value));
+    if (run) run.onclick = async () => {
+      if (!ta.value.trim()) return toast('코드를 입력하세요', true);
+      run.disabled = true;
+      out.hidden = false;
+      out.innerHTML = '<span class="muted">⏳ 파이썬을 준비하는 중… (처음 한 번은 몇 초 걸려요)</span>';
+      const r = await runOnce(ta.value, (stdin ? stdin.value : '').replace(/\n?$/, '\n'));
+      out.innerHTML = renderRun(r);
+      run.disabled = false;
+    };
+    const reset = $('[data-lrreset]', root);
+    if (reset) reset.onclick = () => { ta.value = initial; ta.dispatchEvent(new Event('input', { bubbles: true })); };
+    return ta;
+  }
+  const lrCodeBoxHtml = (rows, { stdin = false, reset = true } = {}) => `<textarea class="code lr-code" rows="${rows}" spellcheck="false"></textarea>
+    ${stdin ? '<details class="stdin-box"><summary>⌨️ 입력값 <span class="muted small">(input() 에 들어갈 값 · 한 줄에 하나씩)</span></summary><textarea class="lr-stdin" rows="2" spellcheck="false"></textarea></details>' : ''}
+    <div class="lr-btns"><button class="ghost" type="button" data-lrrun>▶ 실행해 보기</button>${reset ? '<button class="ghost" type="button" data-lrreset>↺ 처음 코드로</button>' : ''}</div><div class="lr-out judge-out" hidden></div>`;
+
+  /* ----- 확인 문제 (O/X · 객관식 · 단답 · 빈칸) — 학습 화면과 오답 복습이 같이 써요 ----- */
+  const quizAnswerText = (st) => {
+    if (st.kind === 'ox') return st.answer ? 'O (맞아요)' : 'X (틀려요)';
+    if (st.kind === 'choice') return st.answer.map((n) => `${n}. ${st.options[n - 1]}`).join(' / ');
+    if (st.kind === 'short') return st.answer;
+    return st.answers.map((a) => a[0]).join(' , ');
+  };
+  function quizHtml(st) {
+    let inner = '';
+    if (st.kind === 'ox') {
+      inner = '<div class="lr-ox"><button type="button" class="lr-o" data-ox="1">⭕<span>맞아요</span></button><button type="button" class="lr-x" data-ox="0">❌<span>틀려요</span></button></div>';
+    } else if (st.kind === 'choice') {
+      const multi = st.answer.length > 1;
+      inner = `${multi ? '<p class="muted small">정답이 여러 개예요. 모두 골라요.</p>' : ''}<div class="lr-opts">${st.options.map((o, i) => `<label class="lr-opt"><input type="${multi ? 'checkbox' : 'radio'}" name="lrc" value="${i + 1}"><span class="lr-no">${i + 1}</span><span>${mdInline(o)}</span></label>`).join('')}</div><div class="form-actions"><button class="primary" type="button" data-qcheck>정답 확인</button></div>`;
+    } else if (st.kind === 'short') {
+      inner = '<input class="lr-short" type="text" autocomplete="off" spellcheck="false" placeholder="정답을 입력하세요"><div class="form-actions"><button class="primary" type="button" data-qcheck>정답 확인</button></div>';
+    } else {
+      const parts = st.code.split('___');
+      inner = `<pre class="lr-fill"><code>${parts.map((p, i) => esc(p) + (i < parts.length - 1 ? '<input class="lr-blank" type="text" autocomplete="off" spellcheck="false" size="6" aria-label="빈칸 ' + (i + 1) + '">' : '')).join('')}</code></pre><div class="form-actions"><button class="primary" type="button" data-qcheck>정답 확인</button></div>`;
+    }
+    return `${st.question ? `<div class="lr-q">${lrMd(st.question)}</div>` : ''}${inner}<div class="lr-fb" hidden></div>`;
+  }
+  // cb.onWrong() : 틀릴 때마다 / cb.onDone({tries, peek}) : 맞히거나 정답을 열어 보았을 때
+  function mountQuiz(root, st, cb) {
+    root.innerHTML = quizHtml(st);
+    const fb = $('.lr-fb', root);
+    let tries = 0;
+    let over = false;
+    const lock = () => { root.querySelectorAll('input,button[data-ox],[data-qcheck]').forEach((e) => { e.disabled = true; }); };
+    const finish = (peek) => { over = true; lock(); cb.onDone({ tries, peek }); };
+    const showFb = (ok, peek) => {
+      fb.hidden = false;
+      fb.className = 'lr-fb ' + (ok ? 'ok' : 'bad');
+      const ex = st.explanation ? `<div class="lr-ex">${lrMd(st.explanation)}</div>` : '';
+      if (ok) fb.innerHTML = `<b>${tries === 1 ? '🎉 정답이에요!' : '✅ 정답이에요!'}</b>${ex}`;
+      else if (peek) fb.innerHTML = `<b>💡 정답은</b> <code class="ic">${esc(quizAnswerText(st))}</code>${ex}`;
+      else fb.innerHTML = `<b>${tries >= 2 ? '🤔 아직이에요. 설명을 다시 읽고 도전해 보세요!' : '😅 아쉬워요, 다시 해 볼까요?'}</b>${tries >= 2 ? '<div class="form-actions"><button class="ghost" type="button" data-peek>정답 보기</button></div>' : ''}`;
+      const pk = $('[data-peek]', fb);
+      if (pk) pk.onclick = () => { showFb(false, true); finish(true); };
+    };
+    const judge = (ok) => {
+      if (over) return;
+      tries += 1;
+      if (ok) { showFb(true); finish(false); } else { cb.onWrong(); showFb(false, false); }
+    };
+    root.querySelectorAll('[data-ox]').forEach((b) => (b.onclick = () => judge((b.dataset.ox === '1') === st.answer)));
+    const chk = $('[data-qcheck]', root);
+    if (chk) chk.onclick = () => {
+      if (st.kind === 'choice') {
+        const picked = [...root.querySelectorAll('input[name="lrc"]:checked')].map((x) => Number(x.value)).sort((a, b) => a - b);
+        if (!picked.length) return toast('먼저 하나를 골라 보세요', true);
+        judge(picked.length === st.answer.length && picked.every((v, i) => v === st.answer[i]));
+      } else if (st.kind === 'short') {
+        const v = lrNorm($('.lr-short', root).value);
+        if (!v) return toast('정답을 입력해 보세요', true);
+        judge([st.answer, ...(st.alts || [])].some((a) => lrNorm(a) === v));
+      } else {
+        const vals = [...root.querySelectorAll('.lr-blank')].map((x) => lrNorm(x.value));
+        if (vals.some((x) => !x)) return toast('모든 빈칸을 채워 보세요', true);
+        judge(st.answers.every((alts, i) => alts.some((a) => lrNorm(a) === vals[i])));
+      }
+    };
+    root.querySelectorAll('.lr-short,.lr-blank').forEach((inp) => inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (chk) chk.click(); } }));
+    const first = $('.lr-short,.lr-blank', root);
+    if (first) first.focus();
+  }
+  // 이미 푼 확인문제를 다시 볼 때
+  const quizSolvedHtml = (st) => `${st.question ? `<div class="lr-q">${lrMd(st.question)}</div>` : ''}${st.kind === 'fill' ? `<pre class="lr-fill"><code>${esc(st.code)}</code></pre>` : ''}
+    <div class="lr-fb ok"><b>✅ 이미 푼 문제예요</b><div>정답: <code class="ic">${esc(quizAnswerText(st))}</code></div>${st.explanation ? `<div class="lr-ex">${lrMd(st.explanation)}</div>` : ''}</div>`;
+
+  /* ----- 학습 홈 ----- */
+  async function pageLearn(b, c) {
+    if (b === 'c') return pageLearnCourse(c);
+    if (b === 'l') return pageLearnLesson(c);
+    if (b === 'r') return pageLearnReview();
+    return pageLearnHome();
+  }
+  const wrongList = (p) => (p && Array.isArray(p.wrong) ? p.wrong : []);
+
+  async function pageLearnHome() {
+    const staff = can('content');
+    const cr = await sb.from('learn_courses').select('*').order('position').order('id');
+    if (cr.error) { LEARN_OK = false; return learnMissing(); }
+    LEARN_OK = true;
+    const [lr, pr, dr] = await Promise.all([
+      sb.from('learn_lessons').select('id,course_id,position,title,is_public,minutes').order('position').order('id'),
+      sb.from('learn_progress').select('lesson_id,cur,wrong,xp,completed,updated_at').eq('user_id', me.id),
+      sb.from('learn_days').select('day,xp').eq('user_id', me.id),
+    ]);
+    const lessons = lr.data || [];
+    const prog = new Map((pr.data || []).map((p) => [p.lesson_id, p]));
+    const days = dr.data || [];
+    const totalXp = days.reduce((s, d) => s + d.xp, 0);
+    const today = (days.find((d) => d.day === KST_DAY()) || { xp: 0 }).xp;
+    const streak = streakOf(new Set(days.map((d) => d.day)));
+    const nDone = [...prog.values()].filter((p) => p.completed).length;
+    const nWrong = [...prog.values()].reduce((s, p) => s + wrongList(p).length, 0);
+    const byC = {};
+    lessons.forEach((l) => { (byC[l.course_id] = byC[l.course_id] || []).push(l); });
+
+    // 이어서 하기: 가장 최근에 하던 레슨 → 없으면 첫 코스의 다음 레슨
+    let resume = null;
+    const going = lessons.filter((l) => { const p = prog.get(l.id); return p && !p.completed && p.updated_at; }).sort((a, b) => String(prog.get(b.id).updated_at).localeCompare(String(prog.get(a.id).updated_at)));
+    if (going.length) resume = going[0];
+    else {
+      for (const c of cr.data) {
+        const ls = byC[c.id] || [];
+        const nx = ls.find((l) => !(prog.get(l.id) || {}).completed);
+        if (nx) { resume = nx; break; }
+      }
+    }
+    const resumeCourse = resume ? cr.data.find((c) => c.id === resume.course_id) : null;
+
+    const cards = cr.data.map((c) => {
+      const ls = byC[c.id] || [];
+      const done = ls.filter((l) => (prog.get(l.id) || {}).completed).length;
+      const pct = ls.length ? Math.round((done / ls.length) * 100) : 0;
+      return `<a class="card lr-course" href="#/learn/c/${c.id}">
+        <div class="set-top"><h3>${esc(c.title)}</h3>${staff ? pubChip(c.is_public) : ''}${pct === 100 && ls.length ? '<span class="chip">🏅 완료</span>' : ''}</div>
+        ${c.description ? `<p class="muted small">${esc(c.description)}</p>` : ''}
+        <div class="muted small">레슨 ${ls.length}개 · 완료 ${done}개</div>
+        <div class="bar"><i style="width:${pct}%"></i></div></a>`;
+    }).join('') || `<div class="card pad center muted">${staff ? '아직 코스가 없어요. [＋ JSON으로 코스 추가] 로 만들어 보세요.' : '아직 열린 학습 코스가 없어요.'}</div>`;
+
+    return [`
+      <div class="page-head"><h2>📚 학습</h2></div>
+      <div class="lr-stats">
+        <div class="card lr-stat"><b>🔥 ${streak}일</b><span class="muted small">연속 학습</span></div>
+        <div class="card lr-stat"><b>⭐ ${totalXp} XP</b><span class="muted small">오늘 +${today}</span></div>
+        <div class="card lr-stat"><b>✅ ${nDone}개</b><span class="muted small">완료한 레슨</span></div>
+      </div>
+      ${resume && resumeCourse ? `<a class="card lr-resume" href="#/learn/l/${resume.id}"><span class="muted small">${(prog.get(resume.id) || {}).updated_at ? '이어서 학습하기' : '학습 시작하기'}</span><b>${esc(resume.title)}</b><span class="muted small">${esc(resumeCourse.title)}</span><span class="lr-go">▶</span></a>` : ''}
+      ${nWrong ? `<a class="card lr-review" href="#/learn/r">🔁 <b>오답 복습</b> <span class="muted small">— 틀렸던 확인 문제 ${nWrong}개를 다시 풀어 봐요</span></a>` : ''}
+      ${staff ? '<div class="form-actions" style="margin:0 0 12px"><button class="ghost" id="lrAddCourse">＋ JSON으로 코스 추가</button><a class="ghost btnlike" href="LEARN_JSON_GUIDE.md" target="_blank" rel="noopener">📖 JSON 형식 안내</a></div>' : ''}
+      <div class="lr-courses">${cards}</div>`,
+    (v) => { const b = $('#lrAddCourse', v); if (b) b.onclick = () => openLearnAdd(null); }];
+  }
+
+  /* ----- 코스 화면 (로드맵) ----- */
+  async function pageLearnCourse(rawId) {
+    const id = Number(rawId);
+    const staff = can('content');
+    const cr = await sb.from('learn_courses').select('*').eq('id', id).maybeSingle();
+    if (cr.error) return learnMissing();
+    const course = cr.data;
+    if (!course) return notFound();
+    const [lr, pr, sr] = await Promise.all([
+      sb.from('learn_lessons').select('*').eq('course_id', id).order('position').order('id'),
+      sb.from('learn_progress').select('lesson_id,cur,done,xp,completed').eq('user_id', me.id),
+      staff ? sb.from('learn_progress').select('lesson_id,completed') : Promise.resolve({ data: [] }),
+    ]);
+    const lessons = lr.data || [];
+    const prog = new Map((pr.data || []).map((p) => [p.lesson_id, p]));
+    const stat = {};
+    (sr.data || []).forEach((p) => { const s = (stat[p.lesson_id] = stat[p.lesson_id] || { started: 0, done: 0 }); s.started += 1; if (p.completed) s.done += 1; });
+    const seq = course.sequential !== false && !staff;
+    const doneN = lessons.filter((l) => (prog.get(l.id) || {}).completed).length;
+    const rows = lessons.map((l, i) => {
+      const p = prog.get(l.id);
+      const prevOk = i === 0 || (prog.get(lessons[i - 1].id) || {}).completed;
+      const locked = seq && !prevOk;
+      const nd = p ? Object.keys(p.done || {}).length : 0;
+      const st = p && p.completed ? '<span class="chip done">✅ 완료</span>' : locked ? '<span class="chip">🔒 앞 레슨을 먼저 끝내요</span>' : nd ? `<span class="chip">▶ ${nd} / ${l.steps.length} 단계</span>` : '<span class="chip">시작 전</span>';
+      const sx = stat[l.id];
+      return `<div class="lr-node ${p && p.completed ? 'done' : ''} ${locked ? 'locked' : ''}">
+        <div class="lr-circle">${p && p.completed ? '✓' : i + 1}</div>
+        <div class="lr-node-main">
+          ${locked ? `<b>${esc(l.title)}</b>` : `<a href="#/learn/l/${l.id}"><b>${esc(l.title)}</b></a>`}
+          <div class="muted small">${l.steps.length}단계${l.minutes ? ` · 약 ${l.minutes}분` : ''} ${staff ? pubChip(l.is_public) : ''}${staff && sx ? ` · 시작 ${sx.started}명 · 완료 ${sx.done}명` : ''}</div>
+          ${st}
+        </div>
+        ${staff ? `<span class="tools"><button class="icon" data-lup="${l.id}" title="위로">↑</button><button class="icon" data-ldown="${l.id}" title="아래로">↓</button><button class="icon" data-lpub="${l.id}" title="공개/비공개">${l.is_public ? '🌐' : '🔒'}</button><button class="icon" data-ledit="${l.id}" title="JSON 으로 수정">✏️</button><button class="icon" data-ldel="${l.id}" title="삭제">🗑</button></span>` : ''}
+      </div>`;
+    }).join('') || '<p class="muted center pad">레슨이 아직 없어요.</p>';
+
+    return [`
+      <p><a href="#/learn">← 학습</a></p>
+      <div class="page-head"><h2>${esc(course.title)} ${staff ? pubChip(course.is_public) : ''}</h2></div>
+      ${course.description ? `<p class="muted">${esc(course.description)}</p>` : ''}
+      <div class="muted small" style="margin-bottom:6px">레슨 ${lessons.length}개 · 완료 ${doneN}개${course.sequential !== false ? ' · 순서대로 열려요' : ''}</div>
+      <div class="bar" style="margin-bottom:14px"><i style="width:${lessons.length ? Math.round((doneN / lessons.length) * 100) : 0}%"></i></div>
+      ${staff ? `<div class="form-actions" style="margin:0 0 12px"><button class="ghost" id="lcPub">${course.is_public ? '🔒 비공개로 바꾸기' : '🌐 공개하기'}</button><button class="ghost" id="lcEdit">✏️ 코스 정보</button><button class="ghost" id="lcAdd">＋ JSON으로 레슨 추가</button><button class="ghost" id="lcExp">⬇️ JSON 내보내기</button><button class="ghost" id="lcDel">🗑 코스 삭제</button></div>` : ''}
+      <div class="card lr-road">${rows}</div>`,
+    (v) => {
+      if (!staff) return;
+      const L = (i) => lessons.find((x) => x.id === Number(i));
+      $('#lcPub', v).onclick = async () => {
+        const { error } = await sb.from('learn_courses').update({ is_public: !course.is_public }).eq('id', id);
+        if (error) return toast('바꾸지 못했어요', true);
+        toast(course.is_public ? '비공개로 바꿨어요 🔒' : '공개했어요 🌐'); route(true);
+      };
+      $('#lcEdit', v).onclick = () => openCourseEdit(course);
+      $('#lcAdd', v).onclick = () => openLearnAdd(course, lessons);
+      $('#lcExp', v).onclick = () => exportLearn(course, lessons);
+      $('#lcDel', v).onclick = async () => {
+        if (!confirm(`"${course.title}" 코스를 삭제할까요?\n레슨과 학생 진도도 함께 삭제돼요.`)) return;
+        const { error } = await sb.from('learn_courses').delete().eq('id', id);
+        if (error) return toast('삭제하지 못했어요', true);
+        toast('삭제했어요'); location.hash = '#/learn';
+      };
+      const swap = async (lid, dir) => {
+        const i = lessons.findIndex((x) => x.id === Number(lid));
+        const o = lessons[i + dir];
+        if (i < 0 || !o) return;
+        const e = lessons[i];
+        const [r1, r2] = await Promise.all([
+          sb.from('learn_lessons').update({ position: o.position }).eq('id', e.id),
+          sb.from('learn_lessons').update({ position: e.position }).eq('id', o.id),
+        ]);
+        if (r1.error || r2.error) return toast('순서를 바꾸지 못했어요', true);
+        route(true);
+      };
+      v.querySelectorAll('[data-lup]').forEach((b) => (b.onclick = () => swap(b.dataset.lup, -1)));
+      v.querySelectorAll('[data-ldown]').forEach((b) => (b.onclick = () => swap(b.dataset.ldown, 1)));
+      v.querySelectorAll('[data-lpub]').forEach((b) => (b.onclick = async () => {
+        const l = L(b.dataset.lpub);
+        const { error } = await sb.from('learn_lessons').update({ is_public: !l.is_public }).eq('id', l.id);
+        if (error) return toast('바꾸지 못했어요', true);
+        route(true);
+      }));
+      v.querySelectorAll('[data-ledit]').forEach((b) => (b.onclick = () => openLessonEdit(L(b.dataset.ledit))));
+      v.querySelectorAll('[data-ldel]').forEach((b) => (b.onclick = async () => {
+        const l = L(b.dataset.ldel);
+        if (!confirm(`"${l.title}" 레슨을 삭제할까요? (학생 진도도 같이 삭제돼요)`)) return;
+        const { error } = await sb.from('learn_lessons').delete().eq('id', l.id);
+        if (error) return toast('삭제하지 못했어요', true);
+        route(true);
+      }));
+    }];
+  }
+
+  /* ----- 선생님: JSON 으로 코스·레슨 추가 / 수정 ----- */
+  function openLearnAdd(course, existing) {
+    let parsed = null;
+    const m = modal(`<h3>${course ? `＋ "${esc(course.title)}" 에 레슨 추가` : '＋ JSON으로 코스 추가'}</h3>
+      <p class="muted small">형식은 <b>pynest-learn-v1</b> 이에요 (LEARN_JSON_GUIDE.md). ${course ? '<code class="ic">lessons</code> 의 레슨들이 이 코스 <b>맨 뒤</b>에 붙어요.' : '<code class="ic">course</code> 와 <code class="ic">lessons</code> 가 필요해요.'}</p>
+      <label>JSON 붙여넣기<textarea id="laText" class="code" style="min-height:220px" spellcheck="false" placeholder='{ "format": "pynest-learn-v1", "course": { "title": "파이썬 첫걸음" }, "lessons": [ { "title": "print 배우기", "steps": [ { "type": "explain", "body": "..." } ] } ] }'></textarea></label>
+      <label>또는 파일 선택 <input type="file" id="laFile" accept=".json,application/json"></label>
+      <p class="muted small" id="laInfo"></p>
+      ${pubPickHtml('laPub')}
+      <div class="form-actions"><button class="primary" id="laBtn" disabled>추가하기</button><button type="button" class="ghost" id="laCancel">취소</button></div>`);
+    const q = (x) => $(x, m.el);
+    const check = () => {
+      parsed = null;
+      q('#laBtn').disabled = true;
+      const t = q('#laText').value.trim();
+      if (!t) { q('#laInfo').textContent = ''; return; }
+      try {
+        parsed = parseLearnJson(t);
+        if (!course && !(parsed.course && parsed.course.title)) { parsed = null; throw new Error('새 코스에는 course.title 이 필요해요'); }
+        q('#laInfo').textContent = `✅ ${parsed.course && !course ? `코스 "${parsed.course.title}" · ` : ''}레슨 ${parsed.lessons.length}개 · 단계 ${parsed.nSteps}개를 읽었어요.`;
+        q('#laBtn').disabled = false;
+      } catch (err) { q('#laInfo').textContent = '⚠️ ' + err.message; }
+    };
+    q('#laText').oninput = check;
+    q('#laFile').onchange = async (e) => { const f = e.target.files[0]; if (f) { q('#laText').value = await f.text(); check(); } };
+    q('#laCancel').onclick = m.close;
+    q('#laBtn').onclick = async () => {
+      if (!parsed) return;
+      const btn = q('#laBtn');
+      btn.disabled = true;
+      const pub = (m.el.querySelector('input[name="laPub"]:checked') || { value: '0' }).value === '1';
+      let cid = course ? course.id : null;
+      if (!course) {
+        const { data: mx } = await sb.from('learn_courses').select('position').order('position', { ascending: false }).limit(1);
+        const r = await sb.from('learn_courses').insert({
+          title: parsed.course.title, description: parsed.course.description, sequential: parsed.course.sequential,
+          is_public: pub, position: ((mx && mx[0] && mx[0].position) || 0) + 1000,
+        }).select('id').single();
+        if (r.error) { btn.disabled = false; return toast('코스를 만들지 못했어요: ' + r.error.message, true); }
+        cid = r.data.id;
+      }
+      const base = (existing || []).reduce((mx, l) => Math.max(mx, l.position), 0);
+      const rows = parsed.lessons.map((l, i) => ({ ...l, course_id: cid, position: base + (i + 1) * 1000, is_public: course ? pub : true }));
+      const { error } = await sb.from('learn_lessons').insert(rows);
+      if (error) {
+        if (!course) await sb.from('learn_courses').delete().eq('id', cid);
+        btn.disabled = false;
+        return toast('레슨을 넣지 못했어요: ' + error.message, true);
+      }
+      m.close();
+      toast(`레슨 ${rows.length}개를 추가했어요${pub ? '' : ' (비공개 — 확인 후 공개해 주세요)'}`);
+      if (course) route(true); else location.hash = '#/learn/c/' + cid;
+    };
+  }
+  function openLessonEdit(lesson) {
+    const cur = { title: lesson.title, minutes: lesson.minutes || undefined, summary: lesson.summary || '', steps: lesson.steps };
+    const m = modal(`<h3>✏️ 레슨 수정 (JSON)</h3>
+      <p class="muted small">이 레슨 하나의 JSON 이에요. 고친 뒤 저장하면 바뀌어요. 이미 푼 학생의 진도는 단계 번호 기준으로 그대로 남아요 — 단계를 끼워 넣거나 빼면 어긋날 수 있어요.</p>
+      <label>레슨 JSON<textarea id="leText" class="code" style="min-height:360px" spellcheck="false"></textarea></label>
+      <p class="muted small" id="leInfo"></p>
+      <div class="form-actions"><button class="primary" id="leSave">저장</button><button type="button" class="ghost" id="leCancel">취소</button></div>`);
+    const q = (x) => $(x, m.el);
+    q('#leText').value = JSON.stringify(cur, null, 1);
+    q('#leCancel').onclick = m.close;
+    q('#leSave').onclick = async () => {
+      let l;
+      try { l = parseLearnJson(JSON.stringify({ lessons: [JSON.parse(q('#leText').value)] })).lessons[0]; } catch (e) { q('#leInfo').textContent = '⚠️ ' + (e.message.includes('JSON') || e instanceof SyntaxError ? 'JSON 형식 오류예요' : e.message); return; }
+      const { error } = await sb.from('learn_lessons').update({ title: l.title, summary: l.summary, minutes: l.minutes, steps: l.steps }).eq('id', lesson.id);
+      if (error) return toast('저장하지 못했어요: ' + error.message, true);
+      m.close(); toast('저장했어요'); route(true);
+    };
+  }
+  function openCourseEdit(c) {
+    const m = modal(`<h3>✏️ 코스 정보</h3>
+      <label>제목<input type="text" id="ceTitle" value="${esc(c.title)}"></label>
+      <label>설명<textarea id="ceDesc" style="min-height:80px">${esc(c.description || '')}</textarea></label>
+      <label class="inline"><input type="checkbox" id="ceSeq" ${c.sequential !== false ? 'checked' : ''}> 앞 레슨을 끝내야 다음 레슨이 열려요 <span class="muted small">(선생님은 항상 모두 열려요)</span></label>
+      <div class="form-actions"><button class="primary" id="ceSave">저장</button><button type="button" class="ghost" id="ceCancel">취소</button></div>`);
+    const q = (x) => $(x, m.el);
+    q('#ceCancel').onclick = m.close;
+    q('#ceSave').onclick = async () => {
+      const title = q('#ceTitle').value.trim();
+      if (!title) return toast('제목을 써 주세요', true);
+      const { error } = await sb.from('learn_courses').update({ title, description: q('#ceDesc').value.trim(), sequential: q('#ceSeq').checked }).eq('id', c.id);
+      if (error) return toast('저장하지 못했어요', true);
+      m.close(); route(true);
+    };
+  }
+
+  /* ----- 레슨 화면 (한 단계씩) ----- */
+  async function pageLearnLesson(rawId) {
+    const id = Number(rawId);
+    const staff = can('content');
+    const lr = await sb.from('learn_lessons').select('*').eq('id', id).maybeSingle();
+    if (lr.error) return learnMissing();
+    const lesson = lr.data;
+    if (!lesson) return notFound();
+    const [cr, sib, pr] = await Promise.all([
+      sb.from('learn_courses').select('*').eq('id', lesson.course_id).maybeSingle(),
+      sb.from('learn_lessons').select('id,title,position,is_public').eq('course_id', lesson.course_id).order('position').order('id'),
+      sb.from('learn_progress').select('*').eq('lesson_id', id).eq('user_id', me.id).maybeSingle(),
+    ]);
+    const course = cr.data || { id: lesson.course_id, title: '코스' };
+    const sibs = sib.data || [];
+    const at = sibs.findIndex((x) => x.id === id);
+    if (course.sequential !== false && !staff && at > 0) {
+      const pp = await sb.from('learn_progress').select('completed').eq('user_id', me.id).eq('lesson_id', sibs[at - 1].id).maybeSingle();
+      if (!(pp.data && pp.data.completed)) return [`<div class="card pad center"><h2>🔒 잠겨 있어요</h2><p class="muted">앞 레슨 "${esc(sibs[at - 1].title)}" 을(를) 먼저 끝내 주세요.</p><a class="ghost btnlike" href="#/learn/c/${course.id}">← 코스로</a></div>`];
+    }
+    const steps = lesson.steps || [];
+    if (!steps.length) return notFound();
+    const P = pr.data
+      ? { cur: pr.data.cur || 0, done: pr.data.done || {}, wrong: wrongList(pr.data).slice(), xp: pr.data.xp || 0, completed: !!pr.data.completed, completed_at: pr.data.completed_at }
+      : { cur: 0, done: {}, wrong: [], xp: 0, completed: false, completed_at: null };
+    const nextLesson = sibs.slice(at + 1).find((x) => staff || x.is_public);
+
+    return [`
+      <p><a href="#/learn/c/${course.id}">← ${esc(course.title)}</a></p>
+      <div class="card lr-wrap" id="lrWrap">
+        <div class="lr-top"><b>${esc(lesson.title)}</b><span class="spacer"></span><span class="chip" id="lrXp">⭐ 0 XP</span></div>
+        <div class="lr-bar"><i id="lrBar"></i></div>
+        <div class="lr-dots" id="lrDots"></div>
+        <div id="lrStep" class="lr-step"></div>
+        <div class="lr-nav" id="lrNav"><button class="ghost" id="lrPrev">← 이전</button><span class="spacer"></span><button class="ghost" id="lrNext">다음 →</button></div>
+      </div>`,
+    (v) => {
+      const n = steps.length;
+      let cur = 0;
+      const box = $('#lrStep', v);
+      const doneCount = () => steps.filter((_, k) => P.done[k]).length;
+      const reach = () => { for (let k = 0; k < n; k += 1) if (!P.done[k]) return k; return n - 1; };
+      const saveProg = async () => {
+        const row = { user_id: me.id, lesson_id: id, cur: P.cur, done: P.done, wrong: P.wrong, xp: P.xp, completed: P.completed, updated_at: new Date().toISOString() };
+        if (P.completed) { if (!P.completed_at) P.completed_at = new Date().toISOString(); row.completed_at = P.completed_at; }
+        const { error } = await sb.from('learn_progress').upsert(row, { onConflict: 'user_id,lesson_id' });
+        if (error && !saveProg.warned) { saveProg.warned = true; toast('진도를 저장하지 못했어요 (v410_learn.sql 을 실행했나요?)', true); }
+      };
+      const updateTop = () => {
+        $('#lrBar', v).style.width = `${Math.round((doneCount() / n) * 100)}%`;
+        $('#lrXp', v).textContent = `⭐ ${P.xp} XP`;
+        const r = reach();
+        $('#lrDots', v).innerHTML = steps.map((s, k) => `<button type="button" class="lr-dot ${P.done[k] ? 'ok' : ''} ${k === cur ? 'cur' : ''}" data-dot="${k}" ${k > r && !P.completed ? 'disabled' : ''} title="${k + 1}. ${esc(s.title || ({ explain: '개념', quiz: '확인', practice: '실습' })[s.type])}">${({ explain: '📖', quiz: '❓', practice: '💻' })[s.type]}</button>`).join('');
+        v.querySelectorAll('[data-dot]').forEach((b) => (b.onclick = () => show(Number(b.dataset.dot))));
+      };
+      const updateNav = () => {
+        const ok = !!P.done[cur];
+        const nx = $('#lrNext', v);
+        nx.textContent = cur >= n - 1 ? '완료 🎉' : '다음 →';
+        nx.className = ok || steps[cur].type === 'explain' ? 'primary' : 'ghost';
+        $('#lrPrev', v).disabled = cur === 0;
+      };
+      const markDone = async (k, info) => {
+        if (P.done[k]) return;
+        P.done[k] = info;
+        let gain = info.xp || 0;
+        if (!P.completed && steps.every((_, j) => P.done[j])) { P.completed = true; gain += 10; } // 레슨 완료 보너스
+        P.xp += gain;
+        learnAddXp(gain);
+        await saveProg();
+        updateTop();
+        updateNav();
+      };
+      const finish = () => {
+        $('#lrNav', v).hidden = true;
+        const first = steps.filter((s, k) => s.type === 'quiz' && P.done[k] && (P.done[k].t || 1) <= 1 && !P.done[k].peek).length;
+        const qn = steps.filter((s) => s.type === 'quiz').length;
+        box.innerHTML = `<div class="lr-finish"><div class="lr-big">🎉</div><h2>레슨 완료!</h2>
+          <p class="muted">${esc(lesson.title)}</p>
+          <div class="lr-stats"><div class="card lr-stat"><b>⭐ ${P.xp}</b><span class="muted small">이 레슨 XP</span></div>${qn ? `<div class="card lr-stat"><b>🎯 ${first} / ${qn}</b><span class="muted small">첫 시도 정답</span></div>` : ''}</div>
+          ${lesson.summary ? `<div class="lr-sum"><h3>📌 핵심 정리</h3>${lrMd(lesson.summary)}</div>` : ''}
+          <div class="form-actions" style="justify-content:center">${nextLesson ? `<a class="primary btnlike" href="#/learn/l/${nextLesson.id}">다음 레슨 ▶</a>` : ''}${P.wrong.length ? '<a class="ghost btnlike" href="#/learn/r">🔁 틀린 문제 복습</a>' : ''}<a class="ghost btnlike" href="#/learn/c/${course.id}">코스로 돌아가기</a><button class="ghost" id="lrAgain" type="button">↺ 처음부터 다시 보기</button></div></div>`;
+        $('#lrAgain', v).onclick = () => { $('#lrNav', v).hidden = false; show(0); };
+        updateTop();
+      };
+
+      const show = (i) => {
+        cur = Math.max(0, Math.min(i, n - 1));
+        P.cur = cur;
+        const st = steps[cur];
+        const done = P.done[cur];
+        const label = { explain: '📖 개념', quiz: '❓ 확인 문제', practice: '💻 실습' }[st.type];
+        box.innerHTML = `<div class="lr-kind">${label} <span class="muted small">${cur + 1} / ${n}</span></div>${st.title ? `<h3 class="lr-title">${esc(st.title)}</h3>` : ''}<div class="lr-slot"></div>`;
+        const slot = $('.lr-slot', box);
+        if (st.type === 'explain') {
+          slot.innerHTML = `${st.body ? `<div class="lr-md">${lrMd(st.body)}</div>` : ''}${st.code ? (st.run ? `<div class="lr-codebox">${lrCodeBoxHtml(Math.min(14, Math.max(3, st.code.split('\n').length + 1)))}</div>` : `<pre><code>${esc(st.code)}</code></pre>`) : ''}`;
+          if (st.code && st.run) lrCodeBox(slot, st.code);
+        } else if (st.type === 'quiz') {
+          if (done) slot.innerHTML = quizSolvedHtml(st);
+          else {
+            mountQuiz(slot, st, {
+              onWrong: () => { if (!P.wrong.includes(cur)) { P.wrong.push(cur); saveProg(); } },
+              onDone: ({ tries, peek }) => markDone(cur, { xp: peek ? 0 : tries <= 1 ? XP_QUIZ : 5, t: tries, ...(peek ? { peek: true } : {}) }),
+            });
+          }
+        } else mountPractice(slot, st, cur, done);
+        updateTop();
+        updateNav();
+        saveProg();
+        window.scrollTo({ top: Math.max(0, $('#lrWrap', v).getBoundingClientRect().top + window.scrollY - 70), behavior: 'smooth' });
+      };
+      function mountPractice(slot, st, k, done) {
+        const hints = st.hints || [];
+        slot.innerHTML = `<div class="lr-md">${lrMd(st.body)}</div>
+          ${done ? '<div class="lr-fb ok"><b>✅ 이미 통과한 실습이에요</b> 다시 풀어 봐도 돼요.</div>' : ''}
+          <div class="lr-codebox">${lrCodeBoxHtml(10, { stdin: true })}</div>
+          <div class="lr-btns">${st.tests.length ? '<button class="primary" type="button" data-lrgrade>✅ 채점하기</button>' : ''}${hints.length ? `<button class="ghost" type="button" data-lrhint>💡 힌트 보기 (0/${hints.length})</button>` : ''}${st.solution ? `<button class="ghost" type="button" data-lrsol ${done ? '' : 'disabled'}>🔑 정답 코드 ${done ? '' : '(채점 3번 시도 후)'}</button>` : ''}</div>
+          <div class="lr-hints"></div><div class="lr-grade judge-out" hidden></div><div class="lr-sol" hidden></div>`;
+        const key = codeKey(id, k);
+        const ta = lrCodeBox(slot, lrLoad(key) != null ? lrLoad(key) : st.starter, { key });
+        if (st.stdin) $('.lr-stdin', slot).value = st.stdin;
+        else { const smp = st.tests.find((t) => !t.hidden); if (smp) $('.lr-stdin', slot).value = smp.input; }
+        let tries = 0;
+        let used = 0;
+        const solBtn = $('[data-lrsol]', slot);
+        const showSol = () => {
+          const s = $('.lr-sol', slot);
+          s.hidden = false;
+          s.innerHTML = `<div class="muted small">정답 코드 (예시)</div><pre><code>${esc(st.solution)}</code></pre>${st.explanation ? `<div class="lr-ex">${lrMd(st.explanation)}</div>` : ''}`;
+        };
+        if (done && st.solution) showSol();
+        const hb = $('[data-lrhint]', slot);
+        if (hb) hb.onclick = () => {
+          if (used >= hints.length) return;
+          used += 1;
+          $('.lr-hints', slot).innerHTML = hints.slice(0, used).map((h, i) => `<div class="lr-hint">💡 <b>힌트 ${i + 1}</b> ${lrMd(h)}</div>`).join('');
+          hb.textContent = `💡 힌트 보기 (${used}/${hints.length})`;
+          if (used >= hints.length) hb.disabled = true;
+        };
+        if (solBtn) solBtn.onclick = async () => {
+          if (!P.done[k] && !confirm('정답 코드를 보면 이 실습의 XP를 받을 수 없어요. 볼까요?')) return;
+          showSol();
+          solBtn.disabled = true;
+          if (!P.done[k]) await markDone(k, { xp: 0, t: tries, peek: true });
+        };
+        const gb = $('[data-lrgrade]', slot);
+        if (gb) gb.onclick = async () => {
+          const code = ta.value;
+          const out = $('.lr-grade', slot);
+          if (!code.trim()) return toast('코드를 입력하세요', true);
+          gb.disabled = true;
+          tries += 1;
+          out.hidden = false;
+          out.innerHTML = '<span class="muted">⏳ 파이썬을 준비하는 중… (처음 한 번은 몇 초 걸려요)</span>';
+          try {
+            const res = await gradeAll(code, st.tests, (i2, n2) => { out.innerHTML = `<span class="muted">⏳ 채점 중… ${i2 + 1} / ${n2}</span>`; });
+            out.innerHTML = renderGrade(res, null, [], false);
+            if (res.status === 'AC') {
+              if (!P.done[k]) await markDone(k, { xp: Math.max(10, XP_PRACTICE - 5 * used), t: tries, h: used });
+              if (st.solution) showSol(); else if (st.explanation) { const s = $('.lr-sol', slot); s.hidden = false; s.innerHTML = `<div class="lr-ex">${lrMd(st.explanation)}</div>`; }
+              if (solBtn) solBtn.disabled = true;
+              out.insertAdjacentHTML('afterbegin', '<div class="lr-fb ok"><b>🎉 통과했어요!</b> 아래 "다음"으로 넘어가요.</div>');
+            } else if (tries >= 3 && solBtn) { solBtn.disabled = false; solBtn.textContent = '🔑 정답 코드 보기'; }
+          } catch (e) { out.innerHTML = renderRun({ status: 'LOAD', err: e.message }); }
+          gb.disabled = false;
+        };
+      }
+
+      $('#lrPrev', v).onclick = () => show(cur - 1);
+      $('#lrNext', v).onclick = async () => {
+        const st = steps[cur];
+        if (!P.done[cur]) {
+          if (st.type === 'explain') await markDone(cur, { xp: XP_EXPLAIN });
+          else if (st.type === 'practice' && !st.tests.length) await markDone(cur, { xp: 5 });
+          else return toast(st.type === 'quiz' ? '먼저 문제를 풀어 보세요' : '먼저 채점을 통과해 보세요 (막히면 힌트·정답 코드를 쓸 수 있어요)', true);
+        }
+        if (cur >= n - 1) return finish();
+        show(cur + 1);
+      };
+      // 처음 열 때: 끝낸 레슨은 처음부터, 하던 레슨은 하던 곳(아직 못 푼 첫 단계까지만)에서
+      if (P.completed) { P.cur = 0; show(0); } else show(Math.min(P.cur, reach()));
+    }];
+  }
+
+  /* ----- 오답 복습: 틀렸던 확인 문제만 모아서 다시 ----- */
+  async function pageLearnReview() {
+    const pr = await sb.from('learn_progress').select('*').eq('user_id', me.id);
+    if (pr.error) return learnMissing();
+    const rows = (pr.data || []).filter((p) => wrongList(p).length);
+    const empty = ['<p><a href="#/learn">← 학습</a></p><div class="card pad center"><h2>🔁 오답 복습</h2><p class="muted">복습할 문제가 없어요. 잘하고 있어요! 🎉</p></div>'];
+    if (!rows.length) return empty;
+    const lr = await sb.from('learn_lessons').select('id,title,steps').in('id', rows.map((p) => p.lesson_id));
+    const lmap = new Map((lr.data || []).map((l) => [l.id, l]));
+    const queue = [];
+    rows.forEach((p) => wrongList(p).forEach((k) => {
+      const l = lmap.get(p.lesson_id);
+      const st = l && l.steps[k];
+      if (st && st.type === 'quiz') queue.push({ p, k, st, title: l.title });
+    }));
+    if (!queue.length) return empty;
+    queue.sort(() => Math.random() - 0.5);
+    return [`<p><a href="#/learn">← 학습</a></p><div class="card lr-wrap"><div class="lr-top"><b>🔁 오답 복습</b><span class="spacer"></span><span class="chip" id="rvCnt"></span></div><div class="lr-bar"><i id="rvBar"></i></div><div id="rvBox" class="lr-step"></div></div>`,
+      (v) => {
+        let i = 0;
+        let fixed = 0;
+        const box = $('#rvBox', v);
+        const show = () => {
+          $('#rvBar', v).style.width = `${Math.round((i / queue.length) * 100)}%`;
+          $('#rvCnt', v).textContent = `${Math.min(i + 1, queue.length)} / ${queue.length}`;
+          if (i >= queue.length) {
+            box.innerHTML = `<div class="lr-finish"><div class="lr-big">🎉</div><h2>복습 끝!</h2><p class="muted">${fixed}개를 다시 맞혔어요.</p><div class="form-actions" style="justify-content:center"><a class="primary btnlike" href="#/learn">학습으로</a></div></div>`;
+            return;
+          }
+          const q = queue[i];
+          box.innerHTML = `<div class="lr-kind">❓ 확인 문제 <span class="muted small">${esc(q.title)}</span></div><div class="lr-slot"></div><div class="form-actions" id="rvNext" hidden><button class="primary" type="button">다음 →</button></div>`;
+          mountQuiz($('.lr-slot', box), q.st, {
+            onWrong: () => {},
+            onDone: async ({ tries, peek }) => {
+              if (!peek && tries <= 3) {
+                fixed += 1;
+                learnAddXp(3);
+                q.p.wrong = wrongList(q.p).filter((x) => x !== q.k);
+                await sb.from('learn_progress').update({ wrong: q.p.wrong }).eq('user_id', me.id).eq('lesson_id', q.p.lesson_id);
+              }
+              const nx = $('#rvNext', box);
+              nx.hidden = false;
+              $('button', nx).onclick = () => { i += 1; show(); };
+            },
+          });
+        };
+        show();
+      }];
   }
 
   /* ---------- 설정 ---------- */

@@ -1,0 +1,231 @@
+{
+ "format": "pynest-learn-v1",
+ "course": {
+  "title": "파이썬 첫걸음",
+  "description": "print, 변수, input, if 문을 설명 → 확인 문제 → 실습 순서로 배워요.",
+  "sequential": true
+ },
+ "lessons": [
+  {
+   "title": "print 로 출력하기",
+   "minutes": 10,
+   "summary": "- `print(값)` 은 화면에 값을 출력해요.\n- 글자(문자열)는 따옴표 `\"\"` 로 감싸요.\n- `print(1, 2)` 처럼 쉼표로 여러 값을 한 줄에 출력할 수 있어요.",
+   "steps": [
+    {
+     "type": "explain",
+     "title": "print 란?",
+     "body": "파이썬에서 **화면에 무언가를 보여 줄 때** `print()` 를 써요.\n\n괄호 안에 보여 줄 값을 넣으면 돼요. 글자는 반드시 따옴표로 감싸요.",
+     "code": "print(\"안녕하세요\")\nprint(10)\nprint(\"1 + 2 =\", 1 + 2)"
+    },
+    {
+     "type": "quiz",
+     "kind": "ox",
+     "question": "`print(\"hello\")` 를 실행하면 화면에 **hello** 가 출력된다.",
+     "answer": true,
+     "explanation": "따옴표는 글자를 감싸는 표시일 뿐, 출력되지 않아요."
+    },
+    {
+     "type": "quiz",
+     "kind": "choice",
+     "question": "다음 중 **오류가 나는** 코드는?",
+     "options": [
+      "print(\"hi\")",
+      "print('hi')",
+      "print(hi)",
+      "print(5)"
+     ],
+     "answer": 3,
+     "explanation": "따옴표가 없으면 `hi` 를 변수 이름으로 생각해서 오류가 나요."
+    },
+    {
+     "type": "explain",
+     "title": "쉼표로 여러 값 출력",
+     "body": "`print` 에 값을 쉼표로 이어 쓰면 **공백 한 칸**을 사이에 두고 한 줄에 출력해요.",
+     "code": "print(\"나이\", 20)\nprint(\"합계:\", 3 + 4)"
+    },
+    {
+     "type": "quiz",
+     "kind": "fill",
+     "question": "빈칸을 채워 `Hello` 를 출력해 보세요.",
+     "code": "___(\"Hello\")",
+     "answers": [
+      [
+       "print"
+      ]
+     ],
+     "explanation": "출력은 `print` 예요."
+    },
+    {
+     "type": "practice",
+     "title": "Hello, PyNest!",
+     "body": "화면에 정확히 `Hello, PyNest!` 를 출력하는 코드를 작성하세요.",
+     "starter": "# 여기에 작성하세요\n",
+     "tests": [
+      {
+       "input": "",
+       "output": "Hello, PyNest!",
+       "hidden": false
+      }
+     ],
+     "hints": [
+      "`print()` 괄호 안에 글자를 넣어요.",
+      "글자는 따옴표로 감싸요: `print(\"...\")`"
+     ],
+     "solution": "print(\"Hello, PyNest!\")",
+     "explanation": "대소문자와 쉼표, 느낌표까지 똑같이 써야 해요."
+    }
+   ]
+  },
+  {
+   "title": "변수와 input",
+   "minutes": 15,
+   "summary": "- 변수는 값을 담는 이름표: `x = 5`\n- `input()` 은 **글자**를 받아요. 숫자로 쓰려면 `int()` 로 바꿔요.",
+   "steps": [
+    {
+     "type": "explain",
+     "title": "변수",
+     "body": "**변수**는 값을 담아 두는 이름표예요. `=` 는 \"같다\"가 아니라 \"**오른쪽 값을 왼쪽에 담아라**\"는 뜻이에요.",
+     "code": "x = 5\ny = x + 3\nprint(y)"
+    },
+    {
+     "type": "quiz",
+     "kind": "short",
+     "question": "`x = 5` 를 실행한 뒤 `print(x * 2)` 의 출력은?",
+     "answer": "10",
+     "explanation": "x 는 5 이므로 5 × 2 = 10 이에요."
+    },
+    {
+     "type": "quiz",
+     "kind": "choice",
+     "question": "**변수 이름으로 쓸 수 있는 것**을 모두 고르세요.",
+     "options": [
+      "score",
+      "2nd",
+      "my_name",
+      "for"
+     ],
+     "answer": [
+      1,
+      3
+     ],
+     "explanation": "숫자로 시작하거나 파이썬 예약어(`for`)는 변수 이름이 될 수 없어요."
+    },
+    {
+     "type": "explain",
+     "title": "input() 으로 입력받기",
+     "body": "`input()` 은 사용자가 입력한 **글자**를 돌려줘요. 숫자로 계산하려면 `int()` 로 바꿔야 해요.",
+     "code": "a = int(input())\nprint(a + 1)"
+    },
+    {
+     "type": "quiz",
+     "kind": "ox",
+     "question": "`input()` 으로 받은 값은 처음에 숫자(int)다.",
+     "answer": false,
+     "explanation": "항상 글자(문자열)로 받아요. 계산하려면 `int(input())` 처럼 바꿔요."
+    },
+    {
+     "type": "practice",
+     "title": "두 수의 합",
+     "body": "두 정수 A, B 가 각각 한 줄에 하나씩 주어져요. **A + B** 를 출력하세요.\n\n입력 예: `3` / `4` → 출력 예: `7`",
+     "starter": "a = int(input())\n# 여기에 이어서 작성하세요\n",
+     "tests": [
+      {
+       "input": "3\n4\n",
+       "output": "7",
+       "hidden": false
+      },
+      {
+       "input": "10\n-2\n",
+       "output": "8",
+       "hidden": false
+      },
+      {
+       "input": "0\n0\n",
+       "output": "0",
+       "hidden": true
+      },
+      {
+       "input": "-5\n-7\n",
+       "output": "-12",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "두 번째 값도 `int(input())` 으로 받아요.",
+      "`print(a + b)`"
+     ],
+     "solution": "a = int(input())\nb = int(input())\nprint(a + b)"
+    }
+   ]
+  },
+  {
+   "title": "if 조건문",
+   "minutes": 15,
+   "summary": "- `if 조건:` 아래 **들여쓰기**한 코드는 조건이 참일 때만 실행돼요.\n- `else:` 는 아니면, `elif` 는 다른 조건이에요.\n- `%` 는 나머지: `n % 2 == 0` 이면 짝수예요.",
+   "steps": [
+    {
+     "type": "explain",
+     "title": "조건에 따라 다르게",
+     "body": "`if` 뒤에 조건을 쓰고 **콜론(:)** 을 붙인 다음, 다음 줄부터 **4칸 들여쓰기**해요.",
+     "code": "n = 7\nif n > 5:\n    print(\"크다\")\nelse:\n    print(\"작다\")"
+    },
+    {
+     "type": "quiz",
+     "kind": "fill",
+     "question": "빈칸을 채워 보세요.",
+     "code": "n = 4\nif n ___ 2 == 0:\n    print(\"짝수\")",
+     "answers": [
+      [
+       "%"
+      ]
+     ],
+     "explanation": "`%` 는 나머지를 구해요. 2로 나눈 나머지가 0 이면 짝수예요."
+    },
+    {
+     "type": "quiz",
+     "kind": "short",
+     "question": "`if` 문의 조건 줄 끝에 꼭 붙여야 하는 기호의 이름은? (한글)",
+     "answer": "콜론",
+     "alts": [
+      "콜론(:)",
+      ":"
+     ],
+     "explanation": "`if 조건:` 처럼 끝에 콜론을 붙여요."
+    },
+    {
+     "type": "practice",
+     "title": "짝수 홀수",
+     "body": "정수 N 이 주어져요. N 이 짝수면 `짝수`, 홀수면 `홀수` 를 출력하세요.",
+     "starter": "n = int(input())\n",
+     "tests": [
+      {
+       "input": "4\n",
+       "output": "짝수",
+       "hidden": false
+      },
+      {
+       "input": "7\n",
+       "output": "홀수",
+       "hidden": false
+      },
+      {
+       "input": "0\n",
+       "output": "짝수",
+       "hidden": true
+      },
+      {
+       "input": "-3\n",
+       "output": "홀수",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`n % 2` 는 2로 나눈 나머지예요.",
+      "`if n % 2 == 0:` 으로 짝수를 검사해요."
+     ],
+     "solution": "n = int(input())\nif n % 2 == 0:\n    print(\"짝수\")\nelse:\n    print(\"홀수\")"
+    }
+   ]
+  }
+ ]
+}
