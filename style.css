@@ -613,3 +613,11 @@ textarea.inline-edit { width: 100%; box-sizing: border-box; min-height: 90px; }
 .lr-sum { text-align: left; background: var(--hover); padding: 12px 16px; border-radius: 12px; margin: 12px 0; }
 .lr-nav[hidden], .lr-fb[hidden], .lr-out[hidden], .lr-grade[hidden], .lr-sol[hidden], #rvNext[hidden] { display: none !important; }
 a.primary.btnlike { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+
+/* V4.2.0 내 기록 */
+#recCard > summary { cursor: pointer; }
+.rec-row { display: block; text-decoration: none; color: inherit; padding: 10px 12px; border-top: 1px solid var(--border); }
+.rec-row:hover { background: var(--hover); }
+.rec-sum { margin-top: 10px; }
+details.ver.flash { animation: vflash 1.6s ease-out 1; }
+@keyframes vflash { from { background: rgba(250, 204, 21, .35); } to { background: transparent; } }

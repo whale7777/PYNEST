@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.1.0';
+  const APP_VERSION = '4.2.0';
   // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -449,7 +449,7 @@
       ranking: () => pageRanking(),
       u: () => pageProfile(b),
       set: () => pageSet(b),
-      p: () => pageProblem(b),
+      p: () => pageProblem(b, c),
       learn: () => pageLearn(b, c),
       review: () => pageReview(b, c),
       board: () => (BOARDS[b] ? pageBoard(b) : notFound()),
@@ -1266,7 +1266,7 @@
 
 
   /* ---------- 문제 단독 화면 (백준처럼 문제만 크게) ---------- */
-  async function pageProblem(rawId) {
+  async function pageProblem(rawId, sub) {
     const eid = Number(rawId);
     if (!eid) return notFound();
     const admin = can('content');
@@ -1336,6 +1336,14 @@
         const mount = makeSolver({ [eid]: e }, { [eid]: subs }, !!set.answer_public);
         const pn = mount(eid);
         if (pn) pn.hidden = false;
+        // 내 기록에서 들어왔으면(#/p/번호/s제출번호) 그 풀이를 펼쳐서 보여줘요
+        const sm = /^s(\d+)?$/.exec(sub || '');
+        if (sm && subs.length) {
+          const one = sm[1] ? subs.find((x) => x.id === Number(sm[1])) : null;
+          const target = one || subs[subs.length - 1];
+          const d = [...v.querySelectorAll('details.ver')].find((x) => { const b2 = $('summary b', x); return b2 && b2.textContent === 'v' + target.version; });
+          if (d) { d.open = true; setTimeout(() => d.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120); d.classList.add('flash'); }
+        }
       }
     }];
   }
@@ -3348,8 +3356,10 @@ onmessage = (ev) => {
     if (!Array.isArray(l.steps) || !l.steps.length) throw new Error(`${at}("${title}")에 steps 가 하나도 없어요`);
     if (l.steps.length > 80) throw new Error(`${at}("${title}")의 단계가 너무 많아요 (80개 이하)`);
     const m = Number(l.minutes);
+    const rp = l.rank_points === undefined || l.rank_points === null || l.rank_points === '' ? null : Number(l.rank_points);
+    if (rp !== null && (!Number.isInteger(rp) || rp < 0 || rp > 100000)) throw new Error(`${at}("${title}")의 rank_points 는 0 이상의 정수예요`);
     return {
-      title, summary: learnTxt(l.summary ?? '').trim(), minutes: Number.isFinite(m) && m > 0 ? Math.round(m) : null,
+      title, rank_points: rp, summary: learnTxt(l.summary ?? '').trim(), minutes: Number.isFinite(m) && m > 0 ? Math.round(m) : null,
       steps: l.steps.map((s, k) => normLearnStep(s, `"${title}" ${k + 1}번째 단계`)),
     };
   }
@@ -3362,15 +3372,15 @@ onmessage = (ev) => {
     if (!lessons.length) throw new Error('레슨(lessons)이 하나도 없어요');
     const c = d.course && typeof d.course === 'object' ? d.course : null;
     return {
-      course: c ? { title: String(c.title || '').trim(), description: learnTxt(c.description ?? '').trim(), sequential: c.sequential !== false } : null,
+      course: c ? { title: String(c.title || '').trim(), description: learnTxt(c.description ?? '').trim(), sequential: c.sequential !== false, rank_points: Math.max(0, Math.min(100000, Math.round(Number(c.rank_points) || 0))) } : null,
       lessons, nSteps: lessons.reduce((n, l) => n + l.steps.length, 0),
     };
   }
   function exportLearn(course, lessons) {
     const out = {
       format: 'pynest-learn-v1',
-      course: { title: course.title, description: course.description || '', sequential: course.sequential !== false },
-      lessons: lessons.map((l) => ({ title: l.title, minutes: l.minutes || undefined, summary: l.summary || '', steps: l.steps })),
+      course: { title: course.title, description: course.description || '', sequential: course.sequential !== false, rank_points: course.rank_points || 0 },
+      lessons: lessons.map((l) => ({ title: l.title, minutes: l.minutes || undefined, rank_points: l.rank_points == null ? undefined : l.rank_points, summary: l.summary || '', steps: l.steps })),
     };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
@@ -3381,6 +3391,16 @@ onmessage = (ev) => {
   }
 
   /* ----- 공통 조각 ----- */
+  const lrPts = (lesson, course) => (lesson && lesson.rank_points != null ? lesson.rank_points : (course && course.rank_points) || 0);
+  const lrPtsChip = (n) => (n > 0 ? `<span class="chip pts" title="이 레슨을 끝내면 랭킹·티어 점수가 올라요">🏆 +${n}점</span>` : '');
+  // rank_points 칸이 아직 없는 DB(v420 전)면 그 칸만 빼고 다시 시도해요
+  async function lrWrite(make) {
+    let r = await make(false);
+    let dropped = false;
+    if (r.error && /rank_points/.test(r.error.message || '')) { r = await make(true); dropped = !r.error; }
+    if (dropped && !lrWrite.warned) { lrWrite.warned = true; toast('랭킹 점수 칸은 v420_learn_points.sql 을 실행한 뒤에 저장돼요', true); }
+    return r;
+  }
   const learnMissing = () => [`<div class="card pad center"><h2>📚 학습</h2><p class="muted">${can('content') ? '먼저 <b>v410_learn.sql</b> 을 Supabase SQL Editor 에서 한 번 실행해 주세요.' : '학습 기능을 준비하고 있어요. 조금만 기다려 주세요!'}</p></div>`];
   const lrMd = (t) => renderContent(t, true);
   const learnAddXp = (n) => { if (n > 0) { try { Promise.resolve(sb.rpc('learn_add_xp', { p_xp: n })).catch(() => {}); } catch (e) { /* 무시 */ } } };
@@ -3532,7 +3552,7 @@ onmessage = (ev) => {
       const done = ls.filter((l) => (prog.get(l.id) || {}).completed).length;
       const pct = ls.length ? Math.round((done / ls.length) * 100) : 0;
       return `<a class="card lr-course" href="#/learn/c/${c.id}">
-        <div class="set-top"><h3>${esc(c.title)}</h3>${staff ? pubChip(c.is_public) : ''}${pct === 100 && ls.length ? '<span class="chip">🏅 완료</span>' : ''}</div>
+        <div class="set-top"><h3>${esc(c.title)}</h3>${staff ? pubChip(c.is_public) : ''}${pct === 100 && ls.length ? '<span class="chip">🏅 완료</span>' : ''}${lrPtsChip(c.rank_points || 0)}</div>
         ${c.description ? `<p class="muted small">${esc(c.description)}</p>` : ''}
         <div class="muted small">레슨 ${ls.length}개 · 완료 ${done}개</div>
         <div class="bar"><i style="width:${pct}%"></i></div></a>`;
@@ -3582,7 +3602,7 @@ onmessage = (ev) => {
         <div class="lr-circle">${p && p.completed ? '✓' : i + 1}</div>
         <div class="lr-node-main">
           ${locked ? `<b>${esc(l.title)}</b>` : `<a href="#/learn/l/${l.id}"><b>${esc(l.title)}</b></a>`}
-          <div class="muted small">${l.steps.length}단계${l.minutes ? ` · 약 ${l.minutes}분` : ''} ${staff ? pubChip(l.is_public) : ''}${staff && sx ? ` · 시작 ${sx.started}명 · 완료 ${sx.done}명` : ''}</div>
+          <div class="muted small">${l.steps.length}단계${l.minutes ? ` · 약 ${l.minutes}분` : ''} ${l.rank_points != null && l.rank_points !== course.rank_points ? lrPtsChip(l.rank_points) : ''} ${staff ? pubChip(l.is_public) : ''}${staff && sx ? ` · 시작 ${sx.started}명 · 완료 ${sx.done}명` : ''}</div>
           ${st}
         </div>
         ${staff ? `<span class="tools"><button class="icon" data-lup="${l.id}" title="위로">↑</button><button class="icon" data-ldown="${l.id}" title="아래로">↓</button><button class="icon" data-lpub="${l.id}" title="공개/비공개">${l.is_public ? '🌐' : '🔒'}</button><button class="icon" data-ledit="${l.id}" title="JSON 으로 수정">✏️</button><button class="icon" data-ldel="${l.id}" title="삭제">🗑</button></span>` : ''}
@@ -3593,7 +3613,7 @@ onmessage = (ev) => {
       <p><a href="#/learn">← 학습</a></p>
       <div class="page-head"><h2>${esc(course.title)} ${staff ? pubChip(course.is_public) : ''}</h2></div>
       ${course.description ? `<p class="muted">${esc(course.description)}</p>` : ''}
-      <div class="muted small" style="margin-bottom:6px">레슨 ${lessons.length}개 · 완료 ${doneN}개${course.sequential !== false ? ' · 순서대로 열려요' : ''}</div>
+      <div class="muted small" style="margin-bottom:6px">레슨 ${lessons.length}개 · 완료 ${doneN}개${course.sequential !== false ? ' · 순서대로 열려요' : ''} ${course.rank_points > 0 ? `· <span class="chip pts">🏆 레슨 1개 완료마다 랭킹 +${course.rank_points}점</span>` : ''}</div>
       <div class="bar" style="margin-bottom:14px"><i style="width:${lessons.length ? Math.round((doneN / lessons.length) * 100) : 0}%"></i></div>
       ${staff ? `<div class="form-actions" style="margin:0 0 12px"><button class="ghost" id="lcPub">${course.is_public ? '🔒 비공개로 바꾸기' : '🌐 공개하기'}</button><button class="ghost" id="lcEdit">✏️ 코스 정보</button><button class="ghost" id="lcAdd">＋ JSON으로 레슨 추가</button><button class="ghost" id="lcExp">⬇️ JSON 내보내기</button><button class="ghost" id="lcDel">🗑 코스 삭제</button></div>` : ''}
       <div class="card lr-road">${rows}</div>`,
@@ -3679,16 +3699,17 @@ onmessage = (ev) => {
       let cid = course ? course.id : null;
       if (!course) {
         const { data: mx } = await sb.from('learn_courses').select('position').order('position', { ascending: false }).limit(1);
-        const r = await sb.from('learn_courses').insert({
+        const r = await lrWrite((drop) => sb.from('learn_courses').insert({
           title: parsed.course.title, description: parsed.course.description, sequential: parsed.course.sequential,
           is_public: pub, position: ((mx && mx[0] && mx[0].position) || 0) + 1000,
-        }).select('id').single();
+          ...(drop ? {} : { rank_points: parsed.course.rank_points }),
+        }).select('id').single());
         if (r.error) { btn.disabled = false; return toast('코스를 만들지 못했어요: ' + r.error.message, true); }
         cid = r.data.id;
       }
       const base = (existing || []).reduce((mx, l) => Math.max(mx, l.position), 0);
       const rows = parsed.lessons.map((l, i) => ({ ...l, course_id: cid, position: base + (i + 1) * 1000, is_public: course ? pub : true }));
-      const { error } = await sb.from('learn_lessons').insert(rows);
+      const { error } = await lrWrite((drop) => sb.from('learn_lessons').insert(drop ? rows.map(({ rank_points, ...o }) => o) : rows));
       if (error) {
         if (!course) await sb.from('learn_courses').delete().eq('id', cid);
         btn.disabled = false;
@@ -3700,7 +3721,7 @@ onmessage = (ev) => {
     };
   }
   function openLessonEdit(lesson) {
-    const cur = { title: lesson.title, minutes: lesson.minutes || undefined, summary: lesson.summary || '', steps: lesson.steps };
+    const cur = { title: lesson.title, minutes: lesson.minutes || undefined, rank_points: lesson.rank_points == null ? undefined : lesson.rank_points, summary: lesson.summary || '', steps: lesson.steps };
     const m = modal(`<h3>✏️ 레슨 수정 (JSON)</h3>
       <p class="muted small">이 레슨 하나의 JSON 이에요. 고친 뒤 저장하면 바뀌어요. 이미 푼 학생의 진도는 단계 번호 기준으로 그대로 남아요 — 단계를 끼워 넣거나 빼면 어긋날 수 있어요.</p>
       <label>레슨 JSON<textarea id="leText" class="code" style="min-height:360px" spellcheck="false"></textarea></label>
@@ -3712,7 +3733,7 @@ onmessage = (ev) => {
     q('#leSave').onclick = async () => {
       let l;
       try { l = parseLearnJson(JSON.stringify({ lessons: [JSON.parse(q('#leText').value)] })).lessons[0]; } catch (e) { q('#leInfo').textContent = '⚠️ ' + (e.message.includes('JSON') || e instanceof SyntaxError ? 'JSON 형식 오류예요' : e.message); return; }
-      const { error } = await sb.from('learn_lessons').update({ title: l.title, summary: l.summary, minutes: l.minutes, steps: l.steps }).eq('id', lesson.id);
+      const { error } = await lrWrite((drop) => sb.from('learn_lessons').update({ title: l.title, summary: l.summary, minutes: l.minutes, steps: l.steps, ...(drop ? {} : { rank_points: l.rank_points }) }).eq('id', lesson.id));
       if (error) return toast('저장하지 못했어요: ' + error.message, true);
       m.close(); toast('저장했어요'); route(true);
     };
@@ -3722,13 +3743,17 @@ onmessage = (ev) => {
       <label>제목<input type="text" id="ceTitle" value="${esc(c.title)}"></label>
       <label>설명<textarea id="ceDesc" style="min-height:80px">${esc(c.description || '')}</textarea></label>
       <label class="inline"><input type="checkbox" id="ceSeq" ${c.sequential !== false ? 'checked' : ''}> 앞 레슨을 끝내야 다음 레슨이 열려요 <span class="muted small">(선생님은 항상 모두 열려요)</span></label>
+      <label>🏆 랭킹 점수 <span class="muted small">— 이 코스의 레슨을 <b>하나 끝낼 때마다</b> 받는 점수 (0 이면 랭킹·티어에 반영 안 해요). 레슨마다 따로 정하려면 레슨 JSON 의 <code class="ic">rank_points</code></span>
+        <input type="number" id="ceRank" min="0" max="100000" step="1" value="${Number(c.rank_points) || 0}" ${'rank_points' in c ? '' : 'disabled'}></label>
+      ${'rank_points' in c ? '' : '<p class="muted small">⚠️ 먼저 v420_learn_points.sql 을 Supabase 에서 한 번 실행해야 점수를 정할 수 있어요.</p>'}
       <div class="form-actions"><button class="primary" id="ceSave">저장</button><button type="button" class="ghost" id="ceCancel">취소</button></div>`);
     const q = (x) => $(x, m.el);
     q('#ceCancel').onclick = m.close;
     q('#ceSave').onclick = async () => {
       const title = q('#ceTitle').value.trim();
       if (!title) return toast('제목을 써 주세요', true);
-      const { error } = await sb.from('learn_courses').update({ title, description: q('#ceDesc').value.trim(), sequential: q('#ceSeq').checked }).eq('id', c.id);
+      const rk = Math.max(0, Math.min(100000, Math.round(Number(q('#ceRank').value) || 0)));
+      const { error } = await sb.from('learn_courses').update({ title, description: q('#ceDesc').value.trim(), sequential: q('#ceSeq').checked, ...('rank_points' in c ? { rank_points: rk } : {}) }).eq('id', c.id);
       if (error) return toast('저장하지 못했어요', true);
       m.close(); route(true);
     };
@@ -3760,11 +3785,12 @@ onmessage = (ev) => {
       ? { cur: pr.data.cur || 0, done: pr.data.done || {}, wrong: wrongList(pr.data).slice(), xp: pr.data.xp || 0, completed: !!pr.data.completed, completed_at: pr.data.completed_at }
       : { cur: 0, done: {}, wrong: [], xp: 0, completed: false, completed_at: null };
     const nextLesson = sibs.slice(at + 1).find((x) => staff || x.is_public);
+    const rankPts = lrPts(lesson, course);
 
     return [`
       <p><a href="#/learn/c/${course.id}">← ${esc(course.title)}</a></p>
       <div class="card lr-wrap" id="lrWrap">
-        <div class="lr-top"><b>${esc(lesson.title)}</b><span class="spacer"></span><span class="chip" id="lrXp">⭐ 0 XP</span></div>
+        <div class="lr-top"><b>${esc(lesson.title)}</b><span class="spacer"></span>${lrPtsChip(rankPts)}<span class="chip" id="lrXp">⭐ 0 XP</span></div>
         <div class="lr-bar"><i id="lrBar"></i></div>
         <div class="lr-dots" id="lrDots"></div>
         <div id="lrStep" class="lr-step"></div>
@@ -3813,7 +3839,7 @@ onmessage = (ev) => {
         const qn = steps.filter((s) => s.type === 'quiz').length;
         box.innerHTML = `<div class="lr-finish"><div class="lr-big">🎉</div><h2>레슨 완료!</h2>
           <p class="muted">${esc(lesson.title)}</p>
-          <div class="lr-stats"><div class="card lr-stat"><b>⭐ ${P.xp}</b><span class="muted small">이 레슨 XP</span></div>${qn ? `<div class="card lr-stat"><b>🎯 ${first} / ${qn}</b><span class="muted small">첫 시도 정답</span></div>` : ''}</div>
+          <div class="lr-stats"><div class="card lr-stat"><b>⭐ ${P.xp}</b><span class="muted small">이 레슨 XP</span></div>${rankPts > 0 ? `<div class="card lr-stat"><b>🏆 +${rankPts}</b><span class="muted small">랭킹 점수</span></div>` : ''}${qn ? `<div class="card lr-stat"><b>🎯 ${first} / ${qn}</b><span class="muted small">첫 시도 정답</span></div>` : ''}</div>
           ${lesson.summary ? `<div class="lr-sum"><h3>📌 핵심 정리</h3>${lrMd(lesson.summary)}</div>` : ''}
           <div class="form-actions" style="justify-content:center">${nextLesson ? `<a class="primary btnlike" href="#/learn/l/${nextLesson.id}">다음 레슨 ▶</a>` : ''}${P.wrong.length ? '<a class="ghost btnlike" href="#/learn/r">🔁 틀린 문제 복습</a>' : ''}<a class="ghost btnlike" href="#/learn/c/${course.id}">코스로 돌아가기</a><button class="ghost" id="lrAgain" type="button">↺ 처음부터 다시 보기</button></div></div>`;
         $('#lrAgain', v).onclick = () => { $('#lrNav', v).hidden = false; show(0); };
@@ -3968,6 +3994,121 @@ onmessage = (ev) => {
       }];
   }
 
+  /* ---------- ⚙️ 설정 › 내 기록 (푼 문제 · 제출 · 학습) — 누르면 그 문제/제출/레슨으로 이동 ---------- */
+  async function loadMyRecords() {
+    const subs = await fetchAll((a, b) => sb.from('submissions').select('id,exercise_id,set_id,version,judge,created_at').eq('user_id', me.id).order('id', { ascending: false }).range(a, b));
+    const inChunks = async (table, cols, ids) => {
+      const out = [];
+      for (let i = 0; i < ids.length; i += 150) {
+        const r = await sb.from(table).select(cols).in('id', ids.slice(i, i + 150));
+        if (r.error) return { error: r.error, data: out };
+        out.push(...(r.data || []));
+      }
+      return { data: out };
+    };
+    const exIds = [...new Set(subs.map((s) => s.exercise_id))];
+    const exs = (await inChunks('exercises', 'id,set_id,difficulty,body,label,rank_points', exIds)).data;
+    const exMap = new Map(exs.map((e) => [e.id, e]));
+    const setIds = [...new Set(exs.map((e) => e.set_id))];
+    const sets = (await inChunks('problem_sets', 'id,title,short_name', setIds)).data;
+    const setMap = new Map(sets.map((x) => [x.id, x]));
+    // 학습
+    let prog = [];
+    let lessons = [];
+    let courses = [];
+    const pr = await sb.from('learn_progress').select('lesson_id,xp,completed,completed_at,updated_at,done').eq('user_id', me.id);
+    if (!pr.error) {
+      prog = pr.data || [];
+      const lids = prog.map((p) => p.lesson_id);
+      if (lids.length) {
+        let lr = await inChunks('learn_lessons', 'id,title,course_id,rank_points', lids);
+        if (lr.error) lr = await inChunks('learn_lessons', 'id,title,course_id', lids);
+        lessons = lr.data;
+        let cr = await inChunks('learn_courses', 'id,title,rank_points', [...new Set(lessons.map((l) => l.course_id))]);
+        if (cr.error) cr = await inChunks('learn_courses', 'id,title', [...new Set(lessons.map((l) => l.course_id))]);
+        courses = cr.data;
+      }
+    }
+    return { subs, exMap, setMap, prog, lessons, courses, learnOk: !pr.error };
+  }
+
+  function bindMyRecords(root) {
+    const card = $('#recCard', root);
+    if (!card) return;
+    const body = $('#recBody', card);
+    let loaded = false;
+    const title = (e) => (e ? (firstLine(e.body).replace(/^\*+|\*+$/g, '').trim() || e.label || '(제목 없음)') : '(삭제된 문제)');
+    const AC = (s) => s.judge && s.judge.status === 'AC' && !s.judge.teacher_bad;
+    card.addEventListener('toggle', async () => {
+      if (!card.open || loaded) return;
+      loaded = true;
+      let d;
+      try { d = await loadMyRecords(); } catch (e) { body.innerHTML = '<span class="muted">기록을 불러오지 못했어요. 새로고침 해보세요.</span>'; loaded = false; return; }
+      const { subs, exMap, setMap } = d;
+      // 문제별 모음 (subs 는 최신순)
+      const by = new Map();
+      subs.forEach((s) => { if (!by.has(s.exercise_id)) by.set(s.exercise_id, []); by.get(s.exercise_id).push(s); });
+      const solved = [];
+      const trying = [];
+      by.forEach((list, eid) => {
+        const oldestAc = list.slice().reverse().find((s) => s.judge && (s.judge.teacher === 'ok' || (s.judge.status === 'AC' && s.judge.teacher !== 'bad')));
+        if (oldestAc) solved.push({ eid, sub: oldestAc, n: list.length });
+        else trying.push({ eid, sub: list[0], n: list.length });
+      });
+      solved.sort((a, b) => String(b.sub.created_at).localeCompare(String(a.sub.created_at)));
+      trying.sort((a, b) => String(b.sub.created_at).localeCompare(String(a.sub.created_at)));
+      const lmap = new Map(d.lessons.map((l) => [l.id, l]));
+      const cmap = new Map(d.courses.map((c) => [c.id, c]));
+      const learnRows = d.prog.map((p) => ({ p, l: lmap.get(p.lesson_id) })).filter((x) => x.l)
+        .sort((a, b) => String(b.p.completed_at || b.p.updated_at).localeCompare(String(a.p.completed_at || a.p.updated_at)));
+      const lDone = learnRows.filter((x) => x.p.completed);
+      const lPts = lDone.reduce((s, x) => s + lrPts(x.l, cmap.get(x.l.course_id)), 0);
+
+      const exRow = (eid, sub, extra) => {
+        const e = exMap.get(eid);
+        const st = e ? setMap.get(e.set_id) : null;
+        return `<a class="row rec-row" href="#/p/${eid}/s${sub.id}">
+          <div class="row-main">${e ? diffTag(e.difficulty) : ''} <b>#${eid}</b> <span class="numtitle">${esc(title(e))}</span></div>
+          <div class="muted small">${st ? esc(shortOf(st)) + ' · ' : ''}${extra} · ${fmt(sub.created_at)}</div></a>`;
+      };
+      const tabs = {
+        solved: () => solved.map((x) => exRow(x.eid, x.sub, `✅ 푼 문제 · 제출 ${x.n}번`)).join('') || '<p class="muted center pad">아직 푼 문제가 없어요.</p>',
+        trying: () => trying.map((x) => exRow(x.eid, x.sub, `${judgeBadge(x.sub.judge) || '제출함'} · 제출 ${x.n}번`)).join('') || '<p class="muted center pad">도전 중인 문제가 없어요. 👍</p>',
+        subs: () => subs.map((s) => exRow(s.exercise_id, s, `v${s.version} ${judgeBadge(s.judge) || ''}`)).join('') || '<p class="muted center pad">낸 제출이 없어요.</p>',
+        learn: () => (d.learnOk ? learnRows.map(({ p, l }) => {
+          const c = cmap.get(l.course_id);
+          const pts = lrPts(l, c);
+          const n = Object.keys(p.done || {}).length;
+          return `<a class="row rec-row" href="#/learn/l/${l.id}"><div class="row-main">📚 <b>${esc(l.title)}</b> <span class="muted small">${c ? esc(c.title) : ''}</span></div>
+            <div class="muted small">${p.completed ? `✅ 완료 · ${fmt(p.completed_at || p.updated_at)}` : `▶ 진행 중 (${n}단계 끝냄) · ${fmt(p.updated_at)}`} · ⭐ ${p.xp || 0} XP${p.completed && pts > 0 ? ` · 🏆 랭킹 +${pts}점` : ''}</div></a>`;
+        }).join('') || '<p class="muted center pad">아직 시작한 학습이 없어요. <a href="#/learn">📚 학습</a>에서 시작해 보세요!</p>' : '<p class="muted center pad">학습 기록을 아직 볼 수 없어요.</p>'),
+      };
+      const tabDef = [['solved', `✅ 푼 문제 ${solved.length}`], ['trying', `🛠 도전 중 ${trying.length}`], ['subs', `📤 제출 ${subs.length}`], ['learn', `📚 학습 ${lDone.length}`]];
+      let cur = 'solved';
+      let limit = 30;
+      const draw = () => {
+        const html = tabs[cur]();
+        body.innerHTML = `<div class="lr-stats rec-sum"><div class="card lr-stat"><b>${solved.length}</b><span class="muted small">푼 문제</span></div><div class="card lr-stat"><b>${subs.length}</b><span class="muted small">낸 제출</span></div><div class="card lr-stat"><b>${lDone.length}</b><span class="muted small">끝낸 레슨</span></div>${lPts ? `<div class="card lr-stat"><b>🏆 ${lPts}</b><span class="muted small">학습으로 얻은 점수</span></div>` : ''}</div>
+          <div class="tabs">${tabDef.map(([k, n]) => `<button type="button" data-rt="${k}" class="${cur === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+          <div class="rec-list"></div>`;
+        const list = $('.rec-list', body);
+        const nodes = document.createElement('div');
+        nodes.innerHTML = html;
+        const rows = [...nodes.children];
+        list.append(...rows.slice(0, limit));
+        if (rows.length > limit) {
+          const more = document.createElement('div');
+          more.className = 'center pad';
+          more.innerHTML = `<button class="ghost" type="button">더 보기 (${rows.length - limit}개 남음)</button>`;
+          more.firstChild.onclick = () => { limit += 30; draw(); };
+          list.append(more);
+        }
+        body.querySelectorAll('[data-rt]').forEach((b) => (b.onclick = () => { cur = b.dataset.rt; limit = 30; draw(); }));
+      };
+      draw();
+    });
+  }
+
   /* ---------- 설정 ---------- */
   async function pageSettings() {
     return [`
@@ -3986,6 +4127,8 @@ onmessage = (ev) => {
         <p class="muted small" id="nickNote">불러오는 중…</p>
       </div>
       <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>
+      <details class="card" id="recCard"><summary><h3 style="display:inline">📋 내 풀이·학습 기록</h3> <span class="muted small">— 누르면 그 문제·제출·레슨으로 이동해요</span></summary>
+        <div id="recBody" class="muted small" style="margin-top:10px">불러오는 중…</div></details>
       <div class="card" id="ideCard"><h3>⌨️ 코드 입력창 (IDE) 기능</h3>
         <p class="muted small">코드 쓰는 칸의 편의 기능을 골라서 켜고 꺼요. 이 기기(브라우저)에 저장되고, 문제집·라이브 모두 같이 적용돼요.</p>
         <div id="ideOpts"></div>
@@ -3995,6 +4138,7 @@ onmessage = (ev) => {
       <p class="muted small center">PyNest V${APP_VERSION}</p>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
+      bindMyRecords(v);
       if (window.PYIDE) {
         const IDE_OPTS = [
           ['close', '괄호·따옴표 자동 닫기', '( 를 치면 ) 가 같이 생기고, ) 를 치면 건너뛰어요. 지울 때는 한 쌍이 같이 지워져요'],
@@ -4128,7 +4272,7 @@ onmessage = (ev) => {
     return [`
       <div class="page-head"><h2>🏆 랭킹</h2><button class="info-btn" id="rkInfo" type="button" title="티어 기준 보기" aria-label="티어 기준 보기">i</button></div>
       <div class="tabs"><button data-rk="week" class="${rankTab === 'week' ? 'on' : ''}">주간</button><button data-rk="month" class="${rankTab === 'month' ? 'on' : ''}">월간</button></div>
-      <p class="muted small">${unit} · ${periodText(rankTab)} — 이 기간에 새로 맞춘 문제의 점수 합 순이에요 (같은 문제는 한 번만 세요).</p>
+      <p class="muted small">${unit} · ${periodText(rankTab)} — 이 기간에 새로 맞춘 문제의 점수 합 순이에요 (같은 문제는 한 번만 세요). 점수가 정해진 📚 학습 레슨을 끝내면 그 점수도 더해져요.</p>
       ${note}
       <div class="card list">${rows || '<p class="muted center pad">아직 아무도 문제를 풀지 않았어요.</p>'}</div>`,
     (v) => {

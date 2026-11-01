@@ -1,4 +1,4 @@
-# PyNest 학습 JSON 형식 `pynest-learn-v1` (V4.1.0)
+# PyNest 학습 JSON 형식 `pynest-learn-v1` (V4.2.0)
 
 📚 **학습** 메뉴(코스 → 레슨 → 단계)에 올리는 파일이에요. **문제집 JSON(`pynest-problemset-v1`)과는 별개**예요.
 올리는 곳: 📚 학습 → [＋ JSON으로 코스 추가] (새 코스) / 코스 화면 → [＋ JSON으로 레슨 추가] (레슨만 추가).
@@ -9,7 +9,7 @@
 ```json
 {
   "format": "pynest-learn-v1",
-  "course": { "title": "파이썬 첫걸음", "description": "한 줄 소개", "sequential": true },
+  "course": { "title": "파이썬 첫걸음", "description": "한 줄 소개", "sequential": true, "rank_points": 20 },
   "lessons": [
     {
       "title": "print 로 출력하기",
@@ -25,9 +25,11 @@
 |---|---|
 | `course.title` | 코스 이름 (새 코스를 만들 때 필수) |
 | `course.description` | 코스 소개 (선택) |
+| `course.rank_points` | **레슨 1개를 끝낼 때마다** 받는 랭킹·티어 점수 (기본 0 = 반영 안 함). 코스 화면의 ✏️ 코스 정보에서도 바꿔요 |
 | `course.sequential` | `true`(기본)면 앞 레슨을 끝내야 다음 레슨이 열려요. 선생님은 항상 전부 열려요 |
 | `lessons[].title` | 레슨 이름 (필수) |
 | `lessons[].minutes` | 걸리는 시간(분, 선택) |
+| `lessons[].rank_points` | 이 레슨만 따로 정하는 랭킹 점수 (선택, 없으면 코스 점수. `0` 이면 이 레슨만 점수 없음) |
 | `lessons[].summary` | 레슨 끝에 보여 줄 핵심 정리 (마크다운, 선택) |
 | `lessons[].steps` | 단계 목록 (필수, 1~80개). 위에서 아래 순서대로 한 단계씩 진행 |
 
@@ -104,7 +106,9 @@
 | `explanation` | 통과 후 해설 (선택) |
 | `stdin` | 실행해 볼 때 기본 입력값 (선택, 없으면 첫 공개 테스트의 입력) |
 
-## 3. 점수(XP)와 연속 학습일
+## 3. 점수(XP) · 랭킹 점수 · 연속 학습일
+- **랭킹 점수**: 코스(또는 레슨)에 `rank_points` 가 있으면, 학생이 그 레슨의 **모든 단계를 끝내는 순간** 랭킹·티어 점수가 더해져요 (레슨당 한 번). 푼 문제 수에는 안 세요. 먼저 `v420_learn_points.sql` 실행.
+- 예) 입문 코스 `20`점 → 레슨 5개 완료 = 100점. 어려운 레슨만 `rank_points: 50` 으로 올릴 수 있어요.
 - 개념 1 · 확인 문제 첫 시도 10 / 그 뒤 5 / 정답 보기 0 · 실습 30 (힌트 1개당 −5, 최소 10) · 레슨 완료 보너스 10.
 - 하루라도 학습하면 🔥 연속 학습일이 이어져요 (한국 시간 기준). XP 는 랭킹·티어와 **별개**예요.
 
