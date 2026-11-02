@@ -11,21 +11,28 @@ export interface Reply { text: string; quick?: string[] }
 
 export const DEFAULT_TIERS: Tier[] = [
   { n: 'Bronze', min: 0 }, { n: 'Silver', min: 2000 }, { n: 'Gold', min: 7000 }, { n: 'Platinum', min: 22000 },
-  { n: 'Diamond', min: 52000 }, { n: 'Master', min: 112000 }, { n: 'Grandmaster', min: 232000 },
+  { n: 'Diamond', min: 52000 }, { n: 'Master', min: 112000 }, { n: 'Grandmaster', min: 200000 },
 ];
-const ROMAN = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요 (앱과 같은 계산)
+const ROMAN5 = ['V', 'IV', 'III', 'II', 'I'];
+const ROMAN10 = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요 (앱과 같은 계산)
 
 export function tierOf(score: number, tiers: Tier[]) {
   const T = tiers.length ? [...tiers].sort((a, b) => a.min - b.min) : DEFAULT_TIERS;
   const sc = Math.max(0, Number(score) || 0);
   let i = T.length - 1;
   while (i > 0 && sc < T[i].min) i -= 1;
-  const nextMin = i < T.length - 1 ? T[i + 1].min : null;
-  const step = nextMin != null ? (nextMin - T[i].min) / 10 : 20000;
-  const lv = Math.min(9, Math.floor((sc - T[i].min) / step));
-  const hi = lv < 9 ? T[i].min + (lv + 1) * step : nextMin;
-  const nextName = hi == null ? null : tierOf(hi, T).name;
-  return { name: `${T[i].n} ${ROMAN[lv]}`, hi, nextName, left: hi == null ? null : Math.ceil(hi - sc) };
+  if (i === T.length - 1) { // 맨 위 티어: 단계 없이 10만 점마다 Grandmaster 200, 300 …
+    const n = Math.floor(sc / 100000);
+    const hi = (n + 1) * 100000;
+    return { name: `${T[i].n} ${n * 100}`, hi, nextName: `${T[i].n} ${(n + 1) * 100}`, left: Math.ceil(hi - sc) };
+  }
+  const L = /^(bronze|silver|gold)$/i.test(T[i].n) ? 5 : 10;
+  const R = L === 5 ? ROMAN5 : ROMAN10;
+  const step = (T[i + 1].min - T[i].min) / L;
+  const lv = Math.min(L - 1, Math.floor((sc - T[i].min) / step));
+  const hi = lv < L - 1 ? T[i].min + (lv + 1) * step : T[i + 1].min;
+  const nextName = tierOf(hi, T).name;
+  return { name: `${T[i].n} ${R[lv]}`, hi, nextName, left: Math.ceil(hi - sc) };
 }
 
 const QUICK = ['랭킹', '월간랭킹', '내 프로필', '티어'];

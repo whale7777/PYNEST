@@ -21,7 +21,8 @@ const DEFAULT_TIERS: Tier[] = [
   { n: 'Diamond', min: 3500 }, { n: 'Sapphire', min: 5000 }, { n: 'Emerald', min: 7000 }, { n: 'Amethyst', min: 9500 },
   { n: 'Master', min: 12000 }, { n: 'Grandmaster', min: 15000 }, { n: 'Obsidian', min: 17500 }, { n: 'The Programmer', min: 20000 },
 ];
-const ROMAN = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요 (앱과 같은 계산)
+const ROMAN5 = ['V', 'IV', 'III', 'II', 'I'];
+const ROMAN10 = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요 (앱과 같은 계산)
 
 function tierOf(score: number, tiers: Tier[]) {
   const T = tiers.length ? [...tiers].sort((a, b) => a.min - b.min) : DEFAULT_TIERS;

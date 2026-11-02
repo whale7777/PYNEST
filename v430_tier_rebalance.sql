@@ -4,8 +4,9 @@
 --  * 점수는 그때그때 계산되니 실행하는 순간 모두의 티어가 새 기준으로 다시 정해져요.
 --  * 여러 번 실행해도 같은 결과예요. (관리 › 🏅 티어 / 난이도 화면에서 나중에 숫자를 고칠 수도 있어요)
 --
---  티어: Bronze 0 · Silver 2,000 · Gold 7,000 · Platinum 22,000 · Diamond 52,000 · Master 112,000 · Grandmaster 232,000
---        (각 티어 안은 X → I 10단계, 맨 위 티어는 한 단계 20,000점 — 앱 코드가 계산해요)
+--  티어: Bronze 0 · Silver 2,000 · Gold 7,000 · Platinum 22,000 · Diamond 52,000 · Master 112,000 · Grandmaster 200,000
+--        (Bronze·Silver·Gold 는 V→I 5단계, Platinum·Diamond·Master 는 X→I 10단계,
+--         Grandmaster 는 단계 없이 10만 점마다 Grandmaster 200 · 300 · 400 … — 앱 코드가 계산해요)
 -- =====================================================================
 
 do $$
@@ -45,6 +46,6 @@ select v.n, 9500000 + v.o, v.c1, v.c2, v.g
 -- 시작 점수는 서로 겹치면 안 돼서, 임시값으로 옮긴 뒤 한 번에 정해요
 update public.tiers set min_score = 9000000 + id where name <> 'Bronze';
 update public.tiers t set min_score = v.m
-  from (values ('Silver',2000),('Gold',7000),('Platinum',22000),('Diamond',52000),('Master',112000),('Grandmaster',232000)) v(n,m)
+  from (values ('Silver',2000),('Gold',7000),('Platinum',22000),('Diamond',52000),('Master',112000),('Grandmaster',200000)) v(n,m)
  where t.name = v.n;
 update public.tiers set min_score = 0 where name = 'Bronze';

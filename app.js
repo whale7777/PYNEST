@@ -62,8 +62,8 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.3.0';
-  // 누적 점수 → 티어. 각 티어는 X(낮음) ~ I(높음) 10단계로 똑같이 나눠요.
+  const APP_VERSION = '4.4.0';
+  // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
     { n: 'Bronze', min: 0, c: ['#f0b27a', '#9c5a1e'], g: 'circle' },
@@ -72,24 +72,37 @@
     { n: 'Platinum', min: 22000, c: ['#8ff0e0', '#16a394'], g: 'dia' },
     { n: 'Diamond', min: 52000, c: ['#9fd4ff', '#2563eb'], g: 'hex' },
     { n: 'Master', min: 112000, c: ['#d9a8ff', '#7c2ae0'], g: 'star' },
-    { n: 'Grandmaster', min: 232000, c: ['#ffb36b', '#c2410c'], g: 'flame' },
+    { n: 'Grandmaster', min: 200000, c: ['#ffb36b', '#c2410c'], g: 'flame' },
   ];
   let TIERS = DEFAULT_TIERS.slice();
   let TIER_ROWS = []; // DB 에서 읽은 티어 (id 포함)
   let TIER_DB = false; // tiers 표가 있나?
-  const TIER_LV = 10; // 한 티어 안의 단계 수 (X 가 가장 낮고 I 이 가장 높아요)
-  const TOP_STEP = 20000; // 맨 위 티어의 한 단계 점수
-  const ROMAN = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I'];
+  // 단계: Bronze·Silver·Gold 는 5단계(V→I), 그 위 티어는 10단계(X→I), 맨 위 티어(Grandmaster)는 단계 없이 10만 점마다 이름 숫자가 올라가요 (200,000 = Grandmaster 200).
+  const ROMAN5 = ['V', 'IV', 'III', 'II', 'I'];
+  const ROMAN10 = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I'];
+  const GM_STEP = 100000;
+  const tierLevels = (i) => (i >= TIERS.length - 1 ? 0 : /^(bronze|silver|gold)$/i.test(TIERS[i].n) ? 5 : 10); // 0 = 단계 없음(맨 위 티어)
   function tierOf(score) {
     const sc = Math.max(0, Number(score) || 0);
     let i = TIERS.length - 1;
     while (i > 0 && sc < TIERS[i].min) i -= 1;
     const t = TIERS[i];
-    const nextMin = i < TIERS.length - 1 ? TIERS[i + 1].min : null;
-    const step = nextMin != null ? (nextMin - t.min) / TIER_LV : TOP_STEP;
-    const lv = Math.min(TIER_LV - 1, Math.floor((sc - t.min) / step));
-    return { i, lv, roman: ROMAN[lv], name: `${t.n} ${ROMAN[lv]}`, lo: t.min + lv * step, hi: lv < TIER_LV - 1 ? t.min + (lv + 1) * step : nextMin, score: sc };
+    const L = tierLevels(i);
+    if (!L) { // 맨 위 티어: Grandmaster 200, 300 …
+      const n = Math.floor(sc / GM_STEP);
+      const lo = Math.max(t.min, n * GM_STEP);
+      return { i, lv: 0, roman: String(n * 100), name: `${t.n} ${n * 100}`, lo, hi: (n + 1) * GM_STEP, score: sc };
+    }
+    const R = L === 5 ? ROMAN5 : ROMAN10;
+    const step = (TIERS[i + 1].min - t.min) / L;
+    const lv = Math.min(L - 1, Math.floor((sc - t.min) / step));
+    return { i, lv, roman: R[lv], name: `${t.n} ${R[lv]}`, lo: t.min + lv * step, hi: lv < L - 1 ? t.min + (lv + 1) * step : TIERS[i + 1].min, score: sc };
   }
+  const tierStepText = (i, nextMin, curMin) => { // 안내/관리 화면용
+    const L = tierLevels(i);
+    return L ? `${L}단계 · 한 단계 ${Math.round(((nextMin - curMin) / L) * 10) / 10}점` : '단계 없음 · 10만 점마다 숫자가 올라가요';
+  };
+
   // 뱃지 문양 (40×40 칸 안, 방패 가운데 위쪽). 이름은 티어 편집 화면의 선택 칸에 나와요.
   const GLYPH = {
     circle: ['동그라미', '<circle cx="20" cy="15" r="5.5"/>'],
@@ -410,6 +423,7 @@
         <span class="who">${whoHtml()}</span>
         ${CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
+        <a class="icon bellbtn" href="#/settings/notif" title="알림" aria-label="알림">🔔<span class="nbadge" data-bell hidden></span></a>
         <a class="icon" href="#/settings" title="설정">⚙️</a>
         <button class="ghost" id="logoutBtn">로그아웃</button>
       </header>
@@ -454,7 +468,7 @@
       write: () => (BOARDS[b] ? pageWrite(b) : notFound()),
       edit: () => pageEdit(b),
       admin: () => pageAdmin(),
-      settings: () => pageSettings(),
+      settings: () => pageSettings(b, c),
       judge: () => pageSoon('⚖️ 온라인 저지', '코드를 제출하면 자동으로 채점해주는 기능이에요. 수업 시간에 선생님 노트북에서 돌리는 방식으로 곧 붙일 예정이에요.'),
       live: () => pageSoon('📡 라이브', '수업 시간에 실시간으로 강의를 보는 기능이에요. 곧 붙일 예정이에요.'),
     };
@@ -4106,10 +4120,401 @@ onmessage = (ev) => {
     });
   }
 
+
+  /* ---------- V4.4.0 : 캐릭터 · 프로필 꾸미기 · DM · 알림 (v440_social.sql) ---------- */
+  const SOC_HINT = '아직 준비되지 않았어요. 선생님이 v440_social.sql 을 Supabase SQL Editor 에서 한 번 실행하면 쓸 수 있어요.';
+  const AV = {
+    skin: ['#ffe0c7', '#f7cba4', '#e8b48a', '#c98d62', '#a56a43', '#7a4a2c'],
+    hairColor: ['#2b2b2b', '#5b3a1e', '#9a6a2f', '#e0b04a', '#d6453d', '#3b6fd8', '#8a4fd8', '#f2f2f2'],
+    outfitColor: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#334155', '#f8fafc'],
+    bg: ['#dbeafe', '#fee2e2', '#d1fae5', '#fef3c7', '#ede9fe', '#fce7f3', '#e2e8f0', '#1e293b'],
+    hair: [['none', '없음'], ['short', '짧은 머리'], ['spiky', '뾰족 머리'], ['long', '긴 머리'], ['bun', '똥머리'], ['curly', '곱슬']],
+    eyes: [['dot', '동그란 눈'], ['happy', '웃는 눈'], ['sleepy', '졸린 눈'], ['wide', '큰 눈'], ['wink', '윙크']],
+    mouth: [['smile', '미소'], ['open', '활짝'], ['flat', '무표정'], ['tongue', '메롱'], ['o', '오']],
+    outfit: [['tee', '티셔츠'], ['hoodie', '후드'], ['suit', '정장'], ['stripe', '줄무늬']],
+    hat: [['none', '없음'], ['cap', '야구모자'], ['beanie', '비니'], ['headband', '헤어밴드'], ['crown', '왕관 (Gold~)', 2], ['wizard', '마법사 모자 (Platinum~)', 3]],
+    acc: [['none', '없음'], ['glasses', '안경'], ['bow', '리본'], ['shades', '선글라스 (Silver~)', 1], ['headphone', '헤드폰 (Silver~)', 1]],
+  };
+  const AV_KEYS = ['skin', 'hairColor', 'outfitColor', 'bg', 'hair', 'eyes', 'mouth', 'outfit', 'hat', 'acc', 'hatColor'];
+  const avHash = (s) => { let h = 2166136261; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const avPick = (arr, h, k) => arr[(h >>> k) % arr.length];
+  const avCode = (list) => list.map((x) => x[0]);
+  function defAvatar(seed) {
+    const h = avHash(seed || 'x');
+    return { skin: avPick(AV.skin, h, 1), hairColor: avPick(AV.hairColor.slice(0, 6), h, 3), outfitColor: avPick(AV.outfitColor, h, 5), bg: avPick(AV.bg.slice(0, 7), h, 7),
+      hair: avPick(['short', 'spiky', 'long', 'bun', 'curly'], h, 9), eyes: avPick(avCode(AV.eyes), h, 11), mouth: avPick(['smile', 'open', 'smile', 'tongue'], h, 13),
+      outfit: avPick(avCode(AV.outfit), h, 15), hat: 'none', acc: 'none', hatColor: avPick(AV.outfitColor, h, 17) };
+  }
+  function normAv(a, seed) {
+    const d = defAvatar(seed);
+    const o = a && typeof a === 'object' ? a : {};
+    const r = {};
+    AV_KEYS.forEach((k) => { r[k] = typeof o[k] === 'string' ? o[k] : d[k]; });
+    const hex = /^#[0-9a-f]{6}$/i;
+    ['skin', 'hairColor', 'outfitColor', 'bg', 'hatColor'].forEach((k) => { if (!hex.test(r[k])) r[k] = d[k]; });
+    [['hair', AV.hair], ['eyes', AV.eyes], ['mouth', AV.mouth], ['outfit', AV.outfit], ['hat', AV.hat], ['acc', AV.acc]].forEach(([k, l]) => { if (!avCode(l).includes(r[k])) r[k] = d[k]; });
+    return r;
+  }
+  function avatarSvg(av, size = 64) {
+    const a = av;
+    const sk = a.skin; const hc = a.hairColor; const oc = a.outfitColor; const dark = 'rgba(0,0,0,.22)';
+    let s = `<rect width="100" height="100" rx="22" fill="${a.bg}"/>`;
+    // 옷
+    s += `<path d="M10 100 C12 76 32 68 50 68 C68 68 88 76 90 100 Z" fill="${oc}"/>`;
+    if (a.outfit === 'hoodie') s += `<path d="M30 74 Q50 90 70 74 Q50 66 30 74Z" fill="${dark}"/><path d="M45 82 V94 M55 82 V94" stroke="#fff" stroke-opacity=".8" stroke-width="2" stroke-linecap="round"/>`;
+    else if (a.outfit === 'suit') s += `<path d="M38 68 L50 90 L62 68 Z" fill="#fff"/><path d="M47 72 L50 90 L53 72 Z" fill="#ef4444"/><path d="M10 100 C12 76 32 68 38 68 L50 92 L40 100Z M90 100 C88 76 68 68 62 68 L50 92 L60 100Z" fill="${dark}"/>`;
+    else if (a.outfit === 'stripe') s += `<g stroke="#fff" stroke-opacity=".55" stroke-width="3"><path d="M14 82 H86 M12 90 H88 M12 98 H88"/></g><path d="M40 68 Q50 78 60 68Z" fill="${dark}"/>`;
+    else s += `<path d="M40 68 Q50 78 60 68Z" fill="${dark}"/>`;
+    s += `<rect x="43" y="56" width="14" height="14" rx="5" fill="${sk}"/><path d="M43 64 Q50 70 57 64 V60 H43Z" fill="${dark}"/>`;
+    // 뒷머리
+    if (a.hair === 'long') s += `<path d="M23 50 C20 14 80 14 77 50 L80 80 Q50 88 20 80Z" fill="${hc}"/>`;
+    if (a.hair === 'bun') s += `<circle cx="50" cy="15" r="10" fill="${hc}"/>`;
+    // 얼굴
+    s += `<circle cx="26.5" cy="48" r="5" fill="${sk}"/><circle cx="73.5" cy="48" r="5" fill="${sk}"/><ellipse cx="50" cy="46" rx="24" ry="26" fill="${sk}"/>`;
+    s += `<ellipse cx="35" cy="55" rx="4.5" ry="3" fill="#ff7a8a" fill-opacity=".35"/><ellipse cx="65" cy="55" rx="4.5" ry="3" fill="#ff7a8a" fill-opacity=".35"/>`;
+    // 눈
+    const eyeC = '#27272a';
+    const E = {
+      dot: `<circle cx="40" cy="46" r="3.2" fill="${eyeC}"/><circle cx="60" cy="46" r="3.2" fill="${eyeC}"/>`,
+      happy: `<path d="M35.5 47.5 Q40 41.5 44.5 47.5 M55.5 47.5 Q60 41.5 64.5 47.5" fill="none" stroke="${eyeC}" stroke-width="2.6" stroke-linecap="round"/>`,
+      sleepy: `<path d="M35.5 46 H44.5 M55.5 46 H64.5" stroke="${eyeC}" stroke-width="2.8" stroke-linecap="round"/><path d="M36 49 Q40 51 44 49 M56 49 Q60 51 64 49" fill="none" stroke="${dark}" stroke-width="1.2"/>`,
+      wide: `<circle cx="40" cy="46" r="5.4" fill="#fff"/><circle cx="60" cy="46" r="5.4" fill="#fff"/><circle cx="40.8" cy="46.4" r="3" fill="${eyeC}"/><circle cx="60.8" cy="46.4" r="3" fill="${eyeC}"/><circle cx="42" cy="45" r="1" fill="#fff"/><circle cx="62" cy="45" r="1" fill="#fff"/>`,
+      wink: `<circle cx="40" cy="46" r="3.2" fill="${eyeC}"/><path d="M55.5 47.5 Q60 41.5 64.5 47.5" fill="none" stroke="${eyeC}" stroke-width="2.6" stroke-linecap="round"/>`,
+    };
+    s += E[a.eyes] || E.dot;
+    const M = {
+      smile: `<path d="M42 58 Q50 66 58 58" fill="none" stroke="#7a2e2e" stroke-width="2.6" stroke-linecap="round"/>`,
+      open: `<path d="M41 57 Q50 71 59 57Z" fill="#7a1f2b"/><path d="M44 62 Q50 66 56 62" fill="#ff8da1"/>`,
+      flat: `<path d="M43 61 H57" stroke="#7a2e2e" stroke-width="2.6" stroke-linecap="round"/>`,
+      tongue: `<path d="M42 58 Q50 66 58 58" fill="none" stroke="#7a2e2e" stroke-width="2.6" stroke-linecap="round"/><path d="M50 62.5 Q50 70 55 68.5 Q57 64 55 61Z" fill="#ff6b81"/>`,
+      o: `<ellipse cx="50" cy="61" rx="3.2" ry="4" fill="#7a1f2b"/>`,
+    };
+    s += M[a.mouth] || M.smile;
+    // 앞머리
+    const H = {
+      short: `<path d="M26 46 C22 18 78 18 74 46 C68 36 58 31 50 31 C42 31 32 36 26 46Z" fill="${hc}"/>`,
+      spiky: `<path d="M26 46 L24 28 L34 34 L38 18 L46 30 L52 14 L58 30 L66 18 L68 34 L76 28 L74 46 C68 38 58 33 50 33 C42 33 32 38 26 46Z" fill="${hc}"/>`,
+      long: `<path d="M26 50 C22 18 78 18 74 50 C70 38 62 31 50 31 C38 31 30 38 26 50Z" fill="${hc}"/>`,
+      bun: `<path d="M26 46 C22 18 78 18 74 46 C68 36 58 31 50 31 C42 31 32 36 26 46Z" fill="${hc}"/>`,
+      curly: `<g fill="${hc}"><circle cx="30" cy="34" r="9"/><circle cx="42" cy="26" r="9"/><circle cx="55" cy="25" r="9"/><circle cx="68" cy="33" r="9"/><circle cx="24" cy="44" r="6"/><circle cx="76" cy="44" r="6"/></g>`,
+    };
+    if (a.hair !== 'none') s += H[a.hair] || '';
+    // 모자
+    const hcol = a.hatColor;
+    const T = {
+      cap: `<path d="M24 38 C26 10 74 10 76 38 Z" fill="${hcol}"/><path d="M66 34 H93 Q93 42 66 41Z" fill="${hcol}"/><path d="M66 34 H93 Q93 42 66 41Z" fill="${dark}"/>`,
+      beanie: `<path d="M24 38 C24 10 76 10 76 38 Z" fill="${hcol}"/><rect x="22" y="33" width="56" height="8" rx="4" fill="${dark}"/><circle cx="50" cy="11" r="5" fill="${hcol}"/>`,
+      headband: `<path d="M24 36 Q50 24 76 36 L76 42 Q50 30 24 42Z" fill="${hcol}"/>`,
+      crown: `<path d="M28 30 L30 10 L40 20 L50 6 L60 20 L70 10 L72 30 Z" fill="#fbbf24" stroke="#d97706" stroke-width="1.5" stroke-linejoin="round"/><circle cx="50" cy="22" r="2.4" fill="#ef4444"/>`,
+      wizard: `<path d="M26 34 L50 -4 L74 34 Z" fill="#6d28d9"/><rect x="22" y="31" width="56" height="7" rx="3.5" fill="#4c1d95"/><path d="M48 14 l2 4 4 .5 -3 3 .8 4 -3.8 -2 -3.8 2 .8 -4 -3 -3 4 -.5Z" fill="#fde047"/>`,
+    };
+    if (a.hat !== 'none') s += T[a.hat] || '';
+    // 액세서리
+    const C = {
+      glasses: `<g fill="#bfdbfe" fill-opacity=".35" stroke="#334155" stroke-width="2"><circle cx="40" cy="46" r="7.5"/><circle cx="60" cy="46" r="7.5"/></g><path d="M47.5 46 H52.5" stroke="#334155" stroke-width="2"/>`,
+      shades: `<g fill="#111827"><rect x="31" y="40" width="18" height="11" rx="4"/><rect x="51" y="40" width="18" height="11" rx="4"/></g><path d="M49 44 H51" stroke="#111827" stroke-width="2"/>`,
+      headphone: `<path d="M24 50 C22 14 78 14 76 50" fill="none" stroke="#475569" stroke-width="4" stroke-linecap="round"/><rect x="19" y="42" width="9" height="16" rx="4" fill="#ef4444"/><rect x="72" y="42" width="9" height="16" rx="4" fill="#ef4444"/>`,
+      bow: `<path d="M50 70 L38 63 V77 Z M50 70 L62 63 V77 Z" fill="#ec4899"/><circle cx="50" cy="70" r="3.4" fill="#be185d"/>`,
+    };
+    if (a.acc !== 'none') s += C[a.acc] || '';
+    return `<svg class="avsvg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="캐릭터">${s}</svg>`;
+  }
+  // 프로필 꾸미기 · 캐릭터 정보 (profile_ext) 캐시
+  const EXT = new Map();
+  let EXT_OK = true;
+  async function loadExt(ids) {
+    const need = [...new Set((ids || []).filter((x) => x && !EXT.has(x)))];
+    for (let i = 0; i < need.length && EXT_OK; i += 150) {
+      const part = need.slice(i, i + 150);
+      const { data, error } = await sb.from('profile_ext').select('user_id,bio,title,accent,avatar').in('user_id', part);
+      if (error) { EXT_OK = false; return; }
+      part.forEach((id) => EXT.set(id, null));
+      (data || []).forEach((r) => EXT.set(r.user_id, r));
+    }
+  }
+  const avatarOf = (uid) => normAv((EXT.get(uid) || {}).avatar, uid);
+  const avatarHtml = (uid, size = 32) => (EXT_OK ? `<span class="av" style="width:${size}px;height:${size}px">${avatarSvg(avatarOf(uid), size)}</span>` : '');
+  const myTierIdx = () => (staffRole() ? 99 : tierOf((DIR.get(me.id) || {}).score || 0).i);
+
+  // 알림 (🔔) · DM 안 읽은 수
+  let NOTIF_OK = true;
+  let notifSeen = null;
+  let notifTimer = 0;
+  const NOTE_ICON = { dm: '💬', tier: '🎉', notice: '📣' };
+  const bnOn = () => { try { return localStorage.getItem('pn_bn') === '1' && 'Notification' in window && Notification.permission === 'granted'; } catch (e) { return false; } };
+  function setBadge(sel, n) {
+    document.querySelectorAll(sel).forEach((el) => { el.textContent = n > 99 ? '99+' : String(n); el.hidden = !(n > 0); });
+  }
+  async function pollNotif(first = false) {
+    if (!NOTIF_OK || !me || me.status !== 'approved') return;
+    const { data, error } = await sb.from('notifications').select('id,kind,title,body,link,cnt,created_at').is('read_at', null).order('id', { ascending: false }).limit(50);
+    if (error) { NOTIF_OK = false; return; }
+    const list = data || [];
+    setBadge('[data-bell]', list.length);
+    setBadge('[data-nb="notif"]', list.length);
+    const dmN = list.filter((x) => x.kind === 'dm').reduce((s, x) => s + (x.cnt || 1), 0);
+    setBadge('[data-nb="dm"]', dmN);
+    const top = list.reduce((m, x) => Math.max(m, Number(x.id)), 0);
+    if (notifSeen == null || first) { notifSeen = top; return; }
+    const fresh = list.filter((x) => Number(x.id) > notifSeen).reverse();
+    notifSeen = Math.max(notifSeen, top);
+    fresh.forEach((x) => {
+      toast(`${NOTE_ICON[x.kind] || '🔔'} ${x.title}`);
+      if (bnOn() && document.hidden) { try { new Notification(x.title, { body: x.body || '', tag: 'pn' + x.id }); } catch (e) { /* 일부 브라우저는 지원 안 함 */ } }
+    });
+    const cur = $('#view');
+    if (fresh.length && cur && cur.querySelector('[data-sp="dm"]:not([hidden])')) cur.dispatchEvent(new CustomEvent('pn-dm-refresh'));
+  }
+  function startNotif() {
+    clearInterval(notifTimer);
+    NOTIF_OK = true;
+    notifSeen = null;
+    sb.rpc('tier_check_self').then(() => pollNotif(true), () => pollNotif(true));
+    notifTimer = setInterval(() => { if (!document.hidden) pollNotif(); }, 25000);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNotif(); });
+  const nlBr = (t) => esc(t).replace(/\n/g, '<br>');
+  const timeAgo = (d) => {
+    const s = Math.max(0, (Date.now() - new Date(d).getTime()) / 1000);
+    return s < 60 ? '방금' : s < 3600 ? `${Math.floor(s / 60)}분 전` : s < 86400 ? `${Math.floor(s / 3600)}시간 전` : s < 86400 * 7 ? `${Math.floor(s / 86400)}일 전` : fmt(d);
+  };
+  const DM_ERR = { invalid: '1~1000자로 써주세요', self: '나에게는 보낼 수 없어요', nouser: '받는 사람을 찾을 수 없어요', blocked: '상대가 메시지를 받지 않아요', rate: '너무 빨리 보내고 있어요. 잠시 뒤에 다시 보내주세요' };
+
+  // ---- 설정 탭: 프로필 꾸미기
+  async function initProfTab(el) {
+    await loadExt([me.id]);
+    if (!EXT_OK) { el.innerHTML = `<div class="card pad muted">${SOC_HINT}</div>`; return; }
+    const e0 = EXT.get(me.id) || {};
+    el.innerHTML = `<div class="card"><h3>✨ 프로필 꾸미기</h3>
+      <p class="muted small">내 프로필 화면에 보여요. 다른 학생도 볼 수 있으니 개인정보(전화번호, 학교 등)는 쓰지 마세요.</p>
+      <form id="pfForm">
+        <label>칭호 <span class="muted small">(최대 16자)</span><input type="text" id="pfTitle" maxlength="16" value="${esc(e0.title || '')}" placeholder="예) 파이썬 입문 중"></label>
+        <label>소개 <span class="muted small">(최대 200자)</span><textarea id="pfBio" rows="3" maxlength="200" placeholder="한 줄 소개나 목표를 써보세요">${esc(e0.bio || '')}</textarea></label>
+        <label class="inline"><input type="checkbox" id="pfAccOn" ${e0.accent ? 'checked' : ''}> 프로필 포인트 색 <input type="color" id="pfAcc" value="${esc(e0.accent || '#3b82f6')}"></label>
+        <div class="form-actions"><button class="primary">저장</button></div>
+      </form>
+      <h4>미리보기</h4><div id="pfPrev"></div></div>`;
+    const prev = () => {
+      const acc = $('#pfAccOn', el).checked ? $('#pfAcc', el).value : '';
+      $('#pfPrev', el).innerHTML = `<div class="card prof" ${acc ? `style="border-top:5px solid ${esc(acc)}"` : ''}><div class="prof-top">${avatarHtml(me.id, 64)}<div><h3 style="margin:0">${esc(selfName())}</h3>${$('#pfTitle', el).value.trim() ? `<span class="chip" ${acc ? `style="background:${esc(acc)}22;color:${esc(acc)}"` : ''}>${esc($('#pfTitle', el).value.trim())}</span>` : ''}</div></div>${$('#pfBio', el).value.trim() ? `<p class="prof-bio">${nlBr($('#pfBio', el).value.trim())}</p>` : ''}</div>`;
+    };
+    ['#pfTitle', '#pfBio', '#pfAcc', '#pfAccOn'].forEach((s) => { $(s, el).oninput = prev; $(s, el).onchange = prev; });
+    prev();
+    $('#pfForm', el).onsubmit = async (ev) => {
+      ev.preventDefault();
+      const row = { user_id: me.id, title: $('#pfTitle', el).value.trim().slice(0, 16), bio: $('#pfBio', el).value.trim().slice(0, 200), accent: $('#pfAccOn', el).checked ? $('#pfAcc', el).value : null, updated_at: new Date().toISOString() };
+      const { error } = await sb.from('profile_ext').upsert(row, { onConflict: 'user_id' });
+      if (error) return toast('저장하지 못했어요: ' + error.message, true);
+      EXT.set(me.id, { ...(EXT.get(me.id) || {}), ...row });
+      toast('프로필을 저장했어요');
+    };
+  }
+
+  // ---- 설정 탭: 캐릭터 꾸미기
+  async function initAvatarTab(el) {
+    await loadExt([me.id]);
+    if (!EXT_OK) { el.innerHTML = `<div class="card pad muted">${SOC_HINT}</div>`; return; }
+    const saved = (EXT.get(me.id) || {}).avatar;
+    let av = normAv(saved, me.id);
+    const tIdx = myTierIdx();
+    const SW = [['skin', '피부', AV.skin], ['hairColor', '머리 색', AV.hairColor], ['bg', '배경', AV.bg], ['outfitColor', '옷 색', AV.outfitColor], ['hatColor', '모자 색', AV.outfitColor]];
+    const OP = [['hair', '머리 모양', AV.hair], ['eyes', '눈', AV.eyes], ['mouth', '입', AV.mouth], ['outfit', '옷', AV.outfit], ['hat', '모자', AV.hat], ['acc', '소품', AV.acc]];
+    el.innerHTML = `<div class="card"><h3>🧑‍🎤 캐릭터 꾸미기</h3>
+      <p class="muted small">랭킹·프로필·메시지에 내 캐릭터가 보여요. 티어가 오르면 새 모자와 소품이 열려요!</p>
+      <div class="av-ed"><div class="av-prev" id="avPrev"></div><div class="av-ctl" id="avCtl"></div></div>
+      <div class="form-actions"><button class="ghost" id="avRand" type="button">🎲 랜덤</button><button class="ghost" id="avUndo" type="button">되돌리기</button><button class="primary" id="avSave" type="button">저장</button></div></div>`;
+    const draw = () => {
+      $('#avPrev', el).innerHTML = avatarSvg(av, 150);
+      $('#avCtl', el).innerHTML = SW.map(([k, t, list]) => `<div class="av-row"><b>${t}</b><div class="av-sw">${list.map((c) => `<button type="button" class="swatch ${av[k] === c ? 'on' : ''}" data-sw="${k}" data-v="${c}" style="background:${c}" aria-label="${t} ${c}"></button>`).join('')}</div></div>`).join('')
+        + OP.map(([k, t, list]) => `<div class="av-row"><b>${t}</b><div class="av-op">${list.map(([v, nm, need]) => { const lock = need != null && tIdx < need; return `<button type="button" class="chipbtn ${av[k] === v ? 'on' : ''}" data-op="${k}" data-v="${v}" ${lock ? 'disabled title="티어가 올라가면 열려요"' : ''}>${lock ? '🔒 ' : ''}${esc(nm)}</button>`; }).join('')}</div></div>`).join('');
+      el.querySelectorAll('[data-sw]').forEach((b) => (b.onclick = () => { av[b.dataset.sw] = b.dataset.v; draw(); }));
+      el.querySelectorAll('[data-op]').forEach((b) => (b.onclick = () => { av[b.dataset.op] = b.dataset.v; draw(); }));
+    };
+    draw();
+    $('#avRand', el).onclick = () => {
+      const r = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      const ok = (list) => list.filter(([, , need]) => need == null || tIdx >= need).map((x) => x[0]);
+      av = { skin: r(AV.skin), hairColor: r(AV.hairColor), outfitColor: r(AV.outfitColor), bg: r(AV.bg), hatColor: r(AV.outfitColor), hair: r(ok(AV.hair)), eyes: r(ok(AV.eyes)), mouth: r(ok(AV.mouth)), outfit: r(ok(AV.outfit)), hat: r(['none', ...ok(AV.hat)]), acc: r(['none', ...ok(AV.acc)]) };
+      draw();
+    };
+    $('#avUndo', el).onclick = () => { av = normAv(saved, me.id); draw(); };
+    $('#avSave', el).onclick = async () => {
+      const row = { user_id: me.id, avatar: av, updated_at: new Date().toISOString() };
+      const { error } = await sb.from('profile_ext').upsert(row, { onConflict: 'user_id' });
+      if (error) return toast('저장하지 못했어요: ' + error.message, true);
+      EXT.set(me.id, { ...(EXT.get(me.id) || {}), avatar: { ...av } });
+      toast('캐릭터를 저장했어요');
+    };
+  }
+
+  // ---- 설정 탭: 메시지(DM)
+  async function initDmTab(el, openUid) {
+    let contacts = [];
+    let cur = null; // { uid, name, staff, blocked }
+    el.innerHTML = '<div class="card"><p class="muted small">불러오는 중…</p></div>';
+    const { data: cs, error: ce } = await sb.rpc('dm_contacts');
+    if (ce) { el.innerHTML = `<div class="card pad muted">${SOC_HINT}</div>`; return; }
+    contacts = cs || [];
+    await loadExt(contacts.map((c) => c.user_id));
+    const byId = (id) => contacts.find((c) => c.user_id === id);
+    const sTag = (s) => (s ? `<span class="badge">${s === 'owner' ? '선생님' : esc(ROLE_NAME[s] || s)}</span>` : '');
+    el.innerHTML = `<div class="card dm-card">
+      <div class="dm-note">🔒 <b>선생님이 대화 내용을 볼 수 있어요.</b> 비밀번호·전화번호 같은 개인정보는 보내지 마세요. 보낸 메시지는 지울 수 없어요.</div>
+      <div class="dm-wrap"><div class="dm-side" id="dmSide"></div><div class="dm-main" id="dmMain"><p class="muted center pad">왼쪽에서 대화를 고르거나 새 대화를 시작해요.</p></div></div></div>`;
+    const side = $('#dmSide', el); const main = $('#dmMain', el);
+    const wrap = $('.dm-wrap', el);
+    async function drawSide() {
+      const { data, error } = await sb.rpc('dm_inbox');
+      const items = error ? [] : data || [];
+      side.innerHTML = `<button class="primary dm-new" id="dmNew" type="button">✏️ 새 대화</button>
+        <div id="dmPick" hidden><input type="search" id="dmQ" placeholder="이름 검색" autocomplete="off"><div class="dm-pick" id="dmPickList"></div></div>
+        <div class="dm-list">${items.map((x) => `<button type="button" class="dm-item ${cur && cur.uid === x.other ? 'on' : ''}" data-u="${x.other}">${avatarHtml(x.other, 34)}<span class="dm-it"><b>${esc(x.name || '?')}</b> ${sTag(x.staff)}<br><span class="muted small">${x.last_mine ? '나: ' : ''}${esc(x.last_body)}</span></span>${x.unread > 0 ? `<span class="nbadge">${x.unread}</span>` : ''}</button>`).join('') || '<p class="muted small pad">아직 대화가 없어요.</p>'}</div>`;
+      side.querySelectorAll('[data-u]').forEach((b) => (b.onclick = () => openThread(b.dataset.u)));
+      $('#dmNew', side).onclick = () => {
+        const p = $('#dmPick', side); p.hidden = !p.hidden;
+        if (!p.hidden) { $('#dmQ', side).focus(); fillPick(''); }
+      };
+      $('#dmQ', side).oninput = (ev) => fillPick(ev.target.value);
+    }
+    function fillPick(q) {
+      const k = q.trim().toLowerCase();
+      const list = contacts.filter((c) => !k || String(c.name).toLowerCase().includes(k)).slice(0, 40);
+      const box = $('#dmPickList', side);
+      box.innerHTML = list.map((c) => `<button type="button" class="dm-item" data-pu="${c.user_id}">${avatarHtml(c.user_id, 28)}<span class="dm-it"><b>${esc(c.name)}</b> ${sTag(c.staff)}</span></button>`).join('') || '<p class="muted small pad">없어요</p>';
+      box.querySelectorAll('[data-pu]').forEach((b) => (b.onclick = () => { $('#dmPick', side).hidden = true; openThread(b.dataset.pu); }));
+    }
+    async function loadThread(scroll) {
+      if (!cur) return;
+      const { data, error } = await sb.rpc('dm_thread', { p_other: cur.uid });
+      const box = $('#dmMsgs', main);
+      if (!box) return;
+      if (error) { box.innerHTML = '<p class="muted center pad">불러오지 못했어요</p>'; return; }
+      const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+      box.innerHTML = (data || []).map((m) => `<div class="dm-msg ${m.mine ? 'mine' : ''}"><div class="dm-bub">${nlBr(m.body)}</div><div class="muted small">${timeAgo(m.created_at)}${m.mine && m.read_at ? ' · 읽음' : ''}</div></div>`).join('') || '<p class="muted center pad">첫 메시지를 보내봐요 👋</p>';
+      if (scroll || atEnd) box.scrollTop = box.scrollHeight;
+      pollNotif();
+    }
+    async function openThread(uid) {
+      const c = byId(uid) || { user_id: uid, name: '?', staff: null, blocked: false };
+      cur = { uid, name: c.name, staff: c.staff, blocked: !!c.blocked };
+      wrap.classList.add('open');
+      main.innerHTML = `<div class="dm-head"><button class="ghost dm-back" id="dmBack" type="button">←</button>${avatarHtml(uid, 34)}<b>${esc(cur.name)}</b> ${sTag(cur.staff)}<span class="spacer"></span>${cur.staff ? '' : `<button class="ghost small" id="dmBlock" type="button">${cur.blocked ? '차단 해제' : '차단'}</button>`}</div>
+        <div class="dm-msgs" id="dmMsgs"><p class="muted center pad">불러오는 중…</p></div>
+        <form class="dm-form" id="dmForm"><textarea id="dmText" rows="2" maxlength="1000" placeholder="메시지 (Enter 전송, Shift+Enter 줄바꿈)"></textarea><button class="primary">보내기</button></form>`;
+      $('#dmBack', main).onclick = () => { wrap.classList.remove('open'); cur = null; drawSide(); };
+      const bl = $('#dmBlock', main);
+      if (bl) bl.onclick = async () => {
+        const on = !cur.blocked;
+        if (on && !confirm(`${cur.name} 님을 차단할까요? 이 사람이 보내는 메시지를 받지 않아요.`)) return;
+        const r = await sb.rpc('dm_block', { p_uid: cur.uid, p_on: on });
+        if (r.error) return toast('바꾸지 못했어요', true);
+        cur.blocked = on; const cc = byId(cur.uid); if (cc) cc.blocked = on;
+        bl.textContent = on ? '차단 해제' : '차단';
+        toast(on ? '차단했어요' : '차단을 풀었어요');
+      };
+      const ta = $('#dmText', main);
+      ta.onkeydown = (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $('#dmForm', main).requestSubmit(); } };
+      $('#dmForm', main).onsubmit = async (ev) => {
+        ev.preventDefault();
+        const body = ta.value.trim();
+        if (!body) return;
+        const btn = $('#dmForm button', main); btn.disabled = true;
+        const { data: r, error } = await sb.rpc('dm_send', { p_to: cur.uid, p_body: body });
+        btn.disabled = false;
+        if (error) return toast('보내지 못했어요: ' + error.message, true);
+        if (r !== 'ok') return toast(DM_ERR[r] || '보내지 못했어요', true);
+        ta.value = '';
+        await loadThread(true); drawSide(); ta.focus();
+      };
+      await loadThread(true);
+      drawSide();
+    }
+    el.__dmOpen = openThread;
+    await drawSide();
+    if (openUid) await openThread(openUid);
+    const tick = setInterval(() => {
+      if (!document.body.contains(el)) return clearInterval(tick);
+      if (el.hidden || document.hidden) return;
+      if (cur) loadThread(false);
+      drawSide();
+    }, 8000);
+    $('#view').addEventListener('pn-dm-refresh', () => { if (cur) loadThread(false); drawSide(); });
+  }
+
+  // ---- 설정 탭: 알림
+  async function initNotifTab(el) {
+    el.innerHTML = '<div class="card"><p class="muted small">불러오는 중…</p></div>';
+    const draw = async () => {
+      const { data, error } = await sb.from('notifications').select('id,kind,title,body,link,cnt,created_at,read_at').order('id', { ascending: false }).limit(60);
+      if (error) { el.innerHTML = `<div class="card pad muted">${SOC_HINT}</div>`; return; }
+      const list = data || [];
+      const canBn = 'Notification' in window;
+      el.innerHTML = `<div class="card"><div class="page-head"><h3>🔔 알림</h3><span class="spacer"></span>
+        <button class="ghost small" id="ntAll" type="button">모두 읽음</button> <button class="ghost small" id="ntClr" type="button">읽은 알림 지우기</button></div>
+        ${canBn ? `<label class="inline"><input type="checkbox" id="ntBn" ${bnOn() ? 'checked' : ''}> 다른 탭을 보고 있을 때 브라우저 알림도 받기 <span class="muted small">(이 사이트가 열려 있을 때만 와요)</span></label>` : ''}
+        <div class="list nt-list">${list.map((n) => `<button type="button" class="row nt ${n.read_at ? '' : 'unread'}" data-n="${n.id}" data-l="${esc(n.link)}"><span class="nt-ic">${NOTE_ICON[n.kind] || '🔔'}</span><span class="row-main"><b>${esc(n.title)}</b>${n.cnt > 1 ? ` <span class="nbadge">${n.cnt}</span>` : ''}<br><span class="muted small">${esc(n.body)}</span></span><span class="muted small">${timeAgo(n.created_at)}</span></button>`).join('') || '<p class="muted center pad">알림이 없어요.</p>'}</div></div>`;
+      el.querySelectorAll('[data-n]').forEach((b) => (b.onclick = async () => {
+        await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', b.dataset.n).is('read_at', null);
+        pollNotif(true);
+        if (b.dataset.l) { if (location.hash === b.dataset.l) route(); else location.hash = b.dataset.l; } else draw();
+      }));
+      $('#ntAll', el).onclick = async () => { await sb.from('notifications').update({ read_at: new Date().toISOString() }).is('read_at', null); pollNotif(true); draw(); };
+      $('#ntClr', el).onclick = async () => { await sb.from('notifications').delete().not('read_at', 'is', null); draw(); };
+      const bn = $('#ntBn', el);
+      if (bn) bn.onchange = async () => {
+        if (bn.checked) {
+          const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+          if (p !== 'granted') { bn.checked = false; toast('브라우저에서 알림을 허용해야 해요', true); return; }
+          try { localStorage.setItem('pn_bn', '1'); } catch (e) { /* 저장 안 돼도 이번 방문엔 동작 */ }
+          toast('브라우저 알림을 켰어요');
+        } else { try { localStorage.setItem('pn_bn', '0'); } catch (e) { /* 무시 */ } }
+      };
+    };
+    await draw();
+  }
+
+  // ---- 관리자: DM 열람 + 공지 알림
+  async function adminSocial() {
+    const { data: pairs, error } = await sb.rpc('dm_admin_pairs');
+    if (error) return [`<div class="card pad center">${SOC_HINT}</div>`];
+    const rows = (pairs || []).map((p) => `<button type="button" class="row dmp" data-a="${p.a}" data-b="${p.b}"><span class="row-main"><b>${esc(p.a_name)}</b> ↔ <b>${esc(p.b_name)}</b></span><span class="muted small">${p.n}개 · ${timeAgo(p.last_at)}</span></button>`).join('');
+    return [`
+      <div class="card"><h3>📣 공지 알림 보내기</h3><p class="muted small">승인된 모든 사용자에게 🔔 알림이 가요.</p>
+        <form id="ntForm"><label>제목<input type="text" id="ntT" maxlength="80" required></label>
+          <label>내용 <span class="muted small">(선택)</span><input type="text" id="ntB" maxlength="300"></label>
+          <label>눌렀을 때 이동할 곳 <span class="muted small">(선택, 예: #/board/notice)</span><input type="text" id="ntL" maxlength="120" placeholder="#/board/notice"></label>
+          <div class="form-actions"><button class="primary">보내기</button></div></form></div>
+      <div class="card"><h3>💬 DM 열람</h3><p class="muted small">학생들의 대화를 읽을 수 있어요. 대화는 지워지지 않아요. 선생님(OWNER)만 볼 수 있고, 학생에게는 열람 가능하다고 안내돼 있어요.</p>
+        <div class="list">${rows || '<p class="muted center pad">아직 오간 메시지가 없어요.</p>'}</div><div id="dmView"></div></div>`,
+    (v) => {
+      $('#ntForm', v).onsubmit = async (e) => {
+        e.preventDefault();
+        const link = $('#ntL', v).value.trim();
+        if (link && !/^#\//.test(link)) return toast('이동할 곳은 #/ 로 시작해야 해요 (예: #/board/notice)', true);
+        if (!confirm('모든 사용자에게 알림을 보낼까요?')) return;
+        const { data, error: er } = await sb.rpc('notify_all', { p_title: $('#ntT', v).value.trim(), p_body: $('#ntB', v).value.trim(), p_link: link });
+        if (er) return toast('보내지 못했어요: ' + er.message, true);
+        e.target.reset(); toast(`${data}명에게 보냈어요`);
+      };
+      v.querySelectorAll('.dmp').forEach((b) => (b.onclick = async () => {
+        const { data, error: er } = await sb.rpc('dm_admin_thread', { p_a: b.dataset.a, p_b: b.dataset.b });
+        if (er) return toast('불러오지 못했어요', true);
+        $('#dmView', v).innerHTML = `<h4>${esc(b.querySelector('.row-main').textContent)}</h4><div class="dm-msgs adm">${(data || []).slice().reverse().map((m) => `<div class="dm-msg ${m.sender === b.dataset.a ? '' : 'mine'}"><div class="muted small">${esc(m.sender_name)} · ${fmt(m.created_at)}</div><div class="dm-bub">${nlBr(m.body)}</div></div>`).join('')}</div>`;
+      }));
+    }];
+  }
+
   /* ---------- 설정 ---------- */
-  async function pageSettings() {
+  let setTab = 'acct';
+  async function pageSettings(tab, extra) {
+    const STABS = [['acct', '👤 계정'], ['prof', '✨ 프로필'], ['avatar', '🧑‍🎤 캐릭터'], ['dm', '💬 메시지'], ['notif', '🔔 알림'], ['rec', '📋 내 기록'], ['ide', '⌨️ 편집기']];
+    if (STABS.some(([k]) => k === tab)) setTab = tab;
+    else if (!STABS.some(([k]) => k === setTab)) setTab = 'acct';
+    const dmUid = tab === 'dm' && /^[0-9a-f-]{36}$/i.test(extra || '') ? extra : '';
     return [`
       <h2>⚙️ 설정</h2>
+      <div class="tabs" id="stabs">${STABS.map(([k, n]) => `<button data-st="${k}" class="${setTab === k ? 'on' : ''}">${n}${k === 'dm' || k === 'notif' ? `<span class="nbadge" data-nb="${k}" hidden></span>` : ''}</button>`).join('')}</div>
+      <section data-sp="acct" ${setTab === 'acct' ? '' : 'hidden'}>
       <div class="card">
         <h3>비밀번호 바꾸기</h3>
         <form id="pwForm">
@@ -4124,18 +4529,39 @@ onmessage = (ev) => {
         <p class="muted small" id="nickNote">불러오는 중…</p>
       </div>
       <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>
+      <div class="card" id="kkCard"><h3>💬 카카오톡 연동</h3><p class="muted small">PyNest 카카오톡 채널 챗봇에서 랭킹·내 프로필·티어를 볼 수 있어요.</p><div id="kkBody" class="muted small">불러오는 중…</div></div>
+      </section>
+      <section data-sp="prof" ${setTab === 'prof' ? '' : 'hidden'} id="spProf"></section>
+      <section data-sp="avatar" ${setTab === 'avatar' ? '' : 'hidden'} id="spAvatar"></section>
+      <section data-sp="dm" ${setTab === 'dm' ? '' : 'hidden'} id="spDm"></section>
+      <section data-sp="notif" ${setTab === 'notif' ? '' : 'hidden'} id="spNotif"></section>
+      <section data-sp="rec" ${setTab === 'rec' ? '' : 'hidden'}>
       <details class="card" id="recCard"><summary><h3 style="display:inline">📋 내 풀이·학습 기록</h3> <span class="muted small">— 누르면 그 문제·제출·레슨으로 이동해요</span></summary>
         <div id="recBody" class="muted small" style="margin-top:10px">불러오는 중…</div></details>
+      </section>
+      <section data-sp="ide" ${setTab === 'ide' ? '' : 'hidden'}>
       <div class="card" id="ideCard"><h3>⌨️ 코드 입력창 (IDE) 기능</h3>
         <p class="muted small">코드 쓰는 칸의 편의 기능을 골라서 켜고 꺼요. 이 기기(브라우저)에 저장되고, 문제집·라이브 모두 같이 적용돼요.</p>
         <div id="ideOpts"></div>
         <label>써보기<textarea id="ideTry" class="code" rows="6" placeholder="여기서 바로 시험해 보세요. 예) print( 를 치고 Enter, if x: 를 치고 Enter"></textarea></label>
       </div>
-      <div class="card" id="kkCard"><h3>💬 카카오톡 연동</h3><p class="muted small">PyNest 카카오톡 채널 챗봇에서 랭킹·내 프로필·티어를 볼 수 있어요.</p><div id="kkBody" class="muted small">불러오는 중…</div></div>
+      </section>
       <p class="muted small center">PyNest V${APP_VERSION}</p>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
       bindMyRecords(v);
+      const inited = {};
+      const INIT = { prof: () => initProfTab($('#spProf', v)), avatar: () => initAvatarTab($('#spAvatar', v)), dm: () => initDmTab($('#spDm', v), dmUid), notif: () => initNotifTab($('#spNotif', v)), rec: () => { const rc = $('#recCard', v); if (rc && !rc.open) rc.open = true; } };
+      const showTab = (k, push) => {
+        setTab = k;
+        v.querySelectorAll('[data-st]').forEach((b) => b.classList.toggle('on', b.dataset.st === k));
+        v.querySelectorAll('[data-sp]').forEach((sec) => { sec.hidden = sec.dataset.sp !== k; });
+        if (push) { try { history.replaceState(null, '', `#/settings/${k}`); } catch (e) { /* 주소 표시는 없어도 돼요 */ } }
+        if (INIT[k] && !inited[k]) { inited[k] = true; INIT[k](); }
+      };
+      v.querySelectorAll('[data-st]').forEach((b) => (b.onclick = () => showTab(b.dataset.st, true)));
+      showTab(setTab, false);
+      pollNotif(true);
       if (window.PYIDE) {
         const IDE_OPTS = [
           ['close', '괄호·따옴표 자동 닫기', '( 를 치면 ) 가 같이 생기고, ) 를 치면 건너뛰어요. 지울 때는 한 쌍이 같이 지워져요'],
@@ -4227,8 +4653,7 @@ onmessage = (ev) => {
     if (old) { old.remove(); return; }
     const rows = TIERS.map((t, i) => {
       const nx = TIERS[i + 1];
-      const step = nx ? Math.round(((nx.min - t.min) / TIER_LV) * 10) / 10 : TOP_STEP;
-      return `<tr><td>${tierBadge(t.min, 24)}</td><td><b>${esc(t.n)}</b></td><td>${t.min.toLocaleString()}점~</td><td class="muted">${step}점씩</td></tr>`;
+            return `<tr><td>${tierBadge(t.min, 24)}</td><td><b>${esc(t.n)}</b></td><td>${t.min.toLocaleString()}점~</td><td class="muted">${tierStepText(i, nx ? nx.min : 0, t.min)}</td></tr>`;
     }).join('');
     const dif = DIFF_LIST.map((d) => `${diffTag(d.name)} <b>${d.points}</b>`).join(' &nbsp; ');
     const el = document.createElement('div');
@@ -4256,22 +4681,23 @@ onmessage = (ev) => {
     if (error) return sqlHint('랭킹을 불러올 수 없어요.');
     const unit = rankTab === 'week' ? '이번 주' : '이번 달';
     const medal = ['🥇', '🥈', '🥉'];
+    await loadExt(data.map((r) => r.user_id));
     const rows = data.map((r) => `
       <a class="row rk ${r.user_id === me.id ? 'me' : ''}" href="#/u/${r.user_id}">
         <div class="rk-no top${r.rnk <= 3 ? r.rnk : 0}">${r.rnk <= 3 ? medal[r.rnk - 1] : r.rnk}</div>
-        <div class="row-main rk-who">${tierBadge(r.score, 28)}<b>${esc(r.name)}</b></div>
+        <div class="row-main rk-who">${avatarHtml(r.user_id, 30)}${tierBadge(r.score, 28)}<b>${esc(r.name)}</b></div>
         <div class="rk-val"><b>${r.pts}</b><span class="muted small"> 점</span><div class="muted small">${r.solved}문제</div></div>
       </a>`).join('');
     const mine = data.find((r) => r.user_id === me.id);
     const note = staffRole() ? '' : mine
-      ? `<p class="muted small">내 순위: <b>${mine.rnk}등</b> · ${unit} ${mine.pts}점 (${mine.solved}문제)</p>`
+      ? `<p class="muted small">내 순위: <b>${mine.rnk}등</b> · ${unit} ${mine.pts}점 (${mine.solved}문제)${mine.pts === 0 ? ' — 문제를 풀면 점수가 올라요! 💪' : ''}</p>`
       : `<p class="muted small">${unit}에는 아직 푼 문제가 없어요. 지금 도전해봐요! 💪</p>`;
     return [`
       <div class="page-head"><h2>🏆 랭킹</h2><button class="info-btn" id="rkInfo" type="button" title="티어 기준 보기" aria-label="티어 기준 보기">i</button></div>
       <div class="tabs"><button data-rk="week" class="${rankTab === 'week' ? 'on' : ''}">주간</button><button data-rk="month" class="${rankTab === 'month' ? 'on' : ''}">월간</button></div>
       <p class="muted small">${unit} · ${periodText(rankTab)} — 이 기간에 새로 맞춘 문제의 점수 합 순이에요 (같은 문제는 한 번만 세요). 점수가 정해진 📚 학습 레슨을 끝내면 그 점수도 더해져요.</p>
       ${note}
-      <div class="card list">${rows || '<p class="muted center pad">아직 아무도 문제를 풀지 않았어요.</p>'}</div>`,
+      <div class="card list">${rows || '<p class="muted center pad">아직 랭킹에 오른 사람이 없어요.</p>'}</div>`,
     (v) => {
       v.querySelectorAll('[data-rk]').forEach((b) => (b.onclick = () => { rankTab = b.dataset.rk; route(); }));
       $('#rkInfo', v).onclick = showTierInfo;
@@ -4296,12 +4722,15 @@ onmessage = (ev) => {
         : `${diffTag(r.difficulty, `${r.difficulty} ${r.no}`)} <span class="muted small">(#${r.id})</span>
         ${tierCan('problem') ? `<a href="#/set/${r.set_id}">${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</a>` : `<span>${esc(shortOf({ short_name: r.set_short, title: r.set_title || '' }))}</span>`}`}</div>
         <div class="muted small">+${r.pts}점 · ${fmt(r.at)}</div></div>`).join('') || '<p class="muted center pad">아직 푼 문제가 없어요.</p>';
+    await loadExt([uid]);
+    const ex = EXT.get(uid) || {};
+    const acc = /^#[0-9a-f]{6}$/i.test(ex.accent || '') ? ex.accent : '';
     const byd = (p.by_diff || []).map((d) => `${diffTag(d.difficulty)} <b>${d.n}</b>`).join(' &nbsp; ') || '<span class="muted small">-</span>';
     return [`
       <p><a href="#/ranking">← 랭킹</a></p>
-      <div class="card prof">
-        <div class="prof-top">${tierBadge(p.score, 84)}
-          <div><h2 style="margin:0">${esc(p.name)}</h2>
+      <div class="card prof" ${acc ? `style="border-top:5px solid ${acc}"` : ''}>
+        <div class="prof-top">${tierBadge(p.score, 84)}${EXT_OK ? avatarHtml(uid, 84) : ''}
+          <div><h2 style="margin:0">${esc(p.name)}</h2>${ex.title ? `<span class="chip" ${acc ? `style="background:${acc}22;color:${acc}"` : ''}>${esc(ex.title)}</span>` : ''}
             <div class="prof-tier">${esc(k.name)} <span class="muted small">· ${p.score}점</span></div>
             <div class="pbar" title="${p.score} / ${k.hi == null ? '∞' : k.hi}"><i style="width:${pct}%"></i></div>
             <div class="muted small">${next}</div></div></div>
@@ -4311,6 +4740,8 @@ onmessage = (ev) => {
           <div><div class="muted small">이번 달</div><b>${p.month.pts}</b><span class="muted small">점 · ${p.month.solved}문제 · ${rk(p.month)}</span></div>
         </div>
         <div class="prof-diff">${byd}</div>
+        ${ex.bio ? `<p class="prof-bio">${nlBr(ex.bio)}</p>` : ''}
+        <div class="form-actions">${uid === me.id ? '<a class="ghost btnlike" href="#/settings/prof">✨ 프로필·캐릭터 꾸미기</a>' : '<a class="primary btnlike" href="#/settings/dm/' + uid + '">💬 메시지 보내기</a>'}</div>
       </div>
       <h3>최근 푼 문제</h3><div class="card list">${recent}</div>`];
   }
@@ -4325,10 +4756,11 @@ onmessage = (ev) => {
     if (can('content')) tabs.push(['edit', '✏️ 편집']);
     if (isAdmin()) tabs.push(['tier', '🏅 티어']);
     if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
+    if (staffRole() === 'owner') tabs.push(['social', '💬 DM·알림']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, nick: adminNick, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, nick: adminNick, social: adminSocial, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -4547,9 +4979,8 @@ onmessage = (ev) => {
     const glyphOpts = (sel) => Object.entries(GLYPH).map(([k, [nm]]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${nm}</option>`).join('');
     const rows = TIER_ROWS.map((t, i) => {
       const next = TIER_ROWS[i + 1];
-      const step = next ? Math.round(((next.min_score - t.min_score) / TIER_LV) * 10) / 10 : null;
-      return `<div class="card tierrow" data-tid="${t.id}">
-        <div class="tr-prev">${tierPreview(t.c1, t.c2, t.glyph, 'I', 44)}</div>
+            return `<div class="card tierrow" data-tid="${t.id}">
+        <div class="tr-prev">${tierPreview(t.c1, t.c2, t.glyph, tierLevels(i) ? 'I' : '200', 44)}</div>
         <div class="tr-form">
           <div class="grid2">
             <label>이름<input type="text" maxlength="24" data-f="name" value="${esc(t.name)}"></label>
@@ -4558,7 +4989,7 @@ onmessage = (ev) => {
           <div class="tr-line">
             <label>색 <input type="color" data-f="c1" value="${esc(t.c1)}"> <input type="color" data-f="c2" value="${esc(t.c2)}"></label>
             <label>문양 <select data-f="glyph">${glyphOpts(t.glyph)}</select></label>
-            <span class="muted small">${step == null ? `가장 높은 티어 · 한 단계 ${TOP_STEP}점` : `다음 티어(${esc(next.name)})까지 · 한 단계 ${step}점`}</span>
+            <span class="muted small">${next ? `다음 티어(${esc(next.name)})까지 · ${tierStepText(i, next.min_score, t.min_score)}` : `가장 높은 티어 · ${tierStepText(i, 0, 0)}`}</span>
             <span class="spacer"></span>
             <button class="ghost" data-tsave="${t.id}">저장</button>
             ${t.min_score === 0 ? '' : `<button class="ghost" data-tdel="${t.id}">삭제</button>`}
@@ -4782,6 +5213,7 @@ onmessage = (ev) => {
     ensureDefs();
     renderShell();
     route();
+    startNotif();
   }
 
   /* 하단 버전 표시 — 누르면 업데이트 시각, 5번 연속 누르면 패치 노트 (이스터에그) */
@@ -4814,7 +5246,7 @@ onmessage = (ev) => {
   })();
 
   sb.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT' && !signingUp) { me = null; renderAuth(); }
+    if (event === 'SIGNED_OUT' && !signingUp) { me = null; clearInterval(notifTimer); EXT.clear(); renderAuth(); }
   });
   window.addEventListener('hashchange', () => route());
   boot();

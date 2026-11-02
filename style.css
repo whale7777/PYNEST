@@ -621,3 +621,70 @@ a.primary.btnlike { background: var(--primary); color: var(--primary-text); bord
 .rec-sum { margin-top: 10px; }
 details.ver.flash { animation: vflash 1.6s ease-out 1; }
 @keyframes vflash { from { background: rgba(250, 204, 21, .35); } to { background: transparent; } }
+
+/* ===== V4.4.0 : 설정 탭 · 캐릭터 · 프로필 꾸미기 · DM · 알림 ===== */
+[hidden] { display: none !important; }
+.av { display: inline-flex; flex: none; border-radius: 22%; overflow: hidden; vertical-align: middle; }
+.av .avsvg { width: 100%; height: 100%; display: block; }
+.nbadge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 5px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+a.bellbtn { position: relative; }
+a.bellbtn .nbadge { position: absolute; top: -6px; right: -6px; margin: 0; }
+.prof-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.prof-bio { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--code); }
+.av-ed { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: start; }
+.av-prev { display: flex; justify-content: center; }
+.av-row { margin-bottom: 10px; }
+.av-row > b { display: block; font-size: 13px; margin-bottom: 4px; }
+.av-sw, .av-op { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); padding: 0; }
+.swatch.on { outline: 2px solid var(--primary); outline-offset: 2px; }
+.chipbtn { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+.chipbtn.on { background: var(--primary); color: var(--primary-text); border-color: var(--primary); font-weight: 600; }
+.chipbtn:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 560px) { .av-ed { grid-template-columns: 1fr; } }
+.dm-note { background: var(--hover); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+.dm-wrap { display: grid; grid-template-columns: 260px 1fr; gap: 12px; min-height: 420px; }
+.dm-side { border-right: 1px solid var(--border); padding-right: 10px; overflow-y: auto; max-height: 560px; }
+.dm-new { width: 100%; margin-bottom: 8px; }
+.dm-pick { max-height: 200px; overflow-y: auto; margin-bottom: 8px; }
+#dmQ { width: 100%; margin-bottom: 6px; }
+.dm-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--text); border: 0; border-radius: 10px; padding: 7px 8px; }
+.dm-item:hover, .dm-item.on { background: var(--hover); }
+.dm-it { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.dm-main { display: flex; flex-direction: column; min-width: 0; }
+.dm-head { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.dm-back { display: none; }
+.dm-msgs { flex: 1; overflow-y: auto; max-height: 420px; min-height: 260px; padding: 10px 2px; display: flex; flex-direction: column; gap: 8px; }
+.dm-msgs.adm { max-height: 520px; }
+.dm-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 85%; }
+.dm-msg.mine { align-self: flex-end; align-items: flex-end; }
+.dm-bub { background: var(--code); border-radius: 14px 14px 14px 4px; padding: 8px 12px; word-break: break-word; }
+.dm-msg.mine .dm-bub { background: var(--primary); color: var(--primary-text); border-radius: 14px 14px 4px 14px; }
+.dm-form { display: flex; gap: 8px; align-items: flex-end; }
+.dm-form textarea { flex: 1; resize: none; }
+@media (max-width: 640px) {
+  .dm-wrap { grid-template-columns: 1fr; }
+  .dm-side { border-right: 0; padding-right: 0; }
+  .dm-wrap .dm-main { display: none; }
+  .dm-wrap.open .dm-main { display: flex; }
+  .dm-wrap.open .dm-side { display: none; }
+  .dm-back { display: inline-block; }
+}
+.nt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--border); padding: 10px 6px; }
+.nt:hover { background: var(--hover); }
+.nt.unread { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.nt.unread b::before { content: "● "; color: var(--primary); font-size: 10px; }
+.nt-ic { font-size: 20px; }
+.dmp { display: flex; width: 100%; text-align: left; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--border); padding: 9px 6px; }
+.dmp:hover { background: var(--hover); }
+.rk-who .av { margin-right: 6px; }
+.dm-form textarea { min-height: 0; height: 58px; }
+.dm-form textarea { min-width: 0; width: 100%; }
+.dm-card { overflow: hidden; }
+.dm-msgs { min-height: 200px; }
+@media (max-width: 560px) {
+  header.top { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  header.top #themeBtn { display: none; } /* 다크모드는 ⚙️ 설정 › 계정 에도 있어요 */
+  header.top #logoutBtn { padding: 7px 10px; font-size: 13px; }
+  header.top .brand { font-size: 17px; }
+}
