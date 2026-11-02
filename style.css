@@ -688,3 +688,11 @@ a.bellbtn .nbadge { position: absolute; top: -6px; right: -6px; margin: 0; }
   header.top #logoutBtn { padding: 7px 10px; font-size: 13px; }
   header.top .brand { font-size: 17px; }
 }
+
+/* ===== V4.4.1 : 임시 저장 · 이어서 풀기 ===== */
+.draft-bar { background: #fff7d6; color: #6b5300; border: 1px solid #f1dd8a; border-radius: 10px; padding: 6px 10px; margin-bottom: 8px; font-size: 13px; }
+[data-theme="dark"] .draft-bar { background: #3a3210; color: #f3df8a; border-color: #5e5120; }
+.resume-bar { position: sticky; top: 64px; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--card); border: 1px solid var(--primary); border-radius: 12px; padding: 8px 12px; margin: 0 0 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); font-size: 14px; }
+article.ex.flash { animation: exflash 2.2s ease-out; }
+@keyframes exflash { 0% { box-shadow: 0 0 0 3px var(--primary); } 100% { box-shadow: 0 0 0 3px transparent; } }
+.dr-snip { font-family: ui-monospace, Menlo, Consolas, monospace; }

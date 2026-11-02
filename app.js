@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.4.0';
+  const APP_VERSION = '4.4.1';
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -446,6 +446,7 @@
   async function route(keepScroll = false) {
     if (!me || me.status !== 'approved' || !$('#view')) return;
     const y = window.scrollY;
+    flushDrafts();
     const [a, b, c] = (location.hash.replace(/^#\//, '') || 'home').split('/');
     const key = a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' || a === 'p' ? 'sets' : a;
     document.body.classList.remove('menu-open');
@@ -1107,12 +1108,17 @@
   let numDiff = '';
   let numLimit = 100;
 
+  const resumeChips = (sid) => {
+    const nDr = [...DR.map.values()].filter((d) => d.s === sid).length;
+    return `${LP.map.has(sid) ? ' · <span class="chip">📍 이어서 풀기</span>' : ''}${nDr ? ` · <span class="chip">💾 임시 저장 ${nDr}</span>` : ''}`;
+  };
   async function pageSets() {
     const num = setsView === 'num';
     const [sr, ex, mine] = await Promise.all([
       sb.from('problem_sets').select('*').order('week', { ascending: true, nullsFirst: false }).order('id'),
       fetchAll((a, b) => sb.from('exercises').select(num ? 'id,set_id,difficulty,body' : 'id,set_id').order('id').range(a, b)),
       can('content') ? Promise.resolve([]) : fetchAll((a, b) => sb.from('submissions').select('id,exercise_id,set_id').eq('user_id', me.id).order('id').range(a, b)),
+      can('content') ? Promise.resolve() : Promise.all([loadDrafts(), loadLast()]).catch(() => {}),
     ]);
     if (sr.error) throw sr.error;
     const total = {};
@@ -1127,7 +1133,7 @@
       return `<a class="card set-card" href="#/set/${s.id}">
         <div class="set-top">${s.week ? `<span class="week">${s.week}주차</span>` : ''}<h3>${esc(s.title)}</h3>${can('content') ? pubChip(s.is_public) : ''}</div>
         ${s.description ? `<p class="muted small">${esc(s.description)}</p>` : ''}
-        <div class="muted small">문제 ${t}개${can('content') ? '' : ` · 내가 푼 문제 ${d}개`}</div>
+        <div class="muted small">문제 ${t}개${can('content') ? '' : ` · 내가 푼 문제 ${d}개`}${can('content') ? '' : resumeChips(s.id)}</div>
         ${can('content') ? '' : `<div class="bar"><i style="width:${t ? Math.round((d / t) * 100) : 0}%"></i></div>`}
       </a>`;
     }).join('') : '<div class="card pad center muted">아직 올라온 문제집이 없어요.</div>';
@@ -1295,6 +1301,7 @@
     ]);
     const set = sr.data;
     if (!set) return notFound();
+    if (!admin) { await loadDrafts(e.set_id).catch(() => {}); setLast(e.set_id, eid); } // V4.4.1 임시 저장 · 마지막 위치
     const L = layoutEx(all.map((x) => ({ ...x })));
     const order = L.normal.concat(L.elite);
     const idx = order.findIndex((x) => x.id === eid);
@@ -1534,6 +1541,7 @@
         .eq('set_id', id).eq('user_id', me.id).order('id').range(a, b)),
       sb.from('homeworks').select('*,homework_items(exercise_id)').eq('set_id', id).order('id'),
       sb.from('set_notes').select('*').eq('set_id', id).order('position').order('id'),
+      admin ? Promise.resolve() : Promise.all([loadDrafts(id), loadLast()]).catch(() => {}), // 임시 저장 · 마지막 위치 (V4.4.1)
     ]);
     if (sr.error) throw sr.error;
     const set = sr.data;
@@ -1664,6 +1672,7 @@
         const f = set[b.dataset.dl];
         if (f) download(f.bucket || 'sets', f.path, f.name || 'file.pdf');
       }));
+      const hadTarget = !!scrollToEx;
       if (scrollToEx) { const t = scrollToEx; scrollToEx = null; setTimeout(() => go(t), 50); }
 
       /* 숙제만 보기 */
@@ -1687,6 +1696,35 @@
 
       if (admin) return bindSetAdmin(v, set, exs, hws, L);
 
+      /* 마지막으로 풀거나 본 문제로 이동 + 위치 기록 (V4.4.1) */
+      const lastRec = LP.map.get(id);
+      const lastEx = lastRec ? L.normal.concat(L.elite).find((x) => x.id === lastRec.e) : null;
+      if (lastEx && !hadTarget && hwFilter == null && document.getElementById('ex-' + lastEx.id)) {
+        const bar = document.createElement('div');
+        bar.className = 'resume-bar';
+        bar.innerHTML = `📍 마지막으로 보던 <b>${esc(String(dispNo(lastEx)))}번</b> 문제로 이동했어요 <button type="button" class="link" data-rs-top>처음부터 보기</button> <button type="button" class="link" data-rs-x aria-label="닫기">✕</button>`;
+        $('#exlist', v).before(bar);
+        const closeBar = () => bar.remove();
+        $('[data-rs-x]', bar).onclick = closeBar;
+        $('[data-rs-top]', bar).onclick = () => { closeBar(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+        setTimeout(() => { const el = document.getElementById('ex-' + lastEx.id); if (el) { el.scrollIntoView({ block: 'start' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 2200); } }, 120);
+        setTimeout(closeBar, 12000);
+      }
+      v.addEventListener('focusin', (ev) => { const c = ev.target.closest && ev.target.closest('article.ex[data-kind="ex"]'); if (c) setLast(id, Number(c.dataset.id)); });
+      {
+        const list = $('#exlist', v);
+        let tm = 0;
+        const onScroll = () => {
+          if (!document.body.contains(list)) { window.removeEventListener('scroll', onScroll); return; }
+          clearTimeout(tm);
+          tm = setTimeout(() => {
+            const hit = [...list.querySelectorAll('article.ex[data-kind="ex"]')].find((c) => c.getBoundingClientRect().bottom > 140);
+            if (hit && hit.getBoundingClientRect().top < window.innerHeight * 0.6) setLast(id, Number(hit.dataset.id));
+          }, 1200);
+        };
+        window.addEventListener('scroll', onScroll, { passive: true });
+      }
+
       /* 풀어보기 */
       const exMap = {};
       exs.forEach((x) => { exMap[x.id] = x; });
@@ -1701,6 +1739,106 @@
       }));
       openPanels.forEach((eid) => { const p = mount(eid); if (p) p.hidden = false; });
     }];
+  }
+
+  /* ---------- V4.4.1 : 문제 임시 저장 · 문제집 마지막 위치 (v441_drafts.sql — 없으면 이 브라우저에만 저장해요) ---------- */
+  const DR = { map: new Map(), srv: true, tm: new Map(), stm: new Map(), pend: new Map() };
+  const lsObj = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch (e) { return {}; } };
+  const lsPut = (k, o) => { try { localStorage.setItem(k, JSON.stringify(o)); } catch (e) { /* 저장소가 막혀도 서버 저장은 시도해요 */ } };
+  const drLsKey = () => `pn_dr_${me.id}`;
+  const lpLsKey = () => `pn_lp_${me.id}`;
+  const drEmpty = (c, v) => !String(c || '').trim() && !(v || []).some((x) => String(x || '').trim());
+  // 내 임시 저장을 읽어와요 (setId 가 있으면 그 문제집 것만 서버에서, 없으면 전부)
+  async function loadDrafts(setId) {
+    const loc = lsObj(drLsKey());
+    Object.entries(loc).forEach(([id, d]) => {
+      const cur = DR.map.get(Number(id));
+      if (!cur || (d.t || 0) > (cur.t || 0)) DR.map.set(Number(id), d);
+    });
+    if (!DR.srv) return;
+    let q = sb.from('problem_drafts').select('exercise_id,set_id,code,vals,updated_at').eq('user_id', me.id);
+    if (setId) q = q.eq('set_id', setId);
+    const { data, error } = await q;
+    if (error) { DR.srv = false; return; }
+    (data || []).forEach((r) => {
+      const t = Date.parse(r.updated_at) || 0;
+      const cur = DR.map.get(r.exercise_id);
+      if (!cur || t >= (cur.t || 0)) DR.map.set(r.exercise_id, { c: r.code || '', v: Array.isArray(r.vals) ? r.vals : [], t, s: r.set_id });
+    });
+  }
+  function drWriteLocal() {
+    const o = {};
+    DR.map.forEach((d, id) => { o[id] = d; });
+    lsPut(drLsKey(), o);
+  }
+  function drPushServer(eid) {
+    const d = DR.map.get(eid);
+    if (!DR.srv || !d) return;
+    DR.pend.delete(eid);
+    sb.from('problem_drafts').upsert({ user_id: me.id, exercise_id: eid, set_id: d.s || null, code: d.c.slice(0, 30000), vals: d.v, updated_at: new Date(d.t).toISOString() }, { onConflict: 'user_id,exercise_id' })
+      .then((r) => { if (r && r.error) DR.srv = false; }, () => { DR.srv = false; });
+  }
+  function saveDraft(eid, setId, code, vals, now = false) {
+    if (drEmpty(code, vals)) return deleteDraft(eid);
+    const d = { c: String(code), v: (vals || []).map(String), t: Date.now(), s: setId || null };
+    DR.map.set(eid, d);
+    DR.pend.set(eid, true);
+    clearTimeout(DR.tm.get(eid)); clearTimeout(DR.stm.get(eid));
+    const doLocal = () => { drWriteLocal(); };
+    if (now) { doLocal(); drPushServer(eid); } else {
+      DR.tm.set(eid, setTimeout(doLocal, 500));
+      DR.stm.set(eid, setTimeout(() => drPushServer(eid), 3000));
+    }
+    return d.t;
+  }
+  function deleteDraft(eid) {
+    clearTimeout(DR.tm.get(eid)); clearTimeout(DR.stm.get(eid));
+    DR.pend.delete(eid);
+    if (!DR.map.has(eid)) return null;
+    DR.map.delete(eid);
+    drWriteLocal();
+    if (DR.srv) sb.from('problem_drafts').delete().eq('user_id', me.id).eq('exercise_id', eid).then(() => {}, () => {});
+    return null;
+  }
+  function flushDrafts() { // 화면을 옮기거나 닫을 때, 아직 못 보낸 임시 저장을 바로 저장해요
+    if (!me || !DR.pend.size) return;
+    DR.pend.forEach((_, eid) => { clearTimeout(DR.tm.get(eid)); clearTimeout(DR.stm.get(eid)); drPushServer(eid); });
+    drWriteLocal();
+  }
+  window.addEventListener('pagehide', flushDrafts);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushDrafts(); });
+  const hhmm = (t) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+
+  // 문제집마다 "마지막으로 풀거나 본 문제"
+  const LP = { map: new Map(), srv: true, stm: new Map() };
+  async function loadLast(all) {
+    const loc = lsObj(lpLsKey());
+    Object.entries(loc).forEach(([sid, d]) => { const cur = LP.map.get(Number(sid)); if (!cur || d.t > cur.t) LP.map.set(Number(sid), d); });
+    if (!LP.srv) return;
+    const { data, error } = await sb.from('set_last').select('set_id,exercise_id,updated_at').eq('user_id', me.id);
+    if (error) { LP.srv = false; return; }
+    (data || []).forEach((r) => {
+      const t = Date.parse(r.updated_at) || 0;
+      const cur = LP.map.get(r.set_id);
+      if (!cur || t >= cur.t) LP.map.set(r.set_id, { e: r.exercise_id, t });
+    });
+    return all;
+  }
+  function setLast(setId, eid) {
+    if (!setId || !eid || !me || can('content')) return;
+    const cur = LP.map.get(setId);
+    if (cur && cur.e === eid && Date.now() - cur.t < 20000) return;
+    const d = { e: eid, t: Date.now() };
+    LP.map.set(setId, d);
+    const o = lsObj(lpLsKey());
+    o[setId] = d;
+    lsPut(lpLsKey(), o);
+    if (!LP.srv) return;
+    clearTimeout(LP.stm.get(setId));
+    LP.stm.set(setId, setTimeout(() => {
+      sb.from('set_last').upsert({ user_id: me.id, set_id: setId, exercise_id: eid, updated_at: new Date(d.t).toISOString() }, { onConflict: 'user_id,set_id' })
+        .then((r) => { if (r && r.error) LP.srv = false; }, () => { LP.srv = false; });
+    }, 1500));
   }
 
   /* 문제 풀이 칸(코드 입력 · 실행 · 채점 · 제출) — 문제집 화면과 문제 단독 화면이 같이 써요 */
@@ -1718,6 +1856,16 @@
         const vers = subsBy[eid] || [];
         const last = vers[vers.length - 1];
         const lastU = last ? unpackSubmission(last.code, answers.length) : { code: '', vals: [] };
+        // 임시 저장 (제출한 풀이보다 새롭고, 제출한 것과 다를 때만 불러와요)
+        let useDr = null;
+        const dr0 = DR.map.get(eid);
+        if (dr0) {
+          const stale = last && Date.parse(last.created_at) > (dr0.t || 0);
+          const same = dr0.c === lastU.code && answers.every((_, i) => String((dr0.v || [])[i] || '') === String(lastU.vals[i] || ''));
+          if (stale || same) deleteDraft(eid); else useDr = dr0;
+        }
+        const initCode = useDr ? useDr.c : lastU.code;
+        const initVal = (i) => (useDr ? String((useDr.v || [])[i] || '') : lastU.vals[i] || '');
         const hist = vers.slice().reverse().map((s, i) => {
           const cs = (s.submission_comments || []).slice().sort((x, y) => x.created_at.localeCompare(y.created_at));
           return `<details class="ver" ${i === 0 && cs.length ? 'open' : ''}>
@@ -1731,18 +1879,21 @@
           const lines = a.type === 'm' ? 4 : Math.min(6, Math.max(1, a.value.split('\n').length));
           const hint = a.type === 'c' ? '번호를 써요 (예: 2 또는 1, 3)' : a.type === 'm' ? '서술형은 선생님이 확인해요' : a.type === 'x' ? '코드 한 줄' : '';
           return `<label class="part"><span class="plabel">${esc(a.label || i + 1)}${a.type === 'm' ? ' <span class="badge">서술</span>' : ''}</span>
-            <textarea class="pans code" data-i="${i}" rows="${lines}" spellcheck="false" placeholder="${esc(hint)}">${esc(lastU.vals[i] || '')}</textarea></label>`;
+            <textarea class="pans code" data-i="${i}" rows="${lines}" spellcheck="false" placeholder="${esc(hint)}">${esc(initVal(i))}</textarea></label>`;
         }).join('');
         const nAuto = tests.length + answers.filter((a) => a.type !== 'm').length;
         p.innerHTML = `
-          ${showCode ? `<textarea class="code" rows="10" spellcheck="false" placeholder="여기에 완성한 코드(또는 답)를 쓰세요. 서술형 답도 여기에 써요.">${esc(lastU.code)}</textarea>` : ''}
+          <div class="draft-bar" ${useDr ? '' : 'hidden'}>💾 임시 저장한 내용을 불러왔어요 <span class="muted small">(${useDr ? fmt(useDr.t) : ''})</span> <button type="button" class="link" data-dr-clear>지우고 ${last ? '낸 풀이로' : '빈 칸으로'}</button></div>
+          ${showCode ? `<textarea class="code" rows="10" spellcheck="false" placeholder="여기에 완성한 코드(또는 답)를 쓰세요. 서술형 답도 여기에 써요.">${esc(initCode)}</textarea>` : ''}
           ${canRun ? `<details class="stdin-box"><summary>⌨️ 입력값 <span class="muted small">(실행해보기에서 input()에 들어갈 값 · 한 줄에 하나씩)</span></summary>
             <textarea class="stdin" rows="3" spellcheck="false">${esc(sample ? sample.input : '')}</textarea></details>` : ''}
           ${answers.length ? `<div class="parts">${showCode ? '<div class="muted small">아래 칸에도 답을 써 주세요</div>' : ''}${partsInputs}</div>` : ''}
           <div class="form-actions">
+            <button class="ghost" data-dr-save type="button" title="이 문제의 풀이를 임시로 저장해요. 적는 동안 자동으로도 저장돼요">💾 임시 저장</button>
             ${canRun ? '<button class="ghost" data-run>▶ 실행해보기</button>' : ''}
             ${canGrade ? `<button class="ghost" data-grade>✅ 채점하기 <span class="muted small">(${nAuto}개 항목)</span></button>` : ''}
             <button class="solve" data-send>제출하기${last ? ` (v${last.version + 1})` : ''}</button>
+            <span class="muted small" data-dr-st></span>
           </div>
           <p class="muted small" style="margin:4px 0">${canGrade ? '제출하면 자동으로 채점돼요. <b>채점하기</b>에서 모두 통과하면 자동으로 제출돼요. 채점 결과는 선생님도 볼 수 있어요. ' : ''}${answers.some((a) => a.type === 'm') ? '서술형 답은 선생님이 확인해요. ' : ''}${last ? '다시 내면 새 버전으로 쌓이고, 이전 풀이도 그대로 남아요.' : '제출한 풀이는 선생님만 볼 수 있어요.'}</p>
           <div class="judge-out" hidden></div>
@@ -1763,6 +1914,27 @@
           };
         };
         if (ta) { if (window.PYIDE) window.PYIDE.attach(ta); else tabKey(ta); }
+        {
+          const stEl = $('[data-dr-st]', p);
+          const bar = $('.draft-bar', p);
+          const mark = (t) => { if (stEl) stEl.textContent = t ? `💾 임시 저장됨 · ${hhmm(t)}` : ''; };
+          if (useDr) mark(useDr.t);
+          const onEdit = () => { mark(saveDraft(eid, ex.set_id, getCode(), getVals())); setLast(ex.set_id, eid); };
+          [ta, ...partEls].filter(Boolean).forEach((el) => el.addEventListener('input', onEdit));
+          $('[data-dr-save]', p).onclick = () => {
+            const t = saveDraft(eid, ex.set_id, getCode(), getVals(), true);
+            if (!t) return toast('저장할 내용이 없어요', true);
+            mark(t); toast('임시 저장했어요 💾');
+          };
+          const clr = $('[data-dr-clear]', p);
+          if (clr) clr.onclick = () => {
+            if (!confirm('임시 저장한 내용을 지우고 처음 상태로 돌릴까요?')) return;
+            deleteDraft(eid);
+            if (ta) ta.value = lastU.code;
+            partEls.forEach((t, i) => { t.value = lastU.vals[i] || ''; });
+            bar.hidden = true; mark(0);
+          };
+        }
         partEls.forEach(tabKey);
         const jo = $('.judge-out', p);
         const showJ = (html) => { jo.hidden = false; jo.innerHTML = html; };
@@ -1814,6 +1986,7 @@
           if (error && /judge/.test(error.message || '')) ({ error } = await sb.from('submissions').insert({ exercise_id: eid, user_id: me.id, code }));
           if (error) { lock(false); return toast('제출하지 못했어요: ' + error.message, true); }
           sentSig.set(eid, sig());
+          deleteDraft(eid);
           toast(auto ? '✅ 모두 통과! 자동으로 제출했어요 🎉' : !judge ? '제출했어요! 👍' : judge.status === 'MANUAL' ? '제출했어요. 선생님이 확인할 거예요 👍' : judge.status === 'AC' ? '제출했어요! 자동 채점을 모두 통과했어요 🎉' : `제출했어요. 채점 결과는 ${judge.passed}/${judge.total} 통과예요`);
           route(true);
         };
@@ -4017,7 +4190,8 @@ onmessage = (ev) => {
       }
       return { data: out };
     };
-    const exIds = [...new Set(subs.map((s) => s.exercise_id))];
+    await loadDrafts().catch(() => {}); // 임시 저장 (V4.4.1)
+    const exIds = [...new Set(subs.map((s) => s.exercise_id).concat([...DR.map.keys()]))];
     const exs = (await inChunks('exercises', 'id,set_id,difficulty,body,label,rank_points', exIds)).data;
     const exMap = new Map(exs.map((e) => [e.id, e]));
     const setIds = [...new Set(exs.map((e) => e.set_id))];
@@ -4040,7 +4214,7 @@ onmessage = (ev) => {
         courses = cr.data;
       }
     }
-    return { subs, exMap, setMap, prog, lessons, courses, learnOk: !pr.error };
+    return { subs, exMap, setMap, prog, lessons, courses, learnOk: !pr.error, drafts: [...DR.map.entries()].map(([eid, d]) => ({ eid, d })).filter((x) => exMap.has(x.eid)).sort((a, b) => (b.d.t || 0) - (a.d.t || 0)) };
   }
 
   function bindMyRecords(root) {
@@ -4056,6 +4230,7 @@ onmessage = (ev) => {
       let d;
       try { d = await loadMyRecords(); } catch (e) { body.innerHTML = '<span class="muted">기록을 불러오지 못했어요. 새로고침 해보세요.</span>'; loaded = false; return; }
       const { subs, exMap, setMap } = d;
+      let drafts = d.drafts || [];
       // 문제별 모음 (subs 는 최신순)
       const by = new Map();
       subs.forEach((s) => { if (!by.has(s.exercise_id)) by.set(s.exercise_id, []); by.get(s.exercise_id).push(s); });
@@ -4085,6 +4260,14 @@ onmessage = (ev) => {
       const tabs = {
         solved: () => solved.map((x) => exRow(x.eid, x.sub, `✅ 푼 문제 · 제출 ${x.n}번`)).join('') || '<p class="muted center pad">아직 푼 문제가 없어요.</p>',
         trying: () => trying.map((x) => exRow(x.eid, x.sub, `${judgeBadge(x.sub.judge) || '제출함'} · 제출 ${x.n}번`)).join('') || '<p class="muted center pad">도전 중인 문제가 없어요. 👍</p>',
+        draft: () => drafts.map(({ eid, d: dd }) => {
+          const e = exMap.get(eid);
+          const st = e ? setMap.get(e.set_id) : null;
+          const snip = String(dd.c || (dd.v || []).find((x) => String(x).trim()) || '').split('\n').find((l) => l.trim()) || '';
+          return `<a class="row rec-row" href="#/p/${eid}"><div class="row-main">${e ? diffTag(e.difficulty) : ''} <b>#${eid}</b> <span class="numtitle">${esc(title(e))}</span>
+            <div class="muted small dr-snip">${esc(snip.slice(0, 80))}</div></div>
+            <div class="muted small">${st ? esc(shortOf(st)) + ' · ' : ''}💾 ${fmt(dd.t)} <button type="button" class="link" data-dd="${eid}">삭제</button></div></a>`;
+        }).join('') || '<p class="muted center pad">임시 저장한 문제가 없어요. 풀이 칸에 적으면 자동으로 저장돼요 💾</p>',
         subs: () => subs.map((s) => exRow(s.exercise_id, s, `v${s.version} ${judgeBadge(s.judge) || ''}`)).join('') || '<p class="muted center pad">낸 제출이 없어요.</p>',
         learn: () => (d.learnOk ? learnRows.map(({ p, l }) => {
           const c = cmap.get(l.course_id);
@@ -4094,7 +4277,7 @@ onmessage = (ev) => {
             <div class="muted small">${p.completed ? `✅ 완료 · ${fmt(p.completed_at || p.updated_at)}` : `▶ 진행 중 (${n}단계 끝냄) · ${fmt(p.updated_at)}`} · ⭐ ${p.xp || 0} XP${p.completed && pts > 0 ? ` · 🏆 랭킹 +${pts}점` : ''}</div></a>`;
         }).join('') || '<p class="muted center pad">아직 시작한 학습이 없어요. <a href="#/learn">📚 학습</a>에서 시작해 보세요!</p>' : '<p class="muted center pad">학습 기록을 아직 볼 수 없어요.</p>'),
       };
-      const tabDef = [['solved', `✅ 푼 문제 ${solved.length}`], ['trying', `🛠 도전 중 ${trying.length}`], ['subs', `📤 제출 ${subs.length}`], ['learn', `📚 학습 ${lDone.length}`]];
+      const tabDef = [['solved', `✅ 푼 문제 ${solved.length}`], ['trying', `🛠 도전 중 ${trying.length}`], ['draft', `💾 임시 저장 ${drafts.length}`], ['subs', `📤 제출 ${subs.length}`], ['learn', `📚 학습 ${lDone.length}`]];
       let cur = 'solved';
       let limit = 30;
       const draw = () => {
@@ -4115,6 +4298,13 @@ onmessage = (ev) => {
           list.append(more);
         }
         body.querySelectorAll('[data-rt]').forEach((b) => (b.onclick = () => { cur = b.dataset.rt; limit = 30; draw(); }));
+        body.querySelectorAll('[data-dd]').forEach((b) => (b.onclick = (ev) => {
+          ev.preventDefault(); ev.stopPropagation();
+          if (!confirm('이 문제의 임시 저장을 지울까요?')) return;
+          deleteDraft(Number(b.dataset.dd));
+          drafts = drafts.filter((x) => x.eid !== Number(b.dataset.dd));
+          draw();
+        }));
       };
       draw();
     });
