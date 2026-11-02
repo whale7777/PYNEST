@@ -62,36 +62,33 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.2.0';
-  // 누적 점수 → 티어. 각 티어는 V(낮음) ~ I(높음) 5단계로 똑같이 나눠요.
+  const APP_VERSION = '4.3.0';
+  // 누적 점수 → 티어. 각 티어는 X(낮음) ~ I(높음) 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
     { n: 'Bronze', min: 0, c: ['#f0b27a', '#9c5a1e'], g: 'circle' },
-    { n: 'Silver', min: 100, c: ['#f1f5f9', '#8795a8'], g: 'tri' },
-    { n: 'Gold', min: 500, c: ['#ffe27a', '#d19a00'], g: 'sq' },
-    { n: 'Platinum', min: 1500, c: ['#8ff0e0', '#16a394'], g: 'dia' },
-    { n: 'Diamond', min: 3500, c: ['#9fd4ff', '#2563eb'], g: 'hex' },
-    { n: 'Sapphire', min: 5000, c: ['#7aa2ff', '#1e3a8a'], g: 'drop' },
-    { n: 'Emerald', min: 7000, c: ['#7df2a8', '#0e8a4f'], g: 'spark' },
-    { n: 'Amethyst', min: 9500, c: ['#f0abfc', '#a21caf'], g: 'gem' },
-    { n: 'Master', min: 12000, c: ['#d9a8ff', '#7c2ae0'], g: 'star' },
-    { n: 'Grandmaster', min: 15000, c: ['#ffb36b', '#c2410c'], g: 'flame' },
-    { n: 'Obsidian', min: 17500, c: ['#9ca3af', '#111827'], g: 'oct' },
-    { n: 'The Programmer', min: 20000, c: ['#ff8aa8', '#e11d48'], g: 'crown' },
+    { n: 'Silver', min: 2000, c: ['#f1f5f9', '#8795a8'], g: 'tri' },
+    { n: 'Gold', min: 7000, c: ['#ffe27a', '#d19a00'], g: 'sq' },
+    { n: 'Platinum', min: 22000, c: ['#8ff0e0', '#16a394'], g: 'dia' },
+    { n: 'Diamond', min: 52000, c: ['#9fd4ff', '#2563eb'], g: 'hex' },
+    { n: 'Master', min: 112000, c: ['#d9a8ff', '#7c2ae0'], g: 'star' },
+    { n: 'Grandmaster', min: 232000, c: ['#ffb36b', '#c2410c'], g: 'flame' },
   ];
   let TIERS = DEFAULT_TIERS.slice();
   let TIER_ROWS = []; // DB 에서 읽은 티어 (id 포함)
   let TIER_DB = false; // tiers 표가 있나?
-  const ROMAN = ['V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요
+  const TIER_LV = 10; // 한 티어 안의 단계 수 (X 가 가장 낮고 I 이 가장 높아요)
+  const TOP_STEP = 20000; // 맨 위 티어의 한 단계 점수
+  const ROMAN = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I'];
   function tierOf(score) {
     const sc = Math.max(0, Number(score) || 0);
     let i = TIERS.length - 1;
     while (i > 0 && sc < TIERS[i].min) i -= 1;
     const t = TIERS[i];
     const nextMin = i < TIERS.length - 1 ? TIERS[i + 1].min : null;
-    const step = nextMin != null ? (nextMin - t.min) / 5 : 2000;
-    const lv = Math.min(4, Math.floor((sc - t.min) / step));
-    return { i, lv, roman: ROMAN[lv], name: `${t.n} ${ROMAN[lv]}`, lo: t.min + lv * step, hi: lv < 4 ? t.min + (lv + 1) * step : nextMin, score: sc };
+    const step = nextMin != null ? (nextMin - t.min) / TIER_LV : TOP_STEP;
+    const lv = Math.min(TIER_LV - 1, Math.floor((sc - t.min) / step));
+    return { i, lv, roman: ROMAN[lv], name: `${t.n} ${ROMAN[lv]}`, lo: t.min + lv * step, hi: lv < TIER_LV - 1 ? t.min + (lv + 1) * step : nextMin, score: sc };
   }
   // 뱃지 문양 (40×40 칸 안, 방패 가운데 위쪽). 이름은 티어 편집 화면의 선택 칸에 나와요.
   const GLYPH = {
@@ -4230,7 +4227,7 @@ onmessage = (ev) => {
     if (old) { old.remove(); return; }
     const rows = TIERS.map((t, i) => {
       const nx = TIERS[i + 1];
-      const step = nx ? Math.round(((nx.min - t.min) / 5) * 10) / 10 : 2000;
+      const step = nx ? Math.round(((nx.min - t.min) / TIER_LV) * 10) / 10 : TOP_STEP;
       return `<tr><td>${tierBadge(t.min, 24)}</td><td><b>${esc(t.n)}</b></td><td>${t.min.toLocaleString()}점~</td><td class="muted">${step}점씩</td></tr>`;
     }).join('');
     const dif = DIFF_LIST.map((d) => `${diffTag(d.name)} <b>${d.points}</b>`).join(' &nbsp; ');
@@ -4550,7 +4547,7 @@ onmessage = (ev) => {
     const glyphOpts = (sel) => Object.entries(GLYPH).map(([k, [nm]]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${nm}</option>`).join('');
     const rows = TIER_ROWS.map((t, i) => {
       const next = TIER_ROWS[i + 1];
-      const step = next ? Math.round(((next.min_score - t.min_score) / 5) * 10) / 10 : null;
+      const step = next ? Math.round(((next.min_score - t.min_score) / TIER_LV) * 10) / 10 : null;
       return `<div class="card tierrow" data-tid="${t.id}">
         <div class="tr-prev">${tierPreview(t.c1, t.c2, t.glyph, 'I', 44)}</div>
         <div class="tr-form">
@@ -4561,7 +4558,7 @@ onmessage = (ev) => {
           <div class="tr-line">
             <label>색 <input type="color" data-f="c1" value="${esc(t.c1)}"> <input type="color" data-f="c2" value="${esc(t.c2)}"></label>
             <label>문양 <select data-f="glyph">${glyphOpts(t.glyph)}</select></label>
-            <span class="muted small">${step == null ? '가장 높은 티어 · 한 단계 2000점' : `다음 티어(${esc(next.name)})까지 · 한 단계 ${step}점`}</span>
+            <span class="muted small">${step == null ? `가장 높은 티어 · 한 단계 ${TOP_STEP}점` : `다음 티어(${esc(next.name)})까지 · 한 단계 ${step}점`}</span>
             <span class="spacer"></span>
             <button class="ghost" data-tsave="${t.id}">저장</button>
             ${t.min_score === 0 ? '' : `<button class="ghost" data-tdel="${t.id}">삭제</button>`}

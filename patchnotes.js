@@ -1,5 +1,9 @@
 /* PyNest 패치 노트 — 하단 버전을 5번 누르면 보여요. 새 버전은 맨 위에 추가하세요. at 은 한국 시간(KST). */
 window.PYNEST_PATCHES = [
+  { v: '4.3.0', at: '2026-11-02 22:10', t: '티어 개편 · 10단계', items: [
+    '티어를 Bronze · Silver · Gold · Platinum · Diamond · Master · Grandmaster 7개로 정리하고, 티어마다 10단계(X → I)로 나눴어요. 맨 위 티어는 한 단계 20,000점.',
+    '티어 문턱을 크게 올렸어요: 2,000 / 7,000 / 22,000 / 52,000 / 112,000 / 232,000점.',
+    '난이도 점수 재조정: Beginner 10 · Bronze 20 · Intermediate 35 · Advanced 60 · ELITE 100 · Iron 160 · Gold 250 · Diamond 500 · Ruby 1000 · Master 2000. (v430_tier_rebalance.sql 실행 필요)'] },
   { v: '4.2.0', at: '2026-11-01 21:30', t: '학습 랭킹 점수 · 내 기록', items: [
     '📚 학습 레슨을 끝내면 랭킹·티어 점수가 올라요. 코스마다 "레슨 1개당 점수"를 정하고(0 = 반영 안 함), 레슨마다 따로 정할 수도 있어요. (v420_learn_points.sql 실행 필요)',
     '학습 점수는 푼 문제 수에는 안 세고 점수에만 더해져요. 티어 승급 배너·카톡 랭킹에도 반영돼요.',

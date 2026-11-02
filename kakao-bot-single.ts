@@ -21,7 +21,7 @@ const DEFAULT_TIERS: Tier[] = [
   { n: 'Diamond', min: 3500 }, { n: 'Sapphire', min: 5000 }, { n: 'Emerald', min: 7000 }, { n: 'Amethyst', min: 9500 },
   { n: 'Master', min: 12000 }, { n: 'Grandmaster', min: 15000 }, { n: 'Obsidian', min: 17500 }, { n: 'The Programmer', min: 20000 },
 ];
-const ROMAN = ['V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요 (앱과 같은 계산)
+const ROMAN = ['X', 'IX', 'VIII', 'VII', 'VI', 'V', 'IV', 'III', 'II', 'I']; // I 이 가장 높아요 (앱과 같은 계산)
 
 function tierOf(score: number, tiers: Tier[]) {
   const T = tiers.length ? [...tiers].sort((a, b) => a.min - b.min) : DEFAULT_TIERS;
@@ -29,9 +29,9 @@ function tierOf(score: number, tiers: Tier[]) {
   let i = T.length - 1;
   while (i > 0 && sc < T[i].min) i -= 1;
   const nextMin = i < T.length - 1 ? T[i + 1].min : null;
-  const step = nextMin != null ? (nextMin - T[i].min) / 5 : 2000;
-  const lv = Math.min(4, Math.floor((sc - T[i].min) / step));
-  const hi = lv < 4 ? T[i].min + (lv + 1) * step : nextMin;
+  const step = nextMin != null ? (nextMin - T[i].min) / 10 : 20000;
+  const lv = Math.min(9, Math.floor((sc - T[i].min) / step));
+  const hi = lv < 9 ? T[i].min + (lv + 1) * step : nextMin;
   const nextName = hi == null ? null : tierOf(hi, T).name;
   return { name: `${T[i].n} ${ROMAN[lv]}`, hi, nextName, left: hi == null ? null : Math.ceil(hi - sc) };
 }
