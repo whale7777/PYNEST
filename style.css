@@ -784,3 +784,19 @@ nav.menu a .nbadge { margin-left: 6px; }
 .cfg-row { display: flex; gap: 8px; align-items: flex-end; }
 .cfg-row .ghost { margin-bottom: 1px; }
 @media (max-width: 520px) { .me-hero { flex-direction: column; text-align: center; } .me-tier { justify-content: center; } .sh-n { font-size: 32px; } }
+
+/* ===== V4.5.1 캐릭터 아이템 ===== */
+.av-items { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px; }
+.av-items h4 { margin: 0 0 6px; }
+.it-tabs { margin: 8px 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.it-tabs button { flex: 0 0 auto; white-space: nowrap; padding: 6px 12px; }
+.it-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin: 8px 0; }
+.it-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 2px solid var(--border); border-radius: 14px; background: var(--card); color: var(--text); font-size: 13px; text-align: center; }
+.it-tile b { font-size: 13px; line-height: 1.2; }
+.it-pv { display: block; line-height: 0; font-size: 40px; min-height: 56px; display: grid; place-items: center; }
+.it-st { font-size: 11px; font-weight: 700; color: var(--muted); }
+.it-tile.on { border-color: var(--primary); background: var(--hover); }
+.it-tile.on .it-st { color: var(--primary); }
+.it-tile.can { border-color: #22c55e; } .it-tile.can .it-st { color: #16a34a; }
+.it-tile.lock { opacity: .6; }
+.it-grid.adm .it-tile { cursor: default; }

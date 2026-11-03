@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.0';
+  const APP_VERSION = '4.5.1';
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -4337,6 +4337,37 @@ onmessage = (ev) => {
 
   /* ---------- V4.4.0 : 캐릭터 · 프로필 꾸미기 · DM · 알림 (v440_social.sql) ---------- */
   const SOC_HINT = '아직 준비되지 않았어요. 선생님이 v440_social.sql 을 Supabase SQL Editor 에서 한 번 실행하면 쓸 수 있어요.';
+  // ---- V4.5.1 캐릭터 아이템: 그림(SVG 조각)은 안전한 도형만 남기고 쓰기
+  const ITEMS = new Map(); // id → {id,name,slot,svg(정리된 것)}
+  const ITEM_SLOTS = [['hat', '모자', '🎩'], ['hair', '머리', '💇'], ['face', '얼굴', '😎'], ['outfit', '옷', '👕'], ['back', '뒤(날개·망토)', '🪽'], ['deco', '장식', '✨']];
+  const SVG_TAGS = new Set(['g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'defs', 'lineargradient', 'radialgradient', 'stop']);
+  const SVG_ATTR = /^(d|cx|cy|r|rx|ry|x|y|x1|y1|x2|y2|width|height|points|fill|fill-opacity|fill-rule|clip-rule|stroke|stroke-width|stroke-opacity|stroke-linecap|stroke-linejoin|stroke-dasharray|opacity|transform|id|offset|stop-color|stop-opacity|gradientunits|gradienttransform)$/i;
+  function cleanSvg(str) {
+    try {
+      const doc = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg">${str}</svg>`, 'image/svg+xml');
+      if (doc.querySelector('parsererror')) return '';
+      const walk = (n) => {
+        Array.from(n.children).forEach((c) => {
+          if (!SVG_TAGS.has(c.localName.toLowerCase())) { c.remove(); return; }
+          Array.from(c.attributes).forEach((at) => {
+            if (!SVG_ATTR.test(at.name) || /javascript:|data:|url\(\s*[^#\s)]/i.test(at.value)) c.removeAttribute(at.name);
+          });
+          walk(c);
+        });
+      };
+      walk(doc.documentElement);
+      return Array.from(doc.documentElement.childNodes).map((x) => new XMLSerializer().serializeToString(x)).join('').replace(/ xmlns="[^"]*"/g, '');
+    } catch (e) { return ''; }
+  }
+  const IT = (a, slot) => { const id = a.items && a.items[slot]; const it = id && ITEMS.get(id); return it && it.slot === slot ? `<g>${it.svg}</g>` : ''; };
+  async function loadItems() {
+    try {
+      const { data, error } = await sb.from('avatar_items').select('id,name,slot,svg').eq('status', 'active');
+      if (error) throw error;
+      ITEMS.clear();
+      (data || []).forEach((x) => { const sv = cleanSvg(x.svg); if (sv) ITEMS.set(x.id, { id: x.id, name: x.name, slot: x.slot, svg: sv }); });
+    } catch (e) { /* v451_items.sql 전이면 아이템 없이 동작해요 */ }
+  }
   const AV = {
     skin: ['#ffe0c7', '#f7cba4', '#e8b48a', '#c98d62', '#a56a43', '#7a4a2c'],
     hairColor: ['#2b2b2b', '#5b3a1e', '#9a6a2f', '#e0b04a', '#d6453d', '#3b6fd8', '#8a4fd8', '#f2f2f2'],
@@ -4367,12 +4398,15 @@ onmessage = (ev) => {
     const hex = /^#[0-9a-f]{6}$/i;
     ['skin', 'hairColor', 'outfitColor', 'bg', 'hatColor'].forEach((k) => { if (!hex.test(r[k])) r[k] = d[k]; });
     [['hair', AV.hair], ['eyes', AV.eyes], ['mouth', AV.mouth], ['outfit', AV.outfit], ['hat', AV.hat], ['acc', AV.acc]].forEach(([k, l]) => { if (!avCode(l).includes(r[k])) r[k] = d[k]; });
+    r.items = {};
+    if (o.items && typeof o.items === 'object') ITEM_SLOTS.forEach(([k]) => { if (typeof o.items[k] === 'string' && /^[a-z0-9_]{2,40}$/.test(o.items[k])) r.items[k] = o.items[k]; });
     return r;
   }
   function avatarSvg(av, size = 64) {
     const a = av;
     const sk = a.skin; const hc = a.hairColor; const oc = a.outfitColor; const dark = 'rgba(0,0,0,.22)';
     let s = `<rect width="100" height="100" rx="22" fill="${a.bg}"/>`;
+    s += IT(a, 'back');
     // 옷
     s += `<path d="M10 100 C12 76 32 68 50 68 C68 68 88 76 90 100 Z" fill="${oc}"/>`;
     if (a.outfit === 'hoodie') s += `<path d="M30 74 Q50 90 70 74 Q50 66 30 74Z" fill="${dark}"/><path d="M45 82 V94 M55 82 V94" stroke="#fff" stroke-opacity=".8" stroke-width="2" stroke-linecap="round"/>`;
@@ -4380,6 +4414,7 @@ onmessage = (ev) => {
     else if (a.outfit === 'stripe') s += `<g stroke="#fff" stroke-opacity=".55" stroke-width="3"><path d="M14 82 H86 M12 90 H88 M12 98 H88"/></g><path d="M40 68 Q50 78 60 68Z" fill="${dark}"/>`;
     else s += `<path d="M40 68 Q50 78 60 68Z" fill="${dark}"/>`;
     s += `<rect x="43" y="56" width="14" height="14" rx="5" fill="${sk}"/><path d="M43 64 Q50 70 57 64 V60 H43Z" fill="${dark}"/>`;
+    s += IT(a, 'outfit');
     // 뒷머리
     if (a.hair === 'long') s += `<path d="M23 50 C20 14 80 14 77 50 L80 80 Q50 88 20 80Z" fill="${hc}"/>`;
     if (a.hair === 'bun') s += `<circle cx="50" cy="11" r="10" fill="${hc}"/>`;
@@ -4404,6 +4439,7 @@ onmessage = (ev) => {
       o: `<ellipse cx="50" cy="61" rx="3.2" ry="4" fill="#7a1f2b"/>`,
     };
     s += M[a.mouth] || M.smile;
+    s += IT(a, 'face');
     // 앞머리
     const H = {
       short: `<path d="M25 48 C20 2 80 2 75 48 C68 36 58 31 50 31 C42 31 32 36 25 48Z" fill="${hc}"/>`,
@@ -4413,6 +4449,7 @@ onmessage = (ev) => {
       curly: `<g fill="${hc}"><circle cx="30" cy="34" r="9"/><circle cx="42" cy="26" r="9"/><circle cx="55" cy="25" r="9"/><circle cx="68" cy="33" r="9"/><circle cx="24" cy="44" r="6"/><circle cx="76" cy="44" r="6"/></g>`,
     };
     if (a.hair !== 'none') s += H[a.hair] || '';
+    s += IT(a, 'hair');
     // 모자
     const hcol = a.hatColor;
     const T = {
@@ -4423,6 +4460,7 @@ onmessage = (ev) => {
       wizard: `<path d="M26 34 L50 -4 L74 34 Z" fill="#6d28d9"/><rect x="22" y="31" width="56" height="7" rx="3.5" fill="#4c1d95"/><path d="M48 14 l2 4 4 .5 -3 3 .8 4 -3.8 -2 -3.8 2 .8 -4 -3 -3 4 -.5Z" fill="#fde047"/>`,
     };
     if (a.hat !== 'none') s += T[a.hat] || '';
+    s += IT(a, 'hat');
     // 액세서리
     const C = {
       glasses: `<g fill="#bfdbfe" fill-opacity=".35" stroke="#334155" stroke-width="2"><circle cx="40" cy="46" r="7.5"/><circle cx="60" cy="46" r="7.5"/></g><path d="M47.5 46 H52.5" stroke="#334155" stroke-width="2"/>`,
@@ -4431,6 +4469,7 @@ onmessage = (ev) => {
       bow: `<path d="M50 70 L38 63 V77 Z M50 70 L62 63 V77 Z" fill="#ec4899"/><circle cx="50" cy="70" r="3.4" fill="#be185d"/>`,
     };
     if (a.acc !== 'none') s += C[a.acc] || '';
+    s += IT(a, 'deco');
     return `<svg class="avsvg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="캐릭터">${s}</svg>`;
   }
   // 프로필 꾸미기 · 캐릭터 정보 (profile_ext) 캐시
@@ -4536,8 +4575,54 @@ onmessage = (ev) => {
     el.innerHTML = `<div class="card"><h3>🧑‍🎤 캐릭터 꾸미기</h3>
       <p class="muted small">랭킹·프로필·메시지에 내 캐릭터가 보여요. 티어가 오르면 새 모자와 소품이 열려요!</p>
       <div class="av-ed"><div class="av-prev" id="avPrev"></div><div class="av-ctl" id="avCtl"></div></div>
+      <div id="avItems" class="av-items"></div>
       <div class="form-actions"><button class="ghost" id="avRand" type="button">🎲 랜덤</button><button class="ghost" id="avUndo" type="button">되돌리기</button><button class="primary" id="avSave" type="button">저장</button></div></div>`;
+    let cat = null; // 아이템 목록 (item_catalog)
+    let slotTab = 'hat';
+    const drawItems = () => {
+      const box = $('#avItems', el);
+      if (!box) return;
+      if (!cat) { box.innerHTML = ''; return; }
+      const list = cat.items.filter((i) => i.slot === slotTab && ITEMS.has(i.id));
+      const lockTxt = (i) => (i.kind === 'score' ? `🔒 ${Number(i.val).toLocaleString()}점` : i.kind === 'tier' ? `🔒 ${esc((TIERS[i.val] || {}).n || '티어')}` : i.kind === 'reward' ? '🏅 특별 보상' : i.kind === 'event' ? '🎪 행사' : '🔒');
+      const tile = (i) => {
+        const on = av.items[i.slot] === i.id;
+        const st = on ? '착용 중' : i.owned ? '입기' : i.can_claim ? '🎁 받기' : i.kind === 'price' ? `💎 ${i.price}` : lockTxt(i);
+        const cls = on ? 'on' : i.owned ? 'own' : i.can_claim || (i.kind === 'price' && cat.py >= i.price) ? 'can' : 'lock';
+        return `<button type="button" class="it-tile ${cls}" data-it="${esc(i.id)}" title="${esc(i.descr || i.name)}"><span class="it-pv">${avatarSvg({ ...av, items: { ...av.items, [i.slot]: i.id } }, 56)}</span><b>${esc(i.name)}</b><span class="it-st">${st}</span></button>`;
+      };
+      box.innerHTML = `<h4>🎁 아이템 <span class="muted small">💎 ${cat.py} · ${Number(cat.score).toLocaleString()}점</span></h4>
+        <div class="tabs it-tabs">${ITEM_SLOTS.map(([k, n, ic]) => `<button type="button" data-it-slot="${k}" class="${k === slotTab ? 'on' : ''}">${ic} ${n}</button>`).join('')}</div>
+        <div class="it-grid"><button type="button" class="it-tile ${av.items[slotTab] ? 'own' : 'on'}" data-it-none="1"><span class="it-pv">🚫</span><b>벗기</b><span class="it-st">${av.items[slotTab] ? '벗기' : '없음'}</span></button>${list.map(tile).join('') || '<p class="muted small">이 자리의 아이템이 아직 없어요.</p>'}</div>
+        <p class="muted small">🎁 받기: 조건을 채웠어요 · 💎: 파이포인트로 사기 · 🔒: 아직 잠겨 있어요. 저장을 눌러야 적용돼요.</p>`;
+      box.querySelectorAll('[data-it-slot]').forEach((b) => (b.onclick = () => { slotTab = b.dataset.itSlot; drawItems(); }));
+      const none = $('[data-it-none]', box);
+      if (none) none.onclick = () => { const n = { ...av.items }; delete n[slotTab]; av = { ...av, items: n }; draw(); };
+      box.querySelectorAll('[data-it]').forEach((b) => (b.onclick = async () => {
+        const i = cat.items.find((x) => x.id === b.dataset.it);
+        if (!i) return;
+        if (i.owned) { av = { ...av, items: { ...av.items, [i.slot]: i.id } }; if (av.items[i.slot] === i.id && b.classList.contains('on')) { const n = { ...av.items }; delete n[i.slot]; av = { ...av, items: n }; } return draw(); }
+        if (i.can_claim) {
+          const { data: r, error } = await sb.rpc('item_claim', { p_item: i.id });
+          if (error || r !== 'ok') return toast('받지 못했어요', true);
+          toast(`🎁 ${i.name} 을(를) 받았어요!`);
+        } else if (i.kind === 'price') {
+          if (cat.py < i.price) return toast('파이포인트가 부족해요', true);
+          if (!confirm(`${i.name} 을(를) 💎 ${i.price} 에 살까요?`)) return;
+          const { data: r, error } = await sb.rpc('item_buy', { p_item: i.id });
+          if (error) return toast('사지 못했어요: ' + error.message, true);
+          toast(r === 'ok' ? `🛍️ ${i.name} 을(를) 샀어요!` : r === 'poor' ? '파이포인트가 부족해요' : r === 'have' ? '이미 가지고 있어요' : '사지 못했어요', r !== 'ok');
+          growRefresh(true);
+        } else return toast(i.kind === 'reward' ? '특별 문제를 풀면 받을 수 있어요' : '조건을 채우면 열려요');
+        await loadCat(); draw();
+      }));
+    };
+    const loadCat = async () => {
+      const { data, error } = await sb.rpc('item_catalog');
+      cat = error || !data ? null : data;
+    };
     const draw = () => {
+      drawItems();
       $('#avPrev', el).innerHTML = avatarSvg(av, 150);
       $('#avCtl', el).innerHTML = SW.map(([k, t, list]) => `<div class="av-row"><b>${t}</b><div class="av-sw">${list.map((c) => `<button type="button" class="swatch ${av[k] === c ? 'on' : ''}" data-sw="${k}" data-v="${c}" style="background:${c}" aria-label="${t} ${c}"></button>`).join('')}</div></div>`).join('')
         + OP.map(([k, t, list]) => `<div class="av-row"><b>${t}</b><div class="av-op">${list.map(([v, nm, need]) => { const lock = need != null && tIdx < need; return `<button type="button" class="chipbtn ${av[k] === v ? 'on' : ''}" data-op="${k}" data-v="${v}" ${lock ? 'disabled title="티어가 올라가면 열려요"' : ''}>${lock ? '🔒 ' : ''}${esc(nm)}</button>`; }).join('')}</div></div>`).join('');
@@ -4545,10 +4630,12 @@ onmessage = (ev) => {
       el.querySelectorAll('[data-op]').forEach((b) => (b.onclick = () => { av[b.dataset.op] = b.dataset.v; draw(); }));
     };
     draw();
+    loadCat().then(drawItems);
     $('#avRand', el).onclick = () => {
       const r = (arr) => arr[Math.floor(Math.random() * arr.length)];
       const ok = (list) => list.filter(([, , need]) => need == null || tIdx >= need).map((x) => x[0]);
-      av = { skin: r(AV.skin), hairColor: r(AV.hairColor), outfitColor: r(AV.outfitColor), bg: r(AV.bg), hatColor: r(AV.outfitColor), hair: r(ok(AV.hair).filter((v) => v !== 'none')), eyes: r(ok(AV.eyes)), mouth: r(ok(AV.mouth)), outfit: r(ok(AV.outfit)), hat: r(['none', ...ok(AV.hat)]), acc: r(['none', ...ok(AV.acc)]) };
+      const keepItems = av.items;
+      av = { items: keepItems, skin: r(AV.skin), hairColor: r(AV.hairColor), outfitColor: r(AV.outfitColor), bg: r(AV.bg), hatColor: r(AV.outfitColor), hair: r(ok(AV.hair).filter((v) => v !== 'none')), eyes: r(ok(AV.eyes)), mouth: r(ok(AV.mouth)), outfit: r(ok(AV.outfit)), hat: r(['none', ...ok(AV.hat)]), acc: r(['none', ...ok(AV.acc)]) };
       draw();
     };
     $('#avUndo', el).onclick = () => { av = normAv(saved, me.id); draw(); };
@@ -4852,7 +4939,7 @@ onmessage = (ev) => {
         <li>✅ <b>문제를 처음 맞출 때</b> 랜덤 ${esc(rng(C.solve_rand))}</li>
         <li>📚 <b>학습 레슨을 끝낼 때</b> 랜덤 ${esc(rng(C.learn_rand))}</li>
         <li>🎁 시험 순위 · 행사 · 선생님 지급</li></ul>
-        <h3>어디에 써요?</h3><ul class="py-how"><li>🛡️ 연속 학습 방어권 (${esc(String(C.shield_price ?? 60))})</li><li>🧑‍🎤 캐릭터 꾸미기 아이템 <span class="muted small">(곧 열려요)</span></li></ul>
+        <h3>어디에 써요?</h3><ul class="py-how"><li>🛡️ 연속 학습 방어권 (${esc(String(C.shield_price ?? 60))})</li><li>🧑‍🎤 캐릭터 꾸미기 아이템 <a href="#/me/avatar">(구경하기)</a></li></ul>
         <a class="btn" href="#/me/streak">🛡️ 방어권 사러 가기</a></div>
       <div class="card list"><h3 style="padding:14px 18px 0;margin:0">최근 내역</h3>${(lg.data || []).map((x) => `<div class="row"><div class="row-main"><b>${esc(PY_WHY[x.reason] || x.reason)}</b> <span class="muted small">${esc(x.note || '')}</span><br><span class="muted small">${fmt(x.created_at)}</span></div><b class="${x.delta > 0 ? 'py-up' : 'py-down'}">${x.delta > 0 ? '+' : ''}${x.delta}</b></div>`).join('') || '<p class="muted center pad">아직 내역이 없어요. 문제를 풀면 모여요!</p>'}</div>`;
   }
@@ -4965,6 +5052,131 @@ onmessage = (ev) => {
         if (error || data !== 'ok') return toast('저장하지 못했어요', true);
         toast('저장했어요');
       }));
+    }];
+  }
+
+  // ---- 관리자 > 아이템 (업로드 · 목록 · 문제 보상 · 지급)
+  const ITEM_FMT = 'pynest-avatar-item-v1';
+  function parseItemJson(text) {
+    let d;
+    try { d = JSON.parse(text); } catch (e) { throw new Error('JSON 형식 오류예요'); }
+    if (d && !Array.isArray(d) && d.format && d.format !== ITEM_FMT) throw new Error('지원하지 않는 형식이에요: ' + d.format);
+    const arr = Array.isArray(d) ? d : d && Array.isArray(d.items) ? d.items : d && d.id ? [d] : null;
+    if (!arr || !arr.length) throw new Error('items 목록이 없어요');
+    const KINDS = ['free', 'score', 'tier', 'price', 'reward', 'event'];
+    return arr.map((x, n) => {
+      const u = x.unlock || {};
+      const kind = u.type || x.kind || 'free';
+      const label = `#${n + 1}${x.id ? ` (${x.id})` : ''}`;
+      if (!/^[a-z0-9_]{2,40}$/.test(String(x.id || ''))) throw new Error(`${label}: id 는 영문 소문자·숫자·_ 2~40자예요`);
+      if (!x.name || String(x.name).length > 30) throw new Error(`${label}: name 은 1~30자예요`);
+      if (!ITEM_SLOTS.some(([k]) => k === x.slot)) throw new Error(`${label}: slot 은 ${ITEM_SLOTS.map(([k]) => k).join(' / ')} 중 하나예요`);
+      if (!KINDS.includes(kind)) throw new Error(`${label}: unlock.type 은 ${KINDS.join(' / ')} 중 하나예요`);
+      if (typeof x.svg !== 'string' || !cleanSvg(x.svg)) throw new Error(`${label}: svg 가 비었거나 쓸 수 없는 내용이에요 (도형만 가능)`);
+      const price = Number(u.price ?? x.price ?? 0) || 0;
+      if (kind === 'price' && price <= 0) throw new Error(`${label}: price 유형은 unlock.price 가 필요해요`);
+      return { id: x.id, name: String(x.name), descr: String(x.descr || ''), slot: x.slot, svg: x.svg, kind, val: Number(u.value ?? x.val ?? 0) || 0, price, status: x.status === 'hidden' ? 'hidden' : 'active' };
+    });
+  }
+  async function adminItems() {
+    const [it, rw, ps, ex, pr] = await Promise.all([
+      sb.from('avatar_items').select('*').order('slot').order('id'),
+      sb.from('exercise_rewards').select('exercise_id,item_id'),
+      sb.from('problem_sets').select('id,title').order('id', { ascending: false }),
+      sb.from('exercises').select('id,set_id,position,label,difficulty').order('position'),
+      sb.from('profiles').select('id,username').eq('status', 'approved').neq('role', 'admin'),
+    ]);
+    if (it.error) return [`<div class="card pad muted">아직 준비되지 않았어요. (관리자가 v451_items.sql 을 실행하면 쓸 수 있어요)</div>`];
+    const items = it.data || [];
+    const rewards = rw.data || [];
+    const sets = ps.data || [];
+    const exs = ex.data || [];
+    const studs = (pr.data || []).filter((x) => x.id !== me.id).map((x) => ({ id: x.id, name: dname(x.id, x.username) })).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    const base = normAv(null, 'preview');
+    const pv = (i) => { ITEMS.set('__pv', { id: '__pv', name: '', slot: i.slot, svg: cleanSvg(i.svg) }); const h = avatarSvg({ ...base, items: { [i.slot]: '__pv' } }, 56); ITEMS.delete('__pv'); return h; };
+    const KN = { free: '기본', score: '점수', tier: '티어', price: '구입', reward: '문제 보상', event: '행사' };
+    const cond = (i) => (i.kind === 'score' ? `${Number(i.val).toLocaleString()}점 이상` : i.kind === 'tier' ? `${(TIERS[i.val] || {}).n || i.val} 티어 이상` : i.kind === 'price' ? `💎 ${i.price}` : '');
+    const rwBy = new Map(rewards.map((r) => [String(r.exercise_id), r.item_id]));
+    return [`
+      <div class="card"><h3>📤 아이템 올리기 (JSON)</h3>
+        <p class="muted small">형식 <code>${ITEM_FMT}</code> — 파일을 고르거나 아래에 붙여넣어요. 같은 id 로 다시 올리면 덮어써요. 그림(svg)은 <b>100×100 칸</b> 기준 도형(path·circle·rect 등)만 쓸 수 있어요. 자세한 설명은 AVATAR_ITEM_GUIDE.md</p>
+        <input type="file" id="itFile" accept=".json,application/json">
+        <textarea id="itJson" class="code" rows="8" placeholder='{"format":"pynest-avatar-item-v1","items":[{"id":"red_cap","name":"빨간 모자","slot":"hat","svg":"<path d=\\"M24 38 C26 10 74 10 76 38Z\\" fill=\\"#ef4444\\"/>","unlock":{"type":"price","price":30}}]}'></textarea>
+        <div class="form-actions"><button class="ghost" id="itPrev" type="button">미리보기</button><button class="primary" id="itUp" type="button">올리기</button><button class="ghost" id="itSample" type="button">예시 넣기</button></div>
+        <div id="itPrevBox" class="it-grid"></div></div>
+      <div class="card"><h3>🎁 아이템 목록 (${items.length})</h3>
+        <div class="it-grid adm">${items.map((i) => `<div class="it-tile ${i.status === 'hidden' ? 'lock' : 'own'}"><span class="it-pv">${pv(i)}</span><b>${esc(i.name)}</b><span class="muted small">${esc((ITEM_SLOTS.find(([k]) => k === i.slot) || [])[1] || i.slot)} · ${KN[i.kind]} ${esc(cond(i))}</span><span class="muted small">${esc(i.id)}${i.status === 'hidden' ? ' · 숨김' : ''}</span><span><button class="link" data-itex="${esc(i.id)}" type="button">JSON</button> ${i.status === 'hidden' ? `<button class="link" data-itshow="${esc(i.id)}" type="button">보이기</button>` : ''} <button class="link danger" data-itdel="${esc(i.id)}" type="button">${i.builtin ? '숨김' : '삭제'}</button></span></div>`).join('')}</div></div>
+      <div class="card"><h3>🏅 문제 보상 연결</h3>
+        <p class="muted small">그 문제를 처음 맞춘 학생에게 아이템을 줘요. (이미 푼 학생에게는 지급되지 않아요)</p>
+        <div class="ga-grid"><label>문제집<select id="rwSet"><option value="">— 고르세요 —</option>${sets.map((s2) => `<option value="${s2.id}">${esc(s2.title)}</option>`).join('')}</select></label>
+          <label>문제<select id="rwEx"><option value="">— 문제집을 먼저 —</option></select></label>
+          <label>보상 아이템<select id="rwItem"><option value="">(없음 — 연결 해제)</option>${items.filter((i) => i.status === 'active').map((i) => `<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('')}</select></label></div>
+        <div class="form-actions"><button class="primary" id="rwSave" type="button">연결 저장</button></div>
+        <div id="rwList" class="muted small">${rewards.length ? rewards.map((r) => { const e = exs.find((x) => x.id === r.exercise_id); const s2 = e && sets.find((x) => x.id === e.set_id); return `<div>${esc(s2 ? s2.title : '?')} › #${e ? Math.round(e.position / 1000) : '?'} ${esc((e && e.difficulty) || '')} → <b>${esc((items.find((i) => i.id === r.item_id) || {}).name || r.item_id)}</b> <button class="link danger" data-rwdel="${r.exercise_id}" type="button">해제</button></div>`; }).join('') : '연결된 문제가 없어요.'}</div></div>
+      <div class="card"><h3>🎀 학생에게 아이템 선물</h3>
+        <div class="ga-grid"><label>학생<select id="gvUser"><option value="">— 고르세요 —</option>${studs.map((s2) => `<option value="${s2.id}">${esc(s2.name)}</option>`).join('')}</select></label>
+          <label>아이템<select id="gvItem">${items.filter((i) => i.status === 'active').map((i) => `<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('')}</select></label></div>
+        <div class="form-actions"><button class="primary" id="gvBtn" type="button">선물하기</button></div></div>`,
+    (v) => {
+      const SAMPLE = { format: ITEM_FMT, items: [{ id: 'red_cap', name: '빨간 야구모자', descr: '시작이 반이다', slot: 'hat', svg: '<path d="M24 38 C26 10 74 10 76 38Z" fill="#ef4444"/><path d="M66 34 H93 Q93 42 66 41Z" fill="#b91c1c"/>', unlock: { type: 'price', price: 30 } }] };
+      $('#itSample', v).onclick = () => { $('#itJson', v).value = JSON.stringify(SAMPLE, null, 2); };
+      $('#itFile', v).onchange = async (e) => { const f = e.target.files[0]; if (f) $('#itJson', v).value = await f.text(); };
+      const parse = () => { try { return parseItemJson($('#itJson', v).value); } catch (e) { toast(e.message, true); return null; } };
+      $('#itPrev', v).onclick = () => {
+        const arr = parse();
+        if (!arr) return;
+        $('#itPrevBox', v).innerHTML = arr.map((i) => `<div class="it-tile own"><span class="it-pv">${pv(i)}</span><b>${esc(i.name)}</b><span class="muted small">${esc(i.slot)} · ${KN[i.kind]} ${esc(cond(i))}</span></div>`).join('');
+      };
+      $('#itUp', v).onclick = async () => {
+        const arr = parse();
+        if (!arr) return;
+        let ok = 0;
+        for (const i of arr) {
+          const { data, error } = await sb.rpc('item_upsert', { p: i });
+          if (error || data !== 'ok') { toast(`${i.id}: 올리지 못했어요 (도형·값을 확인해주세요)`, true); continue; }
+          ok += 1;
+        }
+        if (ok) { toast(`${ok}개 올렸어요`); await loadItems(); route(true); }
+      };
+      v.querySelectorAll('[data-itex]').forEach((b) => (b.onclick = () => {
+        const i = items.find((x) => x.id === b.dataset.itex);
+        $('#itJson', v).value = JSON.stringify({ format: ITEM_FMT, items: [{ id: i.id, name: i.name, descr: i.descr, slot: i.slot, svg: i.svg, unlock: { type: i.kind, value: i.val, price: i.price } }] }, null, 2);
+        $('#itJson', v).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }));
+      v.querySelectorAll('[data-itdel]').forEach((b) => (b.onclick = async () => {
+        if (!confirm('이 아이템을 지울까요? (기본 아이템은 숨겨져요) 가진 학생의 기록도 같이 사라져요.')) return;
+        const { data, error } = await sb.rpc('item_delete', { p_id: b.dataset.itdel });
+        if (error || data !== 'ok') return toast('처리하지 못했어요', true);
+        await loadItems(); route(true);
+      }));
+      v.querySelectorAll('[data-itshow]').forEach((b) => (b.onclick = async () => {
+        const i = items.find((x) => x.id === b.dataset.itshow);
+        const { data } = await sb.rpc('item_upsert', { p: { ...i, status: 'active' } });
+        if (data === 'ok') { await loadItems(); route(true); }
+      }));
+      $('#rwSet', v).onchange = () => {
+        const sid = Number($('#rwSet', v).value);
+        $('#rwEx', v).innerHTML = '<option value="">— 문제 고르기 —</option>' + exs.filter((e) => e.set_id === sid).map((e) => `<option value="${e.id}">#${Math.round(e.position / 1000)} ${esc(e.difficulty)} ${esc(e.label || '')}${rwBy.has(String(e.id)) ? ' ★' : ''}</option>`).join('');
+      };
+      $('#rwEx', v).onchange = () => { $('#rwItem', v).value = rwBy.get($('#rwEx', v).value) || ''; };
+      $('#rwSave', v).onclick = async () => {
+        const e = $('#rwEx', v).value;
+        if (!e) return toast('문제를 고르세요', true);
+        const { data, error } = await sb.rpc('reward_set', { p_ex: Number(e), p_item: $('#rwItem', v).value });
+        if (error || data !== 'ok') return toast('저장하지 못했어요', true);
+        toast('저장했어요'); route(true);
+      };
+      v.querySelectorAll('[data-rwdel]').forEach((b) => (b.onclick = async () => {
+        const { data } = await sb.rpc('reward_set', { p_ex: Number(b.dataset.rwdel), p_item: '' });
+        if (data === 'ok') route(true);
+      }));
+      $('#gvBtn', v).onclick = async () => {
+        const u = $('#gvUser', v).value;
+        if (!u) return toast('학생을 고르세요', true);
+        const { data, error } = await sb.rpc('item_give_admin', { p_uid: u, p_item: $('#gvItem', v).value });
+        if (error || data !== 'ok') return toast('선물하지 못했어요', true);
+        toast('선물했어요 🎁');
+      };
     }];
   }
 
@@ -5222,13 +5434,14 @@ onmessage = (ev) => {
     if (can('content')) tabs.push(['pre', '🧩 공용 함수']);
     if (can('content')) tabs.push(['edit', '✏️ 편집']);
     if (isAdmin()) tabs.push(['growth', '🏆 성장']);
+    if (isAdmin()) tabs.push(['items', '🎁 아이템']);
     if (isAdmin()) tabs.push(['tier', '🏅 티어']);
     if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
     if (staffRole() === 'owner') tabs.push(['social', '💬 DM·알림']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, growth: adminGrowth, nick: adminNick, social: adminSocial, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, growth: adminGrowth, items: adminItems, nick: adminNick, social: adminSocial, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -5679,7 +5892,7 @@ onmessage = (ev) => {
     if (me.status === 'rejected') return renderStatus('rejected');
     await Promise.all([loadDir(), loadDiffs(), loadTiers(), loadPre()]); // SQL 을 아직 안 돌렸으면 조용히 기본값으로 동작해요
     ensureDefs();
-    await loadExt([me.id]);
+    await Promise.all([loadExt([me.id]), loadItems()]);
     renderShell();
     route();
     startNotif();

@@ -1,0 +1,28 @@
+{
+  "format": "pynest-avatar-item-v1",
+  "items": [
+    {
+      "id": "red_cap",
+      "name": "빨간 야구모자",
+      "descr": "시작이 반이다",
+      "slot": "hat",
+      "svg": "<path d=\"M24 38 C26 10 74 10 76 38Z\" fill=\"#ef4444\"/><path d=\"M66 34 H93 Q93 42 66 41Z\" fill=\"#b91c1c\"/>",
+      "unlock": { "type": "price", "price": 30 }
+    },
+    {
+      "id": "pink_bow_back",
+      "name": "분홍 리본 날개",
+      "slot": "back",
+      "svg": "<path d=\"M30 68 C12 60 8 44 14 34 C22 40 30 50 38 62Z M70 68 C88 60 92 44 86 34 C78 40 70 50 62 62Z\" fill=\"#f9a8d4\" stroke=\"#ec4899\" stroke-width=\"1.5\"/>",
+      "unlock": { "type": "score", "value": 1000 }
+    },
+    {
+      "id": "py_trophy",
+      "name": "파이썬 우승컵",
+      "descr": "특별 문제를 푼 사람에게만",
+      "slot": "deco",
+      "svg": "<path d=\"M8 68 H24 V72 C24 80 20 84 16 84 C12 84 8 80 8 72Z\" fill=\"#fbbf24\"/><rect x=\"9\" y=\"88\" width=\"14\" height=\"4\" rx=\"1.5\" fill=\"#92400e\"/>",
+      "unlock": { "type": "reward" }
+    }
+  ]
+}
