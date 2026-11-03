@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.1';
+  const APP_VERSION = '4.5.2';
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -514,7 +514,8 @@
       if (bind) bind(v);
       window.scrollTo(0, keepScroll ? y : 0);
       refreshHeadAv();
-      growRefresh(a === 'home' || a === 'me' || a === 'settings').then(() => { if (a === 'home' && tok === navTok) injectHomeGrow(); });
+      growRefresh(a === 'home' || a === 'me' || a === 'settings').then(() => { if (a === 'home' && tok === navTok) { injectHomeGrow(); injectEventBanner(); } });
+      if (a === 'home') loadEvents().then(() => { if (tok === navTok) injectEventBanner(); });
     } catch (err) {
       if (tok !== navTok) return;
       console.error(err);
@@ -4359,6 +4360,44 @@ onmessage = (ev) => {
       return Array.from(doc.documentElement.childNodes).map((x) => new XMLSerializer().serializeToString(x)).join('').replace(/ xmlns="[^"]*"/g, '');
     } catch (e) { return ''; }
   }
+  // 학생이 올린 SVG 파일/붙여넣기 → 100×100 칸 도형 조각으로 (viewBox 가 달라도 맞춰 줘요)
+  function extractSvg(text) {
+    const t = String(text || '').trim();
+    if (!t) return '';
+    if (!/<svg[\s>]/i.test(t)) return t;
+    const doc = new DOMParser().parseFromString(t, 'image/svg+xml');
+    if (doc.querySelector('parsererror')) return '';
+    const root = doc.documentElement;
+    const vb = (root.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+    const has = vb.length === 4 && vb.every((n) => Number.isFinite(n)) && vb[2] > 0 && vb[3] > 0;
+    const w = has ? vb[2] : parseFloat(root.getAttribute('width')) || 100;
+    const h = has ? vb[3] : parseFloat(root.getAttribute('height')) || 100;
+    const x0 = has ? vb[0] : 0;
+    const y0 = has ? vb[1] : 0;
+    const inner = Array.from(root.childNodes).map((n) => new XMLSerializer().serializeToString(n)).join('').replace(/ xmlns(:\w+)?="[^"]*"/g, '');
+    const sx = 100 / w;
+    const sy = 100 / h;
+    return Math.abs(sx - 1) < 1e-6 && Math.abs(sy - 1) < 1e-6 && !x0 && !y0 ? inner : `<g transform="scale(${sx.toFixed(5)} ${sy.toFixed(5)}) translate(${-x0} ${-y0})">${inner}</g>`;
+  }
+  function itemPreview(slot, rawSvg, size = 80, av) { // 아직 등록되지 않은 그림을 내 캐릭터에 입혀서 보여줘요
+    const base = av || normAv(null, 'preview');
+    ITEMS.set('__pv', { id: '__pv', name: '', slot, svg: cleanSvg(rawSvg) });
+    const h = avatarSvg({ ...base, items: { [slot]: '__pv' } }, size);
+    ITEMS.delete('__pv');
+    return h;
+  }
+  let EVENTS = [];
+  async function loadEvents() {
+    try { const { data, error } = await sb.rpc('event_active'); EVENTS = error || !Array.isArray(data) ? [] : data; } catch (e) { EVENTS = []; }
+  }
+  const evLeft = (e) => { const ms = new Date(e.ends_at).getTime() - Date.now(); const d = Math.floor(ms / 864e5); return d >= 1 ? `D-${d}` : `${Math.max(0, Math.floor(ms / 36e5))}시간 남음`; };
+  function injectEventBanner() {
+    const v = $('#view');
+    if (!v || !EVENTS.length || $('.ev-banner', v) || !/^#\/home|^#?\/?$/.test(location.hash || '#/home')) return;
+    const box = document.createElement('div');
+    box.innerHTML = EVENTS.map((e) => `<a class="card ev-banner tone-${esc(e.tone)}" href="#/me/avatar"><span class="ev-emoji">${esc(e.emoji)}</span><span class="ev-t"><b>${esc(e.title)}</b>${Number(e.mult) > 1 ? ` <span class="ev-mult">💎 ×${Number(e.mult)}</span>` : ''}${e.items > 0 ? ` <span class="ev-mult">🎁 한정 ${e.items}</span>` : ''}<br><span class="small">${esc(e.descr || '')} <span class="muted">· ${evLeft(e)} (~${new Date(e.ends_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })})</span></span></span></a>`).join('');
+    while (box.lastChild) v.insertBefore(box.lastChild, v.firstChild);
+  }
   const IT = (a, slot) => { const id = a.items && a.items[slot]; const it = id && ITEMS.get(id); return it && it.slot === slot ? `<g>${it.svg}</g>` : ''; };
   async function loadItems() {
     try {
@@ -4579,25 +4618,30 @@ onmessage = (ev) => {
       <div class="form-actions"><button class="ghost" id="avRand" type="button">🎲 랜덤</button><button class="ghost" id="avUndo" type="button">되돌리기</button><button class="primary" id="avSave" type="button">저장</button></div></div>`;
     let cat = null; // 아이템 목록 (item_catalog)
     let slotTab = 'hat';
+    let mode = 'base'; // base 기본 · market 마켓 · mine 내 상품
     const drawItems = () => {
       const box = $('#avItems', el);
       if (!box) return;
       if (!cat) { box.innerHTML = ''; return; }
-      const list = cat.items.filter((i) => i.slot === slotTab && ITEMS.has(i.id));
-      const lockTxt = (i) => (i.kind === 'score' ? `🔒 ${Number(i.val).toLocaleString()}점` : i.kind === 'tier' ? `🔒 ${esc((TIERS[i.val] || {}).n || '티어')}` : i.kind === 'streak' ? `🔒 ${i.val}일 연속` : i.kind === 'rank1' ? `🔒 1등 ${i.val}회` : i.kind === 'reward' ? '🏅 특별 보상' : i.kind === 'event' ? '🎪 행사' : '🔒');
+      const list = cat.items.filter((i) => i.slot === slotTab && ITEMS.has(i.id) && (mode === 'market' ? i.market : !i.market));
+      const lockTxt = (i) => (i.kind === 'score' ? `🔒 ${Number(i.val).toLocaleString()}점` : i.kind === 'tier' ? `🔒 ${esc((TIERS[i.val] || {}).n || '티어')}` : i.kind === 'streak' ? `🔒 ${i.val}일 연속` : i.kind === 'rank1' ? `🔒 1등 ${i.val}회` : i.kind === 'reward' ? '🏅 특별 보상' : i.kind === 'event' ? '🎪 행사 한정' : '🔒');
       const tile = (i) => {
         const on = av.items[i.slot] === i.id;
-        const st = on ? '착용 중' : i.owned ? '입기' : i.can_claim ? '🎁 받기' : i.kind === 'price' ? `💎 ${i.price}` : lockTxt(i);
-        const cls = on ? 'on' : i.owned ? 'own' : i.can_claim || (i.kind === 'price' && cat.py >= i.price) ? 'can' : 'lock';
-        return `<button type="button" class="it-tile ${cls}" data-it="${esc(i.id)}" title="${esc(i.descr || i.name)}"><span class="it-pv">${avatarSvg({ ...av, items: { ...av.items, [i.slot]: i.id } }, 56)}</span><b>${esc(i.name)}</b><span class="it-st">${st}</span></button>`;
+        const buyable = i.kind === 'price' || (i.kind === 'event' && i.ev && i.price > 0);
+        const st = on ? '착용 중' : i.owned ? '입기' : i.can_claim ? '🎁 받기' : buyable ? `💎 ${i.price}${i.kind === 'event' ? ' 🎪' : ''}` : lockTxt(i);
+        const cls = on ? 'on' : i.owned ? 'own' : i.can_claim || (buyable && cat.py >= i.price) ? 'can' : 'lock';
+        return `<button type="button" class="it-tile ${cls}" data-it="${esc(i.id)}" title="${esc(i.descr || i.name)}"><span class="it-pv">${avatarSvg({ ...av, items: { ...av.items, [i.slot]: i.id } }, 56)}</span><b>${esc(i.name)}</b>${i.market && i.creator ? `<span class="it-by">by ${esc(dname(i.creator, '친구'))}${i.sales ? ` · ${i.sales}개 판매` : ''}</span>` : ''}<span class="it-st">${st}</span></button>`;
       };
       const claimable = cat.items.filter((i) => !i.owned && i.can_claim);
       box.innerHTML = `<h4>🎁 아이템 <span class="muted small">💎 ${cat.py} · ${Number(cat.score).toLocaleString()}점 · 🔥 최고 ${cat.streak || 0}일 · 🥇 ${cat.wins || 0}회</span></h4>
         ${claimable.length ? `<button type="button" class="primary" id="itAll">🎁 받을 수 있는 아이템 ${claimable.length}개 모두 받기</button>` : ''}
-        <div class="tabs it-tabs">${ITEM_SLOTS.map(([k, n, ic]) => `<button type="button" data-it-slot="${k}" class="${k === slotTab ? 'on' : ''}">${ic} ${n}</button>`).join('')}</div>
+        <div class="tabs it-tabs it-modes">${[['base', '🎁 기본 제공'], ['market', '🛍️ 마켓'], ['mine', '✏️ 내 상품']].map(([k, n]) => `<button type="button" data-it-mode="${k}" class="${k === mode ? 'on' : ''}">${n}</button>`).join('')}</div>
+        ${mode === 'mine' ? '<div id="itMine"></div>' : `<div class="tabs it-tabs">${ITEM_SLOTS.map(([k, n, ic]) => `<button type="button" data-it-slot="${k}" class="${k === slotTab ? 'on' : ''}">${ic} ${n}</button>`).join('')}</div>
         <div class="it-grid"><button type="button" class="it-tile ${av.items[slotTab] ? 'own' : 'on'}" data-it-none="1"><span class="it-pv">🚫</span><b>벗기</b><span class="it-st">${av.items[slotTab] ? '벗기' : '없음'}</span></button>${list.map(tile).join('') || '<p class="muted small">이 자리의 아이템이 아직 없어요.</p>'}</div>
-        <p class="muted small">🎁 받기: 조건을 채웠어요 · 💎: 파이포인트로 사기 · 🔒: 아직 잠겨 있어요. 저장을 눌러야 적용돼요.</p>`;
+        <p class="muted small">🎁 받기: 조건을 채웠어요 · 💎: 파이포인트로 사기 · 🔒: 아직 잠겨 있어요. 저장을 눌러야 적용돼요.</p>`}`;
       box.querySelectorAll('[data-it-slot]').forEach((b) => (b.onclick = () => { slotTab = b.dataset.itSlot; drawItems(); }));
+      box.querySelectorAll('[data-it-mode]').forEach((b) => (b.onclick = () => { mode = b.dataset.itMode; drawItems(); }));
+      if (mode === 'mine') drawMine($('#itMine', box));
       const all = $('#itAll', box);
       if (all) all.onclick = async () => {
         all.disabled = true;
@@ -4616,7 +4660,7 @@ onmessage = (ev) => {
           const { data: r, error } = await sb.rpc('item_claim', { p_item: i.id });
           if (error || r !== 'ok') return toast('받지 못했어요', true);
           toast(`🎁 ${i.name} 을(를) 받았어요!`);
-        } else if (i.kind === 'price') {
+        } else if (i.kind === 'price' || (i.kind === 'event' && i.ev && i.price > 0)) {
           if (cat.py < i.price) return toast('파이포인트가 부족해요', true);
           if (!confirm(`${i.name} 을(를) 💎 ${i.price} 에 살까요?`)) return;
           const { data: r, error } = await sb.rpc('item_buy', { p_item: i.id });
@@ -4625,6 +4669,24 @@ onmessage = (ev) => {
           growRefresh(true);
         } else return toast(i.kind === 'reward' ? '특별 문제를 풀면 받을 수 있어요' : '조건을 채우면 열려요');
         await loadCat(); draw();
+      }));
+    };
+    const drawMine = async (m) => {
+      m.innerHTML = '<p class="muted small">불러오는 중…</p>';
+      const { data, error } = await sb.rpc('market_mine');
+      if (error) { m.innerHTML = '<p class="muted small">마켓은 아직 준비되지 않았어요. (관리자가 v452_market_events.sql 을 실행하면 열려요)</p>'; return; }
+      const list = data || [];
+      const ST = { pending: '⏳ 심사 중', active: '🛍️ 판매 중', rejected: '❌ 반려', hidden: '내림' };
+      m.innerHTML = `<p class="muted small">내가 그린 아이템을 올리면 선생님이 확인한 뒤 마켓에 올라가요. 팔릴 때마다 <b>가격의 80%</b>가 내 파이포인트로 들어와요 (수수료 20%).</p>
+        <button class="primary" id="mkNew" type="button">✏️ 새 아이템 올리기</button>
+        <div class="mk-list">${list.map((x) => `<div class="mk-row"><span class="it-pv">${itemPreview(x.slot, x.svg, 64, av)}</span><div class="mk-info"><b>${esc(x.name)}</b> <span class="chip">${ST[x.status] || x.status}</span><br><span class="muted small">${esc((ITEM_SLOTS.find(([k]) => k === x.slot) || [])[1] || x.slot)} · 💎 ${x.price} · ${x.sales}개 판매 · 수익 💎 ${x.earned}${x.note ? ` · 반려 사유: ${esc(x.note)}` : ''}</span></div><div>${x.status === 'pending' || x.status === 'rejected' ? `<button class="ghost" data-mkedit="${esc(x.id)}" type="button">수정</button> ` : ''}${x.status === 'active' || x.status === 'pending' ? `<button class="ghost" data-mkoff="${esc(x.id)}" type="button">내리기</button>` : ''}</div></div>`).join('') || '<p class="muted small">아직 올린 아이템이 없어요.</p>'}</div>`;
+      const again = async () => { await Promise.all([loadCat(), loadItems()]); drawItems(); };
+      $('#mkNew', m).onclick = () => openMarketForm(null, av, again);
+      m.querySelectorAll('[data-mkedit]').forEach((b) => (b.onclick = () => openMarketForm(list.find((x) => x.id === b.dataset.mkedit), av, again)));
+      m.querySelectorAll('[data-mkoff]').forEach((b) => (b.onclick = async () => {
+        if (!confirm('마켓에서 내릴까요? (이미 산 친구들은 계속 쓸 수 있어요)')) return;
+        await sb.rpc('market_withdraw', { p_id: b.dataset.mkoff });
+        again();
       }));
     };
     const loadCat = async () => {
@@ -4948,8 +5010,8 @@ onmessage = (ev) => {
         <li>🗓️ <b>월간 랭킹</b> ${esc(lst(C.month_rank))}</li>
         <li>✅ <b>문제를 처음 맞출 때</b> 랜덤 ${esc(rng(C.solve_rand))}</li>
         <li>📚 <b>학습 레슨을 끝낼 때</b> 랜덤 ${esc(rng(C.learn_rand))}</li>
-        <li>🎁 시험 순위 · 행사 · 선생님 지급</li></ul>
-        <h3>어디에 써요?</h3><ul class="py-how"><li>🛡️ 연속 학습 방어권 (${esc(String(C.shield_price ?? 60))})</li><li>🧑‍🎤 캐릭터 꾸미기 아이템 <a href="#/me/avatar">(구경하기)</a></li></ul>
+        <li>🎁 시험 순위 · 행사 · 선생님 지급</li>${(typeof EVENTS !== 'undefined' && EVENTS.filter((e) => Number(e.mult) > 1).map((e) => `<li>${esc(e.emoji)} <b>${esc(e.title)}</b> 행사 중! 문제·학습 보상 💎 ×${Number(e.mult)}</li>`).join('')) || ''}</ul>
+        <h3>어디에 써요?</h3><ul class="py-how"><li>🛡️ 연속 학습 방어권 (${esc(String(C.shield_price ?? 60))})</li><li>🧑‍🎤 캐릭터 꾸미기 아이템·🛍️ 마켓 <a href="#/me/avatar">(구경하기)</a></li></ul>
         <a class="btn" href="#/me/streak">🛡️ 방어권 사러 가기</a></div>
       <div class="card list"><h3 style="padding:14px 18px 0;margin:0">최근 내역</h3>${(lg.data || []).map((x) => `<div class="row"><div class="row-main"><b>${esc(PY_WHY[x.reason] || x.reason)}</b> <span class="muted small">${esc(x.note || '')}</span><br><span class="muted small">${fmt(x.created_at)}</span></div><b class="${x.delta > 0 ? 'py-up' : 'py-down'}">${x.delta > 0 ? '+' : ''}${x.delta}</b></div>`).join('') || '<p class="muted center pad">아직 내역이 없어요. 문제를 풀면 모여요!</p>'}</div>`;
   }
@@ -5062,6 +5124,124 @@ onmessage = (ev) => {
         if (error || data !== 'ok') return toast('저장하지 못했어요', true);
         toast('저장했어요');
       }));
+    }];
+  }
+
+  // ---- 마켓: 학생이 아이템 올리기
+  const MK_ERR = { nouser: '학생 계정만 올릴 수 있어요', price: '가격은 10~2000 이에요', many: '심사 대기는 5개까지 가능해요', limit: '올릴 수 있는 개수(40개)를 넘었어요', invalid: '그림이나 입력값을 확인해주세요 (도형만 가능, 8000자 이하)' };
+  function openMarketForm(ex, av, done) {
+    const m = modal(`<h3>${ex ? '✏️ 아이템 고쳐서 다시 올리기' : '✏️ 새 아이템 올리기'}</h3>
+      <p class="muted small">SVG 그림 파일을 고르거나 코드를 붙여넣어요. 도형(path·circle·rect…)만 쓸 수 있고, 글자·이미지·스크립트는 지워져요. 선생님이 확인하면 마켓에 올라가요.</p>
+      <div class="mk-form">
+        <div class="mk-prev" id="mkPrev"></div>
+        <div class="mk-fields">
+          <label>이름<input type="text" id="mkName" maxlength="30" value="${esc(ex ? ex.name : '')}"></label>
+          <label>자리<select id="mkSlot">${ITEM_SLOTS.map(([k, n]) => `<option value="${k}" ${ex && ex.slot === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+          <label>가격 💎 (10~2000) <span class="muted small">— 팔리면 80% 가 내 몫이에요</span><input type="number" id="mkPrice" min="10" max="2000" value="${ex ? ex.price : 50}"></label>
+          <label>설명 (선택)<input type="text" id="mkDesc" maxlength="120" value="${esc(ex ? ex.descr : '')}"></label>
+        </div></div>
+      <label>그림 파일 (.svg)<input type="file" id="mkFile" accept=".svg,image/svg+xml"></label>
+      <label>또는 SVG 코드 붙여넣기<textarea id="mkSvg" class="code" rows="6" placeholder='<svg viewBox="0 0 100 100"><circle cx="50" cy="10" r="8" fill="#f00"/></svg>'>${esc(ex ? ex.svg : '')}</textarea></label>
+      <p class="muted small">그림 칸은 가로·세로 100 기준이에요. 얼굴 중심은 (50,46), 머리 꼭대기는 y=20 근처예요. 자세한 건 선생님께 받은 AVATAR_ITEM_GUIDE.md 를 보세요.</p>
+      <div class="form-actions"><button class="primary" id="mkGo" type="button">${ex ? '다시 올리기' : '올리기'}</button></div>`);
+    const root = m.el;
+    const cur = () => cleanSvg(extractSvg($('#mkSvg', root).value));
+    const prev = () => { const sv = $('#mkSvg', root).value.trim() ? cur() : ''; $('#mkPrev', root).innerHTML = sv ? itemPreview($('#mkSlot', root).value, sv, 130, av) : '<span class="muted small">미리보기</span>'; };
+    ['input', 'change'].forEach((ev) => { $('#mkSvg', root).addEventListener(ev, prev); $('#mkSlot', root).addEventListener(ev, prev); });
+    $('#mkFile', root).onchange = async (e) => { const f = e.target.files[0]; if (f) { $('#mkSvg', root).value = await f.text(); prev(); } };
+    prev();
+    $('#mkGo', root).onclick = async () => {
+      const svg = cur();
+      const name = $('#mkName', root).value.trim();
+      if (!name) return toast('이름을 적어주세요', true);
+      if (!svg) return toast('그림이 비었거나 읽을 수 없어요', true);
+      const { data, error } = await sb.rpc('market_submit', { p: { id: ex ? ex.id : null, name, slot: $('#mkSlot', root).value, price: parseInt($('#mkPrice', root).value, 10), descr: $('#mkDesc', root).value.trim(), svg } });
+      if (error) return toast('올리지 못했어요: ' + error.message, true);
+      if (data !== 'ok') return toast(MK_ERR[data] || '올리지 못했어요', true);
+      toast('올렸어요! 선생님이 확인하면 마켓에 올라가요 🛍️');
+      m.close();
+      if (done) done();
+    };
+  }
+
+  // ---- 관리자 > 마켓·행사
+  const toLocalInput = (d) => { const x = new Date(d); return new Date(x.getTime() - x.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); };
+  async function adminMarket() {
+    const [pd, ev, it] = await Promise.all([
+      sb.from('avatar_items').select('*').eq('market', true).eq('status', 'pending').order('created_at'),
+      sb.from('events').select('*').order('starts_at', { ascending: false }),
+      sb.from('avatar_items').select('id,name,slot,kind,event_id,price,market,status').eq('market', false).neq('status', 'hidden'),
+    ]);
+    if (pd.error || ev.error) return ['<div class="card pad muted">아직 준비되지 않았어요. (관리자가 v452_market_events.sql 을 실행하면 쓸 수 있어요)</div>'];
+    const pend = pd.data || [];
+    const evs = ev.data || [];
+    const its = it.data || [];
+    const TONES = ['orange', 'red', 'gold', 'green', 'teal', 'blue', 'purple', 'pink'];
+    const now = Date.now();
+    const evState = (e) => (e.status !== 'on' ? '꺼짐' : new Date(e.ends_at) <= now ? '종료' : new Date(e.starts_at) > now ? '예정' : '진행 중');
+    return [`
+      <div class="card"><h3>🛍️ 마켓 심사 대기 (${pend.length})</h3>
+        ${pend.map((x) => `<div class="mk-row"><span class="it-pv">${itemPreview(x.slot, x.svg, 72)}</span><div class="mk-info"><b>${esc(x.name)}</b> <span class="chip">${esc((ITEM_SLOTS.find(([k]) => k === x.slot) || [])[1] || x.slot)}</span> 💎 ${x.price}<br><span class="muted small">by ${esc(dname(x.created_by, '?'))} · ${fmt(x.created_at)}${x.descr ? ` · ${esc(x.descr)}` : ''}</span></div><div><button class="primary" data-mkok="${esc(x.id)}" type="button">승인</button> <button class="ghost" data-mkno="${esc(x.id)}" type="button">반려</button></div></div>`).join('') || '<p class="muted">심사 대기 중인 아이템이 없어요.</p>'}</div>
+      <div class="card"><h3>🎪 행사 만들기·고치기</h3>
+        <form id="evForm"><input type="hidden" id="evId"><div class="ga-grid">
+          <label>제목<input type="text" id="evTitle" maxlength="40" required placeholder="가을 할로윈 행사"></label>
+          <label>이모지<input type="text" id="evEmoji" maxlength="8" value="🎃"></label>
+          <label>배너 색<select id="evTone">${TONES.map((t) => `<option>${t}</option>`).join('')}</select></label>
+          <label>시작<input type="datetime-local" id="evFrom" required value="${toLocalInput(new Date())}"></label>
+          <label>끝<input type="datetime-local" id="evTo" required value="${toLocalInput(new Date(Date.now() + 7 * 864e5))}"></label>
+          <label>파이포인트 배수 (1=그대로, 2=2배)<input type="number" id="evMult" min="1" max="10" step="0.5" value="1"></label></div>
+          <label>설명<input type="text" id="evDesc" maxlength="300" placeholder="행사 기간 동안 문제 풀이·학습 보상 파이포인트가 2배!"></label>
+          <label class="inline"><input type="checkbox" id="evOn" checked> 켜기 (끄면 기간이어도 열리지 않아요)</label>
+          <div class="form-actions"><button class="primary">저장</button><button class="ghost" type="button" id="evReset">새로 쓰기</button></div></form></div>
+      <div class="card"><h3>🎪 행사 목록 (${evs.length})</h3>
+        ${evs.map((e) => `<div class="mk-row"><span class="it-pv">${esc(e.emoji)}</span><div class="mk-info"><b>${esc(e.title)}</b> <span class="chip">${evState(e)}</span>${Number(e.py_mult) > 1 ? ` <span class="chip">💎 ×${Number(e.py_mult)}</span>` : ''}<br><span class="muted small">${fmt(e.starts_at)} ~ ${fmt(e.ends_at)} · 한정 아이템 ${its.filter((x) => x.event_id === e.id).map((x) => esc(x.name)).join(', ') || '없음'}</span></div><div><button class="ghost" data-evedit="${e.id}" type="button">수정</button> <button class="ghost" data-evnote="${e.id}" type="button">📣 알림</button> <button class="link danger" data-evdel="${e.id}" type="button">삭제</button></div></div>`).join('') || '<p class="muted">행사가 없어요.</p>'}</div>
+      <div class="card"><h3>🎁 행사 한정 아이템 붙이기</h3>
+        <p class="muted small">고른 아이템의 얻는 조건이 "행사 한정"으로 바뀌어요. 가격 0 = 행사 중 무료 받기, 가격 &gt; 0 = 행사 중 파이포인트로 구입. 행사가 끝나면 새로 못 얻고, 이미 가진 건 계속 써요.</p>
+        <div class="ga-grid"><label>행사<select id="eiEv">${evs.map((e) => `<option value="${e.id}">${esc(e.emoji)} ${esc(e.title)}</option>`).join('')}</select></label>
+          <label>아이템<select id="eiItem">${its.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}${x.kind === 'event' ? ' (행사)' : ''}</option>`).join('')}</select></label>
+          <label>가격 💎<input type="number" id="eiPrice" min="0" value="0"></label></div>
+        <div class="form-actions"><button class="primary" id="eiGo" type="button">붙이기</button></div></div>`,
+    (v) => {
+      const reload = () => route(true);
+      v.querySelectorAll('[data-mkok]').forEach((b) => (b.onclick = async () => { const { data } = await sb.rpc('market_review', { p_id: b.dataset.mkok, p_ok: true, p_note: '' }); if (data === 'ok') { await loadItems(); toast('승인했어요'); reload(); } else toast('처리하지 못했어요', true); }));
+      v.querySelectorAll('[data-mkno]').forEach((b) => (b.onclick = async () => {
+        const note = prompt('반려 사유를 적어주세요 (학생에게 알림으로 가요)', '');
+        if (note === null) return;
+        const { data } = await sb.rpc('market_review', { p_id: b.dataset.mkno, p_ok: false, p_note: note });
+        if (data === 'ok') { toast('반려했어요'); reload(); } else toast('처리하지 못했어요', true);
+      }));
+      const fill = (e) => {
+        $('#evId', v).value = e ? e.id : ''; $('#evTitle', v).value = e ? e.title : ''; $('#evEmoji', v).value = e ? e.emoji : '🎃';
+        $('#evTone', v).value = e ? e.tone : 'orange'; $('#evFrom', v).value = toLocalInput(e ? e.starts_at : new Date());
+        $('#evTo', v).value = toLocalInput(e ? e.ends_at : new Date(Date.now() + 7 * 864e5)); $('#evMult', v).value = e ? e.py_mult : 1;
+        $('#evDesc', v).value = e ? e.descr : ''; $('#evOn', v).checked = e ? e.status === 'on' : true;
+      };
+      v.querySelectorAll('[data-evedit]').forEach((b) => (b.onclick = () => { fill(evs.find((e) => String(e.id) === b.dataset.evedit)); $('#evForm', v).scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
+      $('#evReset', v).onclick = () => fill(null);
+      $('#evForm', v).onsubmit = async (e) => {
+        e.preventDefault();
+        const p = { id: $('#evId', v).value || null, title: $('#evTitle', v).value.trim(), emoji: $('#evEmoji', v).value.trim() || '🎉', tone: $('#evTone', v).value, descr: $('#evDesc', v).value.trim(),
+          starts_at: new Date($('#evFrom', v).value).toISOString(), ends_at: new Date($('#evTo', v).value).toISOString(), py_mult: Number($('#evMult', v).value) || 1, status: $('#evOn', v).checked ? 'on' : 'off' };
+        if (new Date(p.ends_at) <= new Date(p.starts_at)) return toast('끝나는 시각이 시작보다 늦어야 해요', true);
+        const { data, error } = await sb.rpc('event_upsert', { p });
+        if (error || data !== 'ok') return toast('저장하지 못했어요 (입력값을 확인해주세요)', true);
+        toast('행사를 저장했어요'); loadEvents(); reload();
+      };
+      v.querySelectorAll('[data-evdel]').forEach((b) => (b.onclick = async () => { if (!confirm('행사를 지울까요? (붙어 있던 아이템은 그대로 남아요)')) return; const { data } = await sb.rpc('event_delete', { p_id: Number(b.dataset.evdel) }); if (data === 'ok') { loadEvents(); reload(); } }));
+      v.querySelectorAll('[data-evnote]').forEach((b) => (b.onclick = async () => {
+        const e = evs.find((x) => String(x.id) === b.dataset.evnote);
+        if (!confirm(`모든 학생에게 "${e.emoji} ${e.title}" 알림을 보낼까요?`)) return;
+        const { data, error } = await sb.rpc('notify_all', { p_title: `${e.emoji} ${e.title}`, p_body: e.descr || '행사가 열렸어요!', p_link: '#/home' });
+        if (error) return toast('보내지 못했어요: ' + error.message, true);
+        toast(`${data}명에게 보냈어요`);
+      }));
+      $('#eiGo', v).onclick = async () => {
+        const evId = Number($('#eiEv', v).value);
+        if (!evId) return toast('행사를 먼저 만들어주세요', true);
+        const { data, error } = await sb.rpc('event_item_set', { p_event: evId, p_item: $('#eiItem', v).value, p_price: parseInt($('#eiPrice', v).value, 10) || 0 });
+        if (error || data !== 'ok') return toast('붙이지 못했어요', true);
+        await loadItems(); toast('붙였어요'); reload();
+      };
     }];
   }
 
@@ -5445,13 +5625,14 @@ onmessage = (ev) => {
     if (can('content')) tabs.push(['edit', '✏️ 편집']);
     if (isAdmin()) tabs.push(['growth', '🏆 성장']);
     if (isAdmin()) tabs.push(['items', '🎁 아이템']);
+    if (isAdmin()) tabs.push(['market', '🛍️ 마켓·행사']);
     if (isAdmin()) tabs.push(['tier', '🏅 티어']);
     if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
     if (staffRole() === 'owner') tabs.push(['social', '💬 DM·알림']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, growth: adminGrowth, items: adminItems, nick: adminNick, social: adminSocial, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, growth: adminGrowth, items: adminItems, market: adminMarket, nick: adminNick, social: adminSocial, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -5902,7 +6083,7 @@ onmessage = (ev) => {
     if (me.status === 'rejected') return renderStatus('rejected');
     await Promise.all([loadDir(), loadDiffs(), loadTiers(), loadPre()]); // SQL 을 아직 안 돌렸으면 조용히 기본값으로 동작해요
     ensureDefs();
-    await Promise.all([loadExt([me.id]), loadItems()]);
+    await Promise.all([loadExt([me.id]), loadItems(), loadEvents()]);
     renderShell();
     route();
     startNotif();

@@ -800,3 +800,20 @@ nav.menu a .nbadge { margin-left: 6px; }
 .it-tile.can { border-color: #22c55e; } .it-tile.can .it-st { color: #16a34a; }
 .it-tile.lock { opacity: .6; }
 .it-grid.adm .it-tile { cursor: default; }
+
+/* ===== V4.5.2 마켓 · 행사 ===== */
+.it-by { font-size: 10px; color: var(--muted); line-height: 1.1; }
+.it-modes { margin-top: 4px; }
+.mk-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.mk-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.mk-row:last-child { border-bottom: 0; }
+.mk-row .it-pv { min-width: 64px; }
+.mk-info { flex: 1; min-width: 160px; }
+.mk-form { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.mk-prev { width: 130px; height: 130px; border: 1px dashed var(--border); border-radius: 18px; display: grid; place-items: center; flex: 0 0 auto; line-height: 0; }
+.mk-fields { flex: 1; min-width: 200px; }
+.ev-banner { display: flex; gap: 12px; align-items: center; color: var(--text); --bc: #f97316; border: 2px solid var(--bc); background: color-mix(in srgb, var(--bc) 12%, var(--card)); }
+.ev-banner.tone-red { --bc: #ef4444; } .ev-banner.tone-gold { --bc: #eab308; } .ev-banner.tone-green { --bc: #22c55e; } .ev-banner.tone-teal { --bc: #14b8a6; }
+.ev-banner.tone-blue { --bc: #3b82f6; } .ev-banner.tone-purple { --bc: #a855f7; } .ev-banner.tone-pink { --bc: #ec4899; }
+.ev-emoji { font-size: 34px; line-height: 1; }
+.ev-mult { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 800; background: var(--bc); color: #fff; margin-left: 4px; }

@@ -124,6 +124,10 @@
 - **자동 공지**: 승급자가 있는 날은 공지가 하루에 한 개 올라가요 ("🎉 티어 승급 소식 (10월 28일)"). 같은 날 승급자가 더 생기면 같은 글이 갱신돼요. 누군가 홈을 열 때 어제·오늘 것을 확인해서 만들어요(서버 예약 작업 없이 동작). 선생님·직원·SOLVER 등급 학생은 빠져요.
 - **공지 상단 고정**: 내가 쓴 공지 글에서 [📌 상단 고정] 버튼(또는 글쓰기·수정의 체크박스)을 누르면 공지 목록·홈 맨 위에 빨갛게 고정돼요. 여러 개면 가나다 순이에요.
 
+## V4.5.2 — 마켓 · 행사
+- `v452_market_events.sql`: events, avatar_items(market/event_id/reject_note, 상태 pending·rejected), market_submit/mine/withdraw/review, event_active/upsert/delete/item_set, item_buy(마켓 80% 정산·행사 한정), py_event_mult(파이포인트 배수).
+- 다음: V4.5.3 시험 탭.
+
 ## V4.5.1 — 캐릭터 아이템
 - `v451_items.sql`: avatar_items / avatar_inventory / exercise_rewards, item_catalog·claim·buy RPC, 저장 시 소유 검사 트리거, 문제 보상 트리거, SVG 검사 함수.
 - 업로드 형식과 AI 프롬프트는 `AVATAR_ITEM_GUIDE.md`, 예시는 `avatar_items_sample.json`.
