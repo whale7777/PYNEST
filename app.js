@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.4.1';
+  const APP_VERSION = '4.5.0';
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -323,6 +323,7 @@
 
   /* ---------- 로그인 / 가입 신청 ---------- */
   function renderAuth(tab = 'login') {
+    document.body.classList.remove('shell', 'menu-open');
     const signup = tab === 'signup';
     app.innerHTML = `
       <div class="auth-wrap"><div class="card auth">
@@ -389,6 +390,7 @@
   }
 
   function renderStatus(kind) {
+    document.body.classList.remove('shell', 'menu-open');
     const pending = kind === 'pending';
     app.innerHTML = `
       <div class="auth-wrap"><div class="card auth center">
@@ -405,35 +407,53 @@
 
   /* ---------- 앱 뼈대 ---------- */
   const NAV = [
-    ['home', '🏠', '홈'], ['learn', '📚', '학습'], ['lectures', '🎬', '강의'], ['sets', '📄', '문제'], ['ranking', '🏆', '랭킹'],
-    ['board/notice', '📢', '공지'], ['board/qna', '❓', '질문'], ['board/assignment', '📝', '과제'],
-    ['board/free', '💬', '자유'],
-    ['golive/', '📡', '라이브 · 저지', 'ext'],
+    ['home', '🏠', '홈', '', '배우기'], ['learn', '📚', '학습', '', '배우기'], ['lectures', '🎬', '강의', '', '배우기'], ['sets', '📄', '문제', '', '배우기'], ['golive/', '📡', '라이브 · 저지', 'ext', '배우기'],
+    ['ranking', '🏆', '랭킹', '', '경쟁'],
+    ['board/notice', '📢', '공지', '', '소통'], ['board/qna', '❓', '질문', '', '소통'], ['board/assignment', '📝', '과제', '', '소통'], ['board/free', '💬', '자유', '', '소통'],
   ];
 
   function renderShell() {
     const items = NAV.filter(([k]) => (k === 'lectures' ? tierCan('lecture') : k === 'sets' ? tierCan('problem') : k === 'golive/' ? tierCan('live') : true));
-    if (can('review')) items.push(['review', '📥', '제출함']);
-    if (staffRole()) items.push(['admin', '🛠️', '관리자']);
+    items.push(['me', '👤', '나', '', '내 공간']);
+    if (can('review')) items.push(['review', '📥', '제출함', '', '내 공간']);
+    if (staffRole()) items.push(['admin', '🛠️', '관리자', '', '내 공간']);
+    let grp = '';
+    const navHtml = items.map(([k, ic, name, soon, g]) => {
+      const head = g !== grp ? `<div class="nav-grp">${g}</div>` : '';
+      grp = g;
+      return head + (soon === 'ext' ? `<a href="${k}" data-k="${k}"><i>${ic}</i> ${name}</a>` : `<a href="#/${k}" data-k="${k}"><i>${ic}</i> ${name}${k === 'me' ? '<span class="nbadge" data-bell hidden></span>' : ''}</a>`);
+    }).join('');
+    document.body.classList.add('shell');
     app.innerHTML = `
       <header class="top">
         <button class="icon" id="menuBtn" aria-label="메뉴" aria-expanded="false" title="메뉴">☰</button>
         <a class="brand" href="#/home">${esc(ICON)} ${esc(SITE)}</a>
         <div class="spacer"></div>
+        <span id="gChips" class="gchips"></span>
         <span class="who">${whoHtml()}</span>
         ${CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
-        <a class="icon bellbtn" href="#/settings/notif" title="알림" aria-label="알림">🔔<span class="nbadge" data-bell hidden></span></a>
-        <a class="icon" href="#/settings" title="설정">⚙️</a>
+        <a class="icon bellbtn" href="#/me/notif" title="알림" aria-label="알림">🔔<span class="nbadge" data-bell hidden></span></a>
+        <a class="avbtn" href="#/me" title="나 (프로필·캐릭터·설정)" aria-label="나"></a>
         <button class="ghost" id="logoutBtn">로그아웃</button>
       </header>
       <nav class="menu" id="menu">
-        ${items.map(([k, ic, name, soon]) => (soon === 'ext' ? `<a href="${k}" data-k="${k}">${ic} ${name}</a>` : `<a href="#/${k}" data-k="${k}" class="${soon ? 'soon' : ''}">${ic} ${name}</a>`)).join('')}
+        <a class="side-brand" href="#/home">${esc(ICON)} ${esc(SITE)}</a>
+        ${navHtml}
       </nav>
       <div class="menu-back" id="menuBack"></div>
-      <main id="view"></main>`;
+      <main id="view"></main>
+      <nav class="tabbar" id="tabbar">
+        <a href="#/home" data-k="home"><i>🏠</i>홈</a>
+        <a href="#/learn" data-k="learn"><i>📚</i>학습</a>
+        <a href="#/ranking" data-k="ranking"><i>🏆</i>랭킹</a>
+        <a href="#/me" data-k="me"><i>👤</i>나<span class="nbadge" data-bell hidden></span></a>
+        <button type="button" id="moreBtn"><i>☰</i>더보기</button>
+      </nav>`;
+    refreshHeadAv();
     const setMenu = (open) => { document.body.classList.toggle('menu-open', open); $('#menuBtn').setAttribute('aria-expanded', open ? 'true' : 'false'); };
     $('#menuBtn').onclick = () => setMenu(!document.body.classList.contains('menu-open'));
+    $('#moreBtn').onclick = () => setMenu(!document.body.classList.contains('menu-open'));
     $('#menuBack').onclick = () => setMenu(false);
     $('#menu').onclick = (e) => { if (e.target.closest('a')) setMenu(false); };
     document.onkeydown = (e) => { if (e.key === 'Escape') setMenu(false); };
@@ -448,9 +468,10 @@
     const y = window.scrollY;
     flushDrafts();
     const [a, b, c] = (location.hash.replace(/^#\//, '') || 'home').split('/');
-    const key = a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' || a === 'p' ? 'sets' : a;
+    const key = a === 'settings' ? 'me' : a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? `board/${b}` : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' || a === 'p' ? 'sets' : a;
     document.body.classList.remove('menu-open');
     document.querySelectorAll('#menu a').forEach((l) => l.classList.toggle('on', l.dataset.k === key));
+    document.querySelectorAll('#tabbar [data-k]').forEach((l) => l.classList.toggle('on', l.dataset.k === key));
 
     const pages = {
       home: () => pageHome(),
@@ -470,6 +491,7 @@
       edit: () => pageEdit(b),
       admin: () => pageAdmin(),
       settings: () => pageSettings(b, c),
+      me: () => pageSettings(b, c),
       judge: () => pageSoon('⚖️ 온라인 저지', '코드를 제출하면 자동으로 채점해주는 기능이에요. 수업 시간에 선생님 노트북에서 돌리는 방식으로 곧 붙일 예정이에요.'),
       live: () => pageSoon('📡 라이브', '수업 시간에 실시간으로 강의를 보는 기능이에요. 곧 붙일 예정이에요.'),
     };
@@ -491,6 +513,8 @@
       v.innerHTML = html;
       if (bind) bind(v);
       window.scrollTo(0, keepScroll ? y : 0);
+      refreshHeadAv();
+      growRefresh(a === 'home' || a === 'me' || a === 'settings').then(() => { if (a === 'home' && tok === navTok) injectHomeGrow(); });
     } catch (err) {
       if (tok !== navTok) return;
       console.error(err);
@@ -4358,7 +4382,7 @@ onmessage = (ev) => {
     s += `<rect x="43" y="56" width="14" height="14" rx="5" fill="${sk}"/><path d="M43 64 Q50 70 57 64 V60 H43Z" fill="${dark}"/>`;
     // 뒷머리
     if (a.hair === 'long') s += `<path d="M23 50 C20 14 80 14 77 50 L80 80 Q50 88 20 80Z" fill="${hc}"/>`;
-    if (a.hair === 'bun') s += `<circle cx="50" cy="15" r="10" fill="${hc}"/>`;
+    if (a.hair === 'bun') s += `<circle cx="50" cy="11" r="10" fill="${hc}"/>`;
     // 얼굴
     s += `<circle cx="26.5" cy="48" r="5" fill="${sk}"/><circle cx="73.5" cy="48" r="5" fill="${sk}"/><ellipse cx="50" cy="46" rx="24" ry="26" fill="${sk}"/>`;
     s += `<ellipse cx="35" cy="55" rx="4.5" ry="3" fill="#ff7a8a" fill-opacity=".35"/><ellipse cx="65" cy="55" rx="4.5" ry="3" fill="#ff7a8a" fill-opacity=".35"/>`;
@@ -4382,10 +4406,10 @@ onmessage = (ev) => {
     s += M[a.mouth] || M.smile;
     // 앞머리
     const H = {
-      short: `<path d="M26 46 C22 18 78 18 74 46 C68 36 58 31 50 31 C42 31 32 36 26 46Z" fill="${hc}"/>`,
+      short: `<path d="M25 48 C20 2 80 2 75 48 C68 36 58 31 50 31 C42 31 32 36 25 48Z" fill="${hc}"/>`,
       spiky: `<path d="M26 46 L24 28 L34 34 L38 18 L46 30 L52 14 L58 30 L66 18 L68 34 L76 28 L74 46 C68 38 58 33 50 33 C42 33 32 38 26 46Z" fill="${hc}"/>`,
-      long: `<path d="M26 50 C22 18 78 18 74 50 C70 38 62 31 50 31 C38 31 30 38 26 50Z" fill="${hc}"/>`,
-      bun: `<path d="M26 46 C22 18 78 18 74 46 C68 36 58 31 50 31 C42 31 32 36 26 46Z" fill="${hc}"/>`,
+      long: `<path d="M25 52 C19 2 81 2 75 52 C70 38 62 31 50 31 C38 31 30 38 25 52Z" fill="${hc}"/>`,
+      bun: `<path d="M25 48 C20 2 80 2 75 48 C68 36 58 31 50 31 C42 31 32 36 25 48Z" fill="${hc}"/>`,
       curly: `<g fill="${hc}"><circle cx="30" cy="34" r="9"/><circle cx="42" cy="26" r="9"/><circle cx="55" cy="25" r="9"/><circle cx="68" cy="33" r="9"/><circle cx="24" cy="44" r="6"/><circle cx="76" cy="44" r="6"/></g>`,
     };
     if (a.hair !== 'none') s += H[a.hair] || '';
@@ -4524,7 +4548,7 @@ onmessage = (ev) => {
     $('#avRand', el).onclick = () => {
       const r = (arr) => arr[Math.floor(Math.random() * arr.length)];
       const ok = (list) => list.filter(([, , need]) => need == null || tIdx >= need).map((x) => x[0]);
-      av = { skin: r(AV.skin), hairColor: r(AV.hairColor), outfitColor: r(AV.outfitColor), bg: r(AV.bg), hatColor: r(AV.outfitColor), hair: r(ok(AV.hair)), eyes: r(ok(AV.eyes)), mouth: r(ok(AV.mouth)), outfit: r(ok(AV.outfit)), hat: r(['none', ...ok(AV.hat)]), acc: r(['none', ...ok(AV.acc)]) };
+      av = { skin: r(AV.skin), hairColor: r(AV.hairColor), outfitColor: r(AV.outfitColor), bg: r(AV.bg), hatColor: r(AV.outfitColor), hair: r(ok(AV.hair).filter((v) => v !== 'none')), eyes: r(ok(AV.eyes)), mouth: r(ok(AV.mouth)), outfit: r(ok(AV.outfit)), hat: r(['none', ...ok(AV.hat)]), acc: r(['none', ...ok(AV.acc)]) };
       draw();
     };
     $('#avUndo', el).onclick = () => { av = normAv(saved, me.id); draw(); };
@@ -4694,16 +4718,269 @@ onmessage = (ev) => {
     }];
   }
 
+  /* ---------- V4.5.0 성장: 파이포인트 · 연속 학습 · 배지 (v450_growth.sql) ---------- */
+  let GROW = null;
+  let GROW_OK = true;
+  let growAt = 0;
+  const GROW_HINT = '아직 준비되지 않았어요. (관리자가 v450_growth.sql 을 실행하면 쓸 수 있어요)';
+  const kstDay = (d = new Date()) => new Date(d).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+  const PY_WHY = { solve: '문제를 맞췄어요', learn: '학습 레슨 완료', rank_week: '주간 랭킹 보상', rank_month: '월간 랭킹 보상', admin: '선생님이 조정', shield: '연속 학습 방어권', exam_rank: '시험 순위 보상', item_reward: '아이템 보상', event_claim: '행사 보상', item_buy: '아이템 구입', market_sale: '마켓 판매 수익', market_buy: '마켓 구입' };
+  function growChips() {
+    const el = $('#gChips');
+    if (!el) return;
+    if (!GROW || !GROW.student) { el.innerHTML = ''; return; }
+    const s = GROW.streak || {};
+    el.innerHTML = `<a class="gchip ${s.today ? 'on' : 'off'}" href="#/me/streak" title="${s.today ? '오늘 학습 완료!' : '오늘 학습하면 연속 학습이 이어져요'}">🔥 ${s.streak || 0}</a><a class="gchip py" href="#/me/wallet" title="파이포인트">💎 ${GROW.py || 0}</a>`;
+  }
+  function refreshHeadAv() {
+    const b = $('.avbtn');
+    if (b && me) b.innerHTML = avatarHtml(me.id, 34) || '👤';
+  }
+  async function growRefresh(force) {
+    if (!GROW_OK || !me || me.status !== 'approved') return;
+    if (!force && Date.now() - growAt < 20000) return;
+    growAt = Date.now();
+    const { data, error } = await sb.rpc('growth_boot');
+    if (error) { if (/Could not find|does not exist|42883|PGRST202/.test(`${error.code || ''} ${error.message || ''}`)) GROW_OK = false; return; }
+    if (!data) return;
+    GROW = data;
+    growChips();
+    (data.new_badges || []).forEach((b) => toast(`🎖️ 새 배지! ${b.icon} ${b.name}`));
+  }
+  function injectHomeGrow() {
+    const v = $('#view');
+    if (!v || !GROW || !GROW.student || $('.home-grow', v) || !/^#\/home|^#?\/?$/.test(location.hash || '#/home')) return;
+    const s = GROW.streak || {};
+    const msg = s.today ? `오늘 학습 완료! ${s.streak}일째 이어가는 중이에요 🎉`
+      : s.rescue > 0 ? `어제를 놓쳤지만 방어권 ${s.rescue}개가 자동으로 지켜줘요 🛡️ 오늘 학습하면 이어져요`
+        : s.streak > 0 ? `${s.streak}일 연속 중! 오늘 학습하면 ${s.streak + 1}일이 돼요`
+          : '오늘 문제 하나만 풀어도 연속 학습이 시작돼요';
+    const el = document.createElement('a');
+    el.className = `card home-grow ${s.today ? 'done' : ''}`;
+    el.href = '#/me/streak';
+    el.innerHTML = `<span class="hg-ic">${s.today ? '🔥' : '🕯️'}</span><span class="hg-t"><b>${esc(msg)}</b><br><span class="muted small">💎 ${GROW.py || 0} · 🛡️ ${GROW.shields || 0} · 눌러서 내 성장 보기</span></span>`;
+    v.insertBefore(el, v.firstChild);
+  }
+
+  // ---- 나 > 내 정보 (허브)
+  async function initHubTab(el) {
+    await Promise.all([loadExt([me.id]), growRefresh(true)]);
+    const staff = !!staffRole();
+    const d = DIR.get(me.id) || {};
+    const sc = Math.max(0, Number(d.score) || 0);
+    const k = tierOf(sc);
+    const pct = Math.max(0, Math.min(100, Math.round(((sc - k.lo) / Math.max(1, k.hi - k.lo)) * 100)));
+    const s = (GROW && GROW.streak) || {};
+    let nb = 0;
+    if (!staff && GROW_OK) { const { count } = await sb.from('user_badges').select('badge_id', { count: 'exact', head: true }).eq('user_id', me.id); nb = count || 0; }
+    const TILES = [['avatar', '🧑‍🎤', '캐릭터 꾸미기'], ['prof', '✨', '프로필'], ['badges', '🎖️', '배지'], ['streak', '🔥', '연속 학습'], ['wallet', '💎', '파이포인트'], ['dm', '💬', '메시지'], ['notif', '🔔', '알림'], ['rec', '📋', '내 풀이·임시저장'], ['ide', '⌨️', '코드 편집기'], ['acct', '⚙️', '계정·화면']];
+    el.innerHTML = `<div class="card me-hero">
+        <div class="me-av">${avatarHtml(me.id, 84)}</div>
+        <div class="me-info"><h3 style="margin:0">${esc(selfName())} ${staff ? staffTag() : ''}</h3>
+          ${staff ? '<p class="muted small">선생님 계정이에요.</p>' : `<div class="me-tier">${tierBadge(sc, 26)} <b>${esc(k.name)}</b> <span class="muted small">${sc.toLocaleString()}점</span></div>
+          <div class="prog"><i style="width:${pct}%;background:var(--primary)"></i></div>
+          <p class="muted small" style="margin:4px 0 0">다음 단계까지 ${Math.max(0, Math.ceil(k.hi - sc)).toLocaleString()}점</p>`}</div></div>
+      ${staff || !GROW_OK ? '' : `<div class="stat-grid">
+        <a class="stat hot" href="#/me/streak"><div class="stat-n">🔥 ${s.streak || 0}</div><div class="stat-l">연속 학습(일)</div></a>
+        <a class="stat new" href="#/me/wallet"><div class="stat-n">💎 ${(GROW && GROW.py) || 0}</div><div class="stat-l">파이포인트</div></a>
+        <a class="stat ok" href="#/me/badges"><div class="stat-n">🎖️ ${nb}</div><div class="stat-l">내 배지</div></a></div>`}
+      <div class="me-grid">${TILES.map(([kk, ic, nm]) => `<button type="button" class="me-tile" data-go="${kk}"><span class="me-ic">${ic}</span>${nm}</button>`).join('')}</div>
+      <div class="form-actions" style="justify-content:center"><button class="ghost" id="meLogout" type="button">로그아웃</button></div>`;
+    el.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => $('#view').dispatchEvent(new CustomEvent('pn-tab', { detail: b.dataset.go }))));
+    $('#meLogout', el).onclick = logout;
+  }
+
+  // ---- 나 > 연속 학습
+  async function initStreakTab(el) {
+    el.innerHTML = '<p class="muted center pad">불러오는 중…</p>';
+    const { data: s, error } = GROW_OK ? await sb.rpc('streak_info') : { error: true };
+    if (error || !s) { el.innerHTML = `<div class="card pad muted">${GROW_HINT}</div>`; return; }
+    if (GROW && GROW.student === false) { el.innerHTML = '<div class="card pad muted">선생님 계정에는 연속 학습이 없어요.</div>'; return; }
+    const cfg = (GROW && GROW.cfg) || {};
+    const price = Number(cfg.shield_price) || 60;
+    const max = Number(cfg.shield_max) || 2;
+    const marks = new Map((s.days || []).map((x) => [x.d, x.k]));
+    const today = kstDay();
+    const t0 = new Date(`${today}T00:00:00Z`);
+    const dow = (t0.getUTCDay() + 6) % 7;
+    const cells = [];
+    for (let i = -(dow + 28); i < 7 - dow; i += 1) {
+      const dt = new Date(t0.getTime() + i * 864e5).toISOString().slice(0, 10);
+      const k = marks.get(dt);
+      cells.push(`<div class="cal-c ${k ? `k-${k}` : ''} ${dt === today ? 'today' : ''} ${dt > today ? 'fut' : ''}" title="${dt}">${k === 'shield' ? '🛡️' : k ? '🔥' : ''}<span>${Number(dt.slice(8))}</span></div>`);
+    }
+    const msg = s.today ? '오늘 학습 완료! 내일도 이어가요 🎉'
+      : s.rescue > 0 ? `놓친 ${s.rescue}일은 방어권이 자동으로 지켜줘요 🛡️ 오늘 학습하면 연속이 이어져요`
+        : s.broken ? '연속 학습이 끊겼어요. 오늘부터 다시 시작해봐요!'
+          : s.streak > 0 ? '오늘 학습하면 연속 기록이 늘어나요' : '문제를 풀거나 학습 레슨을 하면 출석이에요';
+    el.innerHTML = `<div class="card streak-hero ${s.today ? 'done' : ''}"><div class="sh-n">🔥 ${s.streak}</div><div><b>일 연속 학습</b><br><span class="muted small">${esc(msg)}</span></div></div>
+      <div class="stat-grid"><div class="stat"><div class="stat-n">${s.best}</div><div class="stat-l">최고 기록(일)</div></div>
+        <div class="stat"><div class="stat-n">🛡️ ${s.shields}/${max}</div><div class="stat-l">방어권</div></div>
+        <div class="stat"><div class="stat-n">💎 ${(GROW && GROW.py) || 0}</div><div class="stat-l">파이포인트</div></div></div>
+      <div class="card"><h3>🛡️ 연속 학습 방어권</h3>
+        <p class="muted small">하루를 놓쳐도 방어권이 있으면 자동으로 쓰여서 연속 기록이 이어져요. 최대 ${max}개까지 가질 수 있어요.</p>
+        <button class="primary" id="shBuy" type="button" ${s.shields >= max ? 'disabled' : ''}>💎 ${price}로 방어권 사기</button></div>
+      <div class="card"><h3>최근 5주</h3><div class="cal"><b>월</b><b>화</b><b>수</b><b>목</b><b>금</b><b>토</b><b>일</b>${cells.join('')}</div>
+        <p class="muted small" style="margin:8px 0 0">🔥 학습한 날 · 🛡️ 방어권으로 지킨 날</p></div>`;
+    $('#shBuy', el).onclick = async () => {
+      const { data: r, error: er } = await sb.rpc('py_buy_shield');
+      if (er) return toast('처리하지 못했어요: ' + er.message, true);
+      const M = { ok: '방어권을 샀어요! 🛡️', full: '방어권을 이미 최대로 가지고 있어요', poor: '파이포인트가 부족해요', nouser: '학생 계정만 살 수 있어요' };
+      toast(M[r] || '처리하지 못했어요', r !== 'ok');
+      await growRefresh(true);
+      initStreakTab(el);
+    };
+  }
+
+  // ---- 나 > 파이포인트
+  async function initWalletTab(el) {
+    el.innerHTML = '<p class="muted center pad">불러오는 중…</p>';
+    if (!GROW_OK) { el.innerHTML = `<div class="card pad muted">${GROW_HINT}</div>`; return; }
+    await growRefresh(true);
+    const [lg, cf] = await Promise.all([
+      sb.from('py_ledger').select('delta,reason,note,created_at').eq('user_id', me.id).order('id', { ascending: false }).limit(40),
+      sb.from('py_config').select('key,val'),
+    ]);
+    if (lg.error) { el.innerHTML = `<div class="card pad muted">${GROW_HINT}</div>`; return; }
+    const C = {}; (cf.data || []).forEach((r) => { C[r.key] = r.val; });
+    const rng = (v) => (Array.isArray(v) ? `${v[0]}~${v[1]}` : '?');
+    const lst = (v) => (Array.isArray(v) ? v.map((x, i) => `${i + 1}위 ${x}`).join(' · ') : '?');
+    el.innerHTML = `<div class="card streak-hero"><div class="sh-n">💎 ${(GROW && GROW.py) || 0}</div><div><b>파이포인트</b><br><span class="muted small">랭킹 점수와는 따로 모으는 재화예요</span></div></div>
+      <div class="card"><h3>어떻게 모아요?</h3><ul class="py-how">
+        <li>📅 <b>주간 랭킹</b> ${esc(lst(C.week_rank))} <span class="muted small">(동점이면 나눠 가져요)</span></li>
+        <li>🗓️ <b>월간 랭킹</b> ${esc(lst(C.month_rank))}</li>
+        <li>✅ <b>문제를 처음 맞출 때</b> 랜덤 ${esc(rng(C.solve_rand))}</li>
+        <li>📚 <b>학습 레슨을 끝낼 때</b> 랜덤 ${esc(rng(C.learn_rand))}</li>
+        <li>🎁 시험 순위 · 행사 · 선생님 지급</li></ul>
+        <h3>어디에 써요?</h3><ul class="py-how"><li>🛡️ 연속 학습 방어권 (${esc(String(C.shield_price ?? 60))})</li><li>🧑‍🎤 캐릭터 꾸미기 아이템 <span class="muted small">(곧 열려요)</span></li></ul>
+        <a class="btn" href="#/me/streak">🛡️ 방어권 사러 가기</a></div>
+      <div class="card list"><h3 style="padding:14px 18px 0;margin:0">최근 내역</h3>${(lg.data || []).map((x) => `<div class="row"><div class="row-main"><b>${esc(PY_WHY[x.reason] || x.reason)}</b> <span class="muted small">${esc(x.note || '')}</span><br><span class="muted small">${fmt(x.created_at)}</span></div><b class="${x.delta > 0 ? 'py-up' : 'py-down'}">${x.delta > 0 ? '+' : ''}${x.delta}</b></div>`).join('') || '<p class="muted center pad">아직 내역이 없어요. 문제를 풀면 모여요!</p>'}</div>`;
+  }
+
+  // ---- 나 > 배지
+  const BADGE_GROUP = [['score', '🏆 점수'], ['solved', '🧩 문제 풀이'], ['streak', '🔥 연속 학습'], ['learn', '📚 학습'], ['exam_join', '📝 시험'], ['exam_first', '📝 시험'], ['pypoint', '💎 파이포인트'], ['manual', '🎁 특별']];
+  const badgeTile = (b, got) => `<div class="bdg tone-${esc(b.tone)} ${got ? 'on' : ''}" title="${esc(b.descr)}"><div class="bdg-ic">${esc(b.icon)}</div><b>${esc(b.name)}</b><span class="muted small">${got ? `${fmt(got)} 획득` : esc(b.descr)}</span></div>`;
+  async function initBadgesTab(el) {
+    el.innerHTML = '<p class="muted center pad">불러오는 중…</p>';
+    if (!GROW_OK) { el.innerHTML = `<div class="card pad muted">${GROW_HINT}</div>`; return; }
+    await growRefresh(true);
+    const [d, u] = await Promise.all([sb.from('badge_defs').select('*').order('position').order('id'), sb.from('user_badges').select('badge_id,earned_at').eq('user_id', me.id)]);
+    if (d.error) { el.innerHTML = `<div class="card pad muted">${GROW_HINT}</div>`; return; }
+    const got = new Map((u.data || []).map((x) => [x.badge_id, x.earned_at]));
+    const defs = d.data || [];
+    const seen = new Set();
+    const sections = BADGE_GROUP.map(([k, title]) => {
+      const kinds = BADGE_GROUP.filter(([, t]) => t === title).map(([x]) => x);
+      if (seen.has(title)) return '';
+      seen.add(title);
+      const arr = defs.filter((b) => kinds.includes(b.kind));
+      return arr.length ? `<h3>${title}</h3><div class="bdg-grid">${arr.map((b) => badgeTile(b, got.get(b.id))).join('')}</div>` : '';
+    }).join('');
+    el.innerHTML = `<div class="card streak-hero"><div class="sh-n">🎖️ ${got.size}</div><div><b>/ ${defs.length} 배지</b><br><span class="muted small">조건을 채우면 자동으로 받아요</span></div></div>${sections}`;
+  }
+
+  // ---- 관리자 > 성장 (점수·파이포인트·배지·보상 설정)
+  async function adminGrowth() {
+    const [pr, bd, cf] = await Promise.all([
+      sb.from('profiles').select('id,username').eq('status', 'approved').neq('role', 'admin'),
+      sb.from('badge_defs').select('*').order('position').order('id'),
+      sb.from('py_config').select('key,val'),
+    ]);
+    if (bd.error || cf.error) return [`<div class="card pad muted">${GROW_HINT}</div>`];
+    const studs = (pr.data || []).filter((x) => x.id !== me.id).map((x) => ({ id: x.id, name: dname(x.id, x.username) })).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    const defs = bd.data || [];
+    const KINDS = [['score', '랭킹 점수'], ['solved', '푼 문제 수'], ['streak', '연속 학습(일)'], ['learn', '끝낸 레슨 수'], ['exam_join', '시험 응시'], ['exam_first', '시험 1등'], ['pypoint', '누적 파이포인트'], ['manual', '직접 지급']];
+    const TONES = ['blue', 'green', 'orange', 'purple', 'red', 'gold', 'teal', 'pink'];
+    const CFG = [['week_rank', '주간 랭킹 1·2·3위 보상', '[30,20,10]'], ['month_rank', '월간 랭킹 1·2·3위 보상', '[100,60,30]'], ['solve_rand', '문제 맞출 때 랜덤 (최소,최대)', '[2,6]'], ['learn_rand', '레슨 끝낼 때 랜덤 (최소,최대)', '[3,8]'], ['shield_price', '방어권 가격', '60'], ['shield_max', '방어권 최대 개수', '2']];
+    const CV = {}; (cf.data || []).forEach((r) => { CV[r.key] = JSON.stringify(r.val); });
+    return [`
+      <div class="card"><h3>👤 학생 점수·파이포인트</h3>
+        <label>학생<select id="gaUser"><option value="">— 고르세요 —</option>${studs.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label>
+        <div id="gaInfo" class="muted small" style="margin:8px 0">학생을 고르면 현재 상태가 보여요.</div>
+        <div class="ga-grid">
+          <form id="gaScore"><h4>🏆 랭킹 점수 조정</h4><input type="number" id="gaSv" placeholder="+100 / -50" required><input type="text" id="gaSn" maxlength="100" placeholder="사유 (학생에게 알림으로 가요)"><button class="primary">적용</button></form>
+          <form id="gaPy"><h4>💎 파이포인트 지급/차감</h4><input type="number" id="gaPv" placeholder="+50 / -20" required><input type="text" id="gaPn" maxlength="100" placeholder="사유"><button class="primary">적용</button></form>
+          <form id="gaBadge"><h4>🎖️ 배지 지급/회수</h4><select id="gaBd">${defs.map((b) => `<option value="${esc(b.id)}">${esc(b.icon)} ${esc(b.name)}</option>`).join('')}</select><div class="form-actions"><button class="primary" data-on="1">지급</button><button class="ghost" data-on="0">회수</button></div></form>
+        </div></div>
+      <div class="card"><h3>🎖️ 배지 만들기·고치기</h3>
+        <form id="gaDef"><div class="ga-grid">
+          <label>ID (영문 소문자·숫자·_)<input type="text" id="bdId" pattern="[a-z0-9_]{2,40}" required></label>
+          <label>이름<input type="text" id="bdName" maxlength="30" required></label>
+          <label>아이콘(이모지)<input type="text" id="bdIcon" maxlength="8" value="🏅"></label>
+          <label>설명<input type="text" id="bdDesc" maxlength="120"></label>
+          <label>조건<select id="bdKind">${KINDS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
+          <label>기준 값<input type="number" id="bdTh" min="0" value="0"></label>
+          <label>색<select id="bdTone">${TONES.map((t) => `<option>${t}</option>`).join('')}</select></label></div>
+          <div class="form-actions"><button class="primary">저장</button></div></form>
+        <div class="bdg-grid" style="margin-top:12px">${defs.map((b) => `<div class="bdg tone-${esc(b.tone)} on"><div class="bdg-ic">${esc(b.icon)}</div><b>${esc(b.name)}</b><span class="muted small">${esc(KINDS.find(([k]) => k === b.kind)[1])} ${b.kind === 'manual' ? '' : b.threshold}</span><span><button class="link" data-bedit="${esc(b.id)}" type="button">수정</button>${b.builtin ? '' : ` <button class="link danger" data-bdel="${esc(b.id)}" type="button">삭제</button>`}</span></div>`).join('')}</div></div>
+      <div class="card"><h3>⚙️ 파이포인트 보상 설정</h3><p class="muted small">JSON 형식 그대로 적어요. 예) 주간 보상 [30,20,10]</p>
+        ${CFG.map(([k, n, ph]) => `<div class="cfg-row"><label style="flex:1">${n}<input type="text" data-cfg="${k}" value="${esc(CV[k] || ph)}"></label><button class="ghost" data-cfgsave="${k}" type="button">저장</button></div>`).join('')}</div>`,
+    (v) => {
+      const MSG = { forbidden: '권한이 없어요', invalid: '값이 올바르지 않아요', nouser: '학생을 찾을 수 없어요', ok: '적용했어요' };
+      const pick = () => $('#gaUser', v).value;
+      const info = async () => {
+        const u = pick();
+        const box = $('#gaInfo', v);
+        if (!u) { box.textContent = '학생을 고르면 현재 상태가 보여요.'; return; }
+        const { data, error } = await sb.rpc('admin_user_wallet', { p_uid: u });
+        if (error || !data) { box.textContent = '불러오지 못했어요'; return; }
+        box.innerHTML = `<b>🏆 ${data.score.toLocaleString()}점 · 💎 ${data.balance} · 🛡️ ${data.shields}</b><br>${(data.adjust || []).slice(0, 5).map((a) => `점수 ${a.delta > 0 ? '+' : ''}${a.delta} (${esc(a.note || '-')}) · ${fmt(a.created_at)}`).join('<br>') || '점수 조정 기록 없음'}`;
+      };
+      $('#gaUser', v).onchange = info;
+      const run = async (rpc, args, form) => {
+        if (!pick()) return toast('학생을 먼저 고르세요', true);
+        const { data, error } = await sb.rpc(rpc, args);
+        if (error) return toast('처리하지 못했어요: ' + error.message, true);
+        toast(MSG[data] || String(data), data !== 'ok');
+        if (data === 'ok') { if (form) form.reset(); info(); await loadDir(); }
+      };
+      $('#gaScore', v).onsubmit = (e) => { e.preventDefault(); run('admin_adjust_score', { p_uid: pick(), p_delta: parseInt($('#gaSv', v).value, 10), p_note: $('#gaSn', v).value }, e.target); };
+      $('#gaPy', v).onsubmit = (e) => { e.preventDefault(); run('admin_grant_py', { p_uid: pick(), p_delta: parseInt($('#gaPv', v).value, 10), p_note: $('#gaPn', v).value }, e.target); };
+      $('#gaBadge', v).onsubmit = (e) => { e.preventDefault(); run('badge_award', { p_uid: pick(), p_id: $('#gaBd', v).value, p_on: e.submitter && e.submitter.dataset.on === '1' }); };
+      $('#gaDef', v).onsubmit = async (e) => {
+        e.preventDefault();
+        const p = { id: $('#bdId', v).value.trim(), name: $('#bdName', v).value.trim(), icon: $('#bdIcon', v).value.trim() || '🏅', descr: $('#bdDesc', v).value.trim(), kind: $('#bdKind', v).value, threshold: parseInt($('#bdTh', v).value, 10) || 0, tone: $('#bdTone', v).value };
+        const { data, error } = await sb.rpc('badge_upsert', { p });
+        if (error || data !== 'ok') return toast('저장하지 못했어요 (입력값을 확인해주세요)', true);
+        toast('배지를 저장했어요');
+        route(true);
+      };
+      v.querySelectorAll('[data-bedit]').forEach((b) => (b.onclick = () => {
+        const d = defs.find((x) => x.id === b.dataset.bedit);
+        $('#bdId', v).value = d.id; $('#bdName', v).value = d.name; $('#bdIcon', v).value = d.icon; $('#bdDesc', v).value = d.descr;
+        $('#bdKind', v).value = d.kind; $('#bdTh', v).value = d.threshold; $('#bdTone', v).value = d.tone;
+        $('#gaDef', v).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }));
+      v.querySelectorAll('[data-bdel]').forEach((b) => (b.onclick = async () => {
+        if (!confirm('이 배지를 지울까요? 학생들이 받은 기록도 같이 사라져요.')) return;
+        const { data, error } = await sb.rpc('badge_delete', { p_id: b.dataset.bdel });
+        if (error || data !== 'ok') return toast('지우지 못했어요', true);
+        route(true);
+      }));
+      v.querySelectorAll('[data-cfgsave]').forEach((b) => (b.onclick = async () => {
+        const k = b.dataset.cfgsave;
+        let val;
+        try { val = JSON.parse($(`[data-cfg="${k}"]`, v).value); } catch (e) { return toast('JSON 형식이 올바르지 않아요', true); }
+        const { data, error } = await sb.rpc('py_cfg_set', { p_key: k, p_val: val });
+        if (error || data !== 'ok') return toast('저장하지 못했어요', true);
+        toast('저장했어요');
+      }));
+    }];
+  }
+
   /* ---------- 설정 ---------- */
-  let setTab = 'acct';
+  let setTab = 'hub';
   async function pageSettings(tab, extra) {
-    const STABS = [['acct', '👤 계정'], ['prof', '✨ 프로필'], ['avatar', '🧑‍🎤 캐릭터'], ['dm', '💬 메시지'], ['notif', '🔔 알림'], ['rec', '📋 내 기록'], ['ide', '⌨️ 편집기']];
-    if (STABS.some(([k]) => k === tab)) setTab = tab;
-    else if (!STABS.some(([k]) => k === setTab)) setTab = 'acct';
+    const STABS = [['hub', '🏠 내 정보'], ['streak', '🔥 연속 학습'], ['badges', '🎖️ 배지'], ['wallet', '💎 파이포인트'], ['avatar', '🧑‍🎤 캐릭터'], ['prof', '✨ 프로필'], ['dm', '💬 메시지'], ['notif', '🔔 알림'], ['rec', '📋 내 기록'], ['acct', '⚙️ 계정'], ['ide', '⌨️ 편집기']];
+    setTab = STABS.some(([k]) => k === tab) ? tab : 'hub'; // 탭 없이 들어오면 항상 내 정보부터
     const dmUid = tab === 'dm' && /^[0-9a-f-]{36}$/i.test(extra || '') ? extra : '';
     return [`
-      <h2>⚙️ 설정</h2>
+      <h2>👤 나</h2>
       <div class="tabs" id="stabs">${STABS.map(([k, n]) => `<button data-st="${k}" class="${setTab === k ? 'on' : ''}">${n}${k === 'dm' || k === 'notif' ? `<span class="nbadge" data-nb="${k}" hidden></span>` : ''}</button>`).join('')}</div>
+      <section data-sp="hub" ${setTab === 'hub' ? '' : 'hidden'} id="spHub"></section>
+      <section data-sp="streak" ${setTab === 'streak' ? '' : 'hidden'} id="spStreak"></section>
+      <section data-sp="badges" ${setTab === 'badges' ? '' : 'hidden'} id="spBadges"></section>
+      <section data-sp="wallet" ${setTab === 'wallet' ? '' : 'hidden'} id="spWallet"></section>
       <section data-sp="acct" ${setTab === 'acct' ? '' : 'hidden'}>
       <div class="card">
         <h3>비밀번호 바꾸기</h3>
@@ -4735,21 +5012,21 @@ onmessage = (ev) => {
         <div id="ideOpts"></div>
         <label>써보기<textarea id="ideTry" class="code" rows="6" placeholder="여기서 바로 시험해 보세요. 예) print( 를 치고 Enter, if x: 를 치고 Enter"></textarea></label>
       </div>
-      </section>
-      <p class="muted small center">PyNest V${APP_VERSION}</p>`,
+      </section>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
       bindMyRecords(v);
       const inited = {};
-      const INIT = { prof: () => initProfTab($('#spProf', v)), avatar: () => initAvatarTab($('#spAvatar', v)), dm: () => initDmTab($('#spDm', v), dmUid), notif: () => initNotifTab($('#spNotif', v)), rec: () => { const rc = $('#recCard', v); if (rc && !rc.open) rc.open = true; } };
+      const INIT = { hub: () => initHubTab($('#spHub', v)), streak: () => initStreakTab($('#spStreak', v)), badges: () => initBadgesTab($('#spBadges', v)), wallet: () => initWalletTab($('#spWallet', v)), prof: () => initProfTab($('#spProf', v)), avatar: () => initAvatarTab($('#spAvatar', v)), dm: () => initDmTab($('#spDm', v), dmUid), notif: () => initNotifTab($('#spNotif', v)), rec: () => { const rc = $('#recCard', v); if (rc && !rc.open) rc.open = true; } };
       const showTab = (k, push) => {
         setTab = k;
         v.querySelectorAll('[data-st]').forEach((b) => b.classList.toggle('on', b.dataset.st === k));
         v.querySelectorAll('[data-sp]').forEach((sec) => { sec.hidden = sec.dataset.sp !== k; });
-        if (push) { try { history.replaceState(null, '', `#/settings/${k}`); } catch (e) { /* 주소 표시는 없어도 돼요 */ } }
+        if (push) { try { history.replaceState(null, '', `#/me/${k}`); } catch (e) { /* 주소 표시는 없어도 돼요 */ } }
         if (INIT[k] && !inited[k]) { inited[k] = true; INIT[k](); }
       };
-      v.querySelectorAll('[data-st]').forEach((b) => (b.onclick = () => showTab(b.dataset.st, true)));
+      v.querySelectorAll('[data-st]').forEach((b) => (b.onclick = () => { showTab(b.dataset.st, true); window.scrollTo(0, 0); }));
+      v.addEventListener('pn-tab', (e) => { showTab(e.detail, true); window.scrollTo(0, 0); });
       showTab(setTab, false);
       pollNotif(true);
       if (window.PYIDE) {
@@ -4944,13 +5221,14 @@ onmessage = (ev) => {
     if (can('content')) tabs.push(['diff', '🎯 난이도']);
     if (can('content')) tabs.push(['pre', '🧩 공용 함수']);
     if (can('content')) tabs.push(['edit', '✏️ 편집']);
+    if (isAdmin()) tabs.push(['growth', '🏆 성장']);
     if (isAdmin()) tabs.push(['tier', '🏅 티어']);
     if (staffRole()) tabs.push(['nick', '🏷️ 별명']);
     if (staffRole() === 'owner') tabs.push(['social', '💬 DM·알림']);
     if (can('roles_basic')) tabs.push(['staff', '🎖️ 권한']);
     if (!tabs.length) return ['<div class="card pad center">선생님만 볼 수 있어요.</div>'];
     if (!tabs.some(([k]) => k === adminTab)) adminTab = tabs[0][0];
-    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, nick: adminNick, social: adminSocial, staff: adminStaff }[adminTab];
+    const sub = { members: adminMembers, lectures: adminLectures, diff: adminDiff, pre: adminPre, edit: adminEdit, tier: adminTiers, growth: adminGrowth, nick: adminNick, social: adminSocial, staff: adminStaff }[adminTab];
     const [body, bind] = await sub();
     const r = staffRole();
     return [`
@@ -5401,6 +5679,7 @@ onmessage = (ev) => {
     if (me.status === 'rejected') return renderStatus('rejected');
     await Promise.all([loadDir(), loadDiffs(), loadTiers(), loadPre()]); // SQL 을 아직 안 돌렸으면 조용히 기본값으로 동작해요
     ensureDefs();
+    await loadExt([me.id]);
     renderShell();
     route();
     startNotif();
@@ -5428,9 +5707,10 @@ onmessage = (ev) => {
       if (n >= 5) {
         n = 0;
         at.textContent = '';
+        if (document.querySelector('.pn-modal')) return;
         const m = modal(`<h2>📜 패치 노트</h2><p class="muted small">V1.0.0 부터 지금까지 (한국 시간)</p>
           <div class="pn-list">${list.map((p) => `<section class="pn-ver"><h3>V${esc(p.v)} <span class="muted small">${esc(p.at)}</span></h3><p class="pn-t">${esc(p.t)}</p><ul>${p.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>`).join('')}</div>`);
-        m.el.addEventListener('click', (e) => { if (e.target === m.el) m.close(); });
+        m.el.classList.add('pn-modal'); // ✕ 버튼으로만 닫아요 (연타해도 안 닫혀요)
       }
     };
   })();
