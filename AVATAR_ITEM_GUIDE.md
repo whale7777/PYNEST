@@ -16,7 +16,7 @@
 | name | 1~30자 |
 | slot | `hat` 모자 · `hair` 머리 · `face` 얼굴 · `outfit` 옷 · `back` 뒤(날개·망토) · `deco` 장식 |
 | svg | 100×100 칸 기준 도형 조각 (아래 규칙) |
-| unlock.type | `free` 누구나 · `score` 랭킹 점수 기준 `value` 이상 · `tier` 큰 등급 `value` 이상(0 Bronze, 1 Silver, 2 Gold, 3 Platinum, 4 Diamond …) · `price` 파이포인트 `price` · `reward` 문제 보상 전용 · `event` 행사 전용 |
+| unlock.type | `free` 누구나 · `score` 랭킹 점수 기준 `value` 이상 · `tier` 큰 등급 `value` 이상(0 Bronze, 1 Silver, 2 Gold, 3 Platinum, 4 Diamond …) · `streak` 연속 출석 최고 기록 `value`일 이상 · `rank1` 주간/월간 랭킹 1등 `value`회 이상 · `price` 파이포인트 `price` · `reward` 문제 보상 전용 · `event` 행사 전용 |
 
 ## SVG 규칙
 - `<svg>` 태그 없이 **도형 조각만**. 좌표는 0~100 (캐릭터 칸). 칸 밖으로 조금 나가도 돼요.

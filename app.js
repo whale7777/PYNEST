@@ -4584,18 +4584,28 @@ onmessage = (ev) => {
       if (!box) return;
       if (!cat) { box.innerHTML = ''; return; }
       const list = cat.items.filter((i) => i.slot === slotTab && ITEMS.has(i.id));
-      const lockTxt = (i) => (i.kind === 'score' ? `🔒 ${Number(i.val).toLocaleString()}점` : i.kind === 'tier' ? `🔒 ${esc((TIERS[i.val] || {}).n || '티어')}` : i.kind === 'reward' ? '🏅 특별 보상' : i.kind === 'event' ? '🎪 행사' : '🔒');
+      const lockTxt = (i) => (i.kind === 'score' ? `🔒 ${Number(i.val).toLocaleString()}점` : i.kind === 'tier' ? `🔒 ${esc((TIERS[i.val] || {}).n || '티어')}` : i.kind === 'streak' ? `🔒 ${i.val}일 연속` : i.kind === 'rank1' ? `🔒 1등 ${i.val}회` : i.kind === 'reward' ? '🏅 특별 보상' : i.kind === 'event' ? '🎪 행사' : '🔒');
       const tile = (i) => {
         const on = av.items[i.slot] === i.id;
         const st = on ? '착용 중' : i.owned ? '입기' : i.can_claim ? '🎁 받기' : i.kind === 'price' ? `💎 ${i.price}` : lockTxt(i);
         const cls = on ? 'on' : i.owned ? 'own' : i.can_claim || (i.kind === 'price' && cat.py >= i.price) ? 'can' : 'lock';
         return `<button type="button" class="it-tile ${cls}" data-it="${esc(i.id)}" title="${esc(i.descr || i.name)}"><span class="it-pv">${avatarSvg({ ...av, items: { ...av.items, [i.slot]: i.id } }, 56)}</span><b>${esc(i.name)}</b><span class="it-st">${st}</span></button>`;
       };
-      box.innerHTML = `<h4>🎁 아이템 <span class="muted small">💎 ${cat.py} · ${Number(cat.score).toLocaleString()}점</span></h4>
+      const claimable = cat.items.filter((i) => !i.owned && i.can_claim);
+      box.innerHTML = `<h4>🎁 아이템 <span class="muted small">💎 ${cat.py} · ${Number(cat.score).toLocaleString()}점 · 🔥 최고 ${cat.streak || 0}일 · 🥇 ${cat.wins || 0}회</span></h4>
+        ${claimable.length ? `<button type="button" class="primary" id="itAll">🎁 받을 수 있는 아이템 ${claimable.length}개 모두 받기</button>` : ''}
         <div class="tabs it-tabs">${ITEM_SLOTS.map(([k, n, ic]) => `<button type="button" data-it-slot="${k}" class="${k === slotTab ? 'on' : ''}">${ic} ${n}</button>`).join('')}</div>
         <div class="it-grid"><button type="button" class="it-tile ${av.items[slotTab] ? 'own' : 'on'}" data-it-none="1"><span class="it-pv">🚫</span><b>벗기</b><span class="it-st">${av.items[slotTab] ? '벗기' : '없음'}</span></button>${list.map(tile).join('') || '<p class="muted small">이 자리의 아이템이 아직 없어요.</p>'}</div>
         <p class="muted small">🎁 받기: 조건을 채웠어요 · 💎: 파이포인트로 사기 · 🔒: 아직 잠겨 있어요. 저장을 눌러야 적용돼요.</p>`;
       box.querySelectorAll('[data-it-slot]').forEach((b) => (b.onclick = () => { slotTab = b.dataset.itSlot; drawItems(); }));
+      const all = $('#itAll', box);
+      if (all) all.onclick = async () => {
+        all.disabled = true;
+        let ok = 0;
+        for (const i of claimable) { const { data } = await sb.rpc('item_claim', { p_item: i.id }); if (data === 'ok') ok += 1; }
+        toast(`🎁 ${ok}개를 받았어요!`);
+        await loadCat(); draw();
+      };
       const none = $('[data-it-none]', box);
       if (none) none.onclick = () => { const n = { ...av.items }; delete n[slotTab]; av = { ...av, items: n }; draw(); };
       box.querySelectorAll('[data-it]').forEach((b) => (b.onclick = async () => {
@@ -5063,7 +5073,7 @@ onmessage = (ev) => {
     if (d && !Array.isArray(d) && d.format && d.format !== ITEM_FMT) throw new Error('지원하지 않는 형식이에요: ' + d.format);
     const arr = Array.isArray(d) ? d : d && Array.isArray(d.items) ? d.items : d && d.id ? [d] : null;
     if (!arr || !arr.length) throw new Error('items 목록이 없어요');
-    const KINDS = ['free', 'score', 'tier', 'price', 'reward', 'event'];
+    const KINDS = ['free', 'score', 'streak', 'tier', 'rank1', 'price', 'reward', 'event'];
     return arr.map((x, n) => {
       const u = x.unlock || {};
       const kind = u.type || x.kind || 'free';
@@ -5094,8 +5104,8 @@ onmessage = (ev) => {
     const studs = (pr.data || []).filter((x) => x.id !== me.id).map((x) => ({ id: x.id, name: dname(x.id, x.username) })).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
     const base = normAv(null, 'preview');
     const pv = (i) => { ITEMS.set('__pv', { id: '__pv', name: '', slot: i.slot, svg: cleanSvg(i.svg) }); const h = avatarSvg({ ...base, items: { [i.slot]: '__pv' } }, 56); ITEMS.delete('__pv'); return h; };
-    const KN = { free: '기본', score: '점수', tier: '티어', price: '구입', reward: '문제 보상', event: '행사' };
-    const cond = (i) => (i.kind === 'score' ? `${Number(i.val).toLocaleString()}점 이상` : i.kind === 'tier' ? `${(TIERS[i.val] || {}).n || i.val} 티어 이상` : i.kind === 'price' ? `💎 ${i.price}` : '');
+    const KN = { free: '기본', score: '점수', streak: '연속 출석', tier: '티어', rank1: '1등 횟수', price: '구입', reward: '문제 보상', event: '행사' };
+    const cond = (i) => (i.kind === 'score' ? `${Number(i.val).toLocaleString()}점 이상` : i.kind === 'tier' ? `${(TIERS[i.val] || {}).n || i.val} 티어 이상` : i.kind === 'streak' ? `${i.val}일 연속` : i.kind === 'rank1' ? `1등 ${i.val}회` : i.kind === 'price' ? `💎 ${i.price}` : '');
     const rwBy = new Map(rewards.map((r) => [String(r.exercise_id), r.item_id]));
     return [`
       <div class="card"><h3>📤 아이템 올리기 (JSON)</h3>
