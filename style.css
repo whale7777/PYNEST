@@ -817,3 +817,37 @@ nav.menu a .nbadge { margin-left: 6px; }
 .ev-banner.tone-blue { --bc: #3b82f6; } .ev-banner.tone-purple { --bc: #a855f7; } .ev-banner.tone-pink { --bc: #ec4899; }
 .ev-emoji { font-size: 34px; line-height: 1; }
 .ev-mult { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 800; background: var(--bc); color: #fff; margin-left: 4px; }
+
+/* ===== V4.5.3 게시판 통합 · 배너 · 마켓 · 에디터 통합 · 배지 관리 ===== */
+.bd-tabs { display: flex; gap: 6px; margin: 10px 0; overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+.bd-tabs a { flex: 0 0 auto; white-space: nowrap; padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; color: var(--text); text-decoration: none; font-size: 14px; background: var(--card); }
+.bd-tabs a.on { background: var(--primary); color: var(--primary-text); border-color: var(--primary); font-weight: 700; }
+.bd-q { width: 100%; max-width: 360px; margin: 4px 0 10px; }
+.bd-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; background: #e2e8f0; color: #334155; }
+.bd-tag.t-notice { background: #fee2e2; color: #b91c1c; } .bd-tag.t-qna { background: #dbeafe; color: #1d4ed8; }
+.bd-tag.t-assignment { background: #fef3c7; color: #92400e; } .bd-tag.t-free { background: #d1fae5; color: #047857; }
+[data-theme="dark"] .bd-tag { background: #334155; color: #e2e8f0; }
+.nban { display: flex; align-items: stretch; margin: 0 0 10px; border-radius: 14px; overflow: hidden; border: 1px solid #fca5a5; background: linear-gradient(90deg, #fee2e2, #fecaca); color: #7f1d1d; }
+.nban .nb-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 11px 14px; color: inherit; text-decoration: none; font-weight: 700; }
+.nban .nb-txt { overflow-wrap: anywhere; line-height: 1.4; }
+.nban .nb-x { border: 0; background: transparent; color: inherit; font-size: 18px; padding: 0 16px; cursor: pointer; opacity: .65; }
+.nban .nb-x:hover { opacity: 1; background: rgba(0, 0, 0, .06); }
+[data-theme="dark"] .nban { background: linear-gradient(90deg, #450a0a, #7f1d1d); border-color: #b91c1c; color: #fecaca; }
+.mk-tabs { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; margin: 10px 0; }
+.mk-tabs a { flex: 0 0 auto; padding: 8px 16px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); text-decoration: none; white-space: nowrap; }
+.mk-tabs a.on { background: var(--primary); color: var(--primary-text); border-color: var(--primary); font-weight: 700; }
+.mk-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0 10px; }
+.mk-bar .bd-tabs { margin: 0; max-width: 100%; }
+.mk-bar select, .mk-bar .bd-q { margin: 0; width: auto; min-width: 130px; }
+.mk-grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
+.mk-big { display: grid; place-items: center; line-height: 0; margin: 6px 0; }
+.av-cats { margin: 0 0 8px; }
+.av-ctl .it-grid { max-height: 420px; overflow-y: auto; padding: 2px; }
+.bd-prevrow { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.bd-prevrow #bdPrev { width: 150px; flex: 0 0 auto; }
+.bd-fields { flex: 1; min-width: 200px; }
+.bd-icons { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 12px; }
+.bd-icons button { font-size: 20px; padding: 4px 6px; background: transparent; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; line-height: 1.1; }
+.bd-icons button:hover { background: var(--hover); }
+.av-ed > *, .av-ctl { min-width: 0; }
+.bd-q, .mk-bar select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font: inherit; }

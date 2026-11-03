@@ -124,6 +124,14 @@
 - **자동 공지**: 승급자가 있는 날은 공지가 하루에 한 개 올라가요 ("🎉 티어 승급 소식 (10월 28일)"). 같은 날 승급자가 더 생기면 같은 글이 갱신돼요. 누군가 홈을 열 때 어제·오늘 것을 확인해서 만들어요(서버 예약 작업 없이 동작). 선생님·직원·SOLVER 등급 학생은 빠져요.
 - **공지 상단 고정**: 내가 쓴 공지 글에서 [📌 상단 고정] 버튼(또는 글쓰기·수정의 체크박스)을 누르면 공지 목록·홈 맨 위에 빨갛게 고정돼요. 여러 개면 가나다 순이에요.
 
+### V4.5.3 · 마켓 페이지 · 게시판 통합 · 배너 · 배지 170개
+- 🛍️ `#/market`: 학생 마켓 · 상점 · 내 상품 (슬롯 필터, 정렬, 검색, 입어보기, 구매). 학생은 가격만 정해 올려요.
+- 💬 `#/board[/notice|qna|assignment|free]`: 4개 게시판을 한 화면 탭으로 통합 (데이터의 `posts.board` 는 그대로). 옛 주소도 동작.
+- 📣 `posts.banner` (공지 전용, 📌 고정과 별개): 홈 상단 배너, 학생이 ✕ 로 닫음(브라우저에 저장).
+- 🧑‍🎤 캐릭터 에디터: 기본 모양 + 아이템을 카테고리 하나로 통합. 아이템을 입으면 같은 자리 기본 모양이 빠지고, 모자를 쓰면 머리카락을 머리 안쪽으로 잘라요.
+- 🎖️ 배지 170개(새 조건: tier · rank1 · items · sales · market_made · attend · event · shield · posts · comments), 관리자 🎖️ 배지 탭에서 만들기·수정·삭제.
+- SQL: `v453_board_badges.sql` (v451b → v452 → v453 순서로 한 번씩)
+
 ## V4.5.2 — 마켓 · 행사
 - `v452_market_events.sql`: events, avatar_items(market/event_id/reject_note, 상태 pending·rejected), market_submit/mine/withdraw/review, event_active/upsert/delete/item_set, item_buy(마켓 80% 정산·행사 한정), py_event_mult(파이포인트 배수).
 - 다음: V4.5.3 시험 탭.
