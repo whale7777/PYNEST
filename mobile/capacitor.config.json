@@ -1,0 +1,11 @@
+{
+  "appId": "com.pynest.app",
+  "appName": "PyNest",
+  "webDir": "www",
+  "server": {
+    "url": "https://whale7777.github.io/pynest/",
+    "cleartext": false,
+    "allowNavigation": ["*.supabase.co", "cdn.jsdelivr.net", "*.github.io"]
+  },
+  "android": { "allowMixedContent": false, "backgroundColor": "#f4f6fb" }
+}

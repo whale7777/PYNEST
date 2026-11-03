@@ -1,0 +1,45 @@
+name: Android APK
+# Actions 탭 → "Android APK" → Run workflow 를 누르면 APK 가 만들어져서 Releases 에 올라가요.
+on:
+  workflow_dispatch:
+  push:
+    paths: ['mobile/**', '.github/workflows/android-apk.yml']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: 사이트 주소를 이 저장소의 GitHub Pages 주소로 맞추기
+        working-directory: mobile
+        run: |
+          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          node -e "const f='capacitor.config.json';const c=require('./'+f);c.server.url='$URL';require('fs').writeFileSync(f,JSON.stringify(c,null,2));console.log(c.server.url)"
+      - name: 설치 · 안드로이드 프로젝트 만들기 · 아이콘
+        working-directory: mobile
+        run: |
+          npm install
+          npx cap add android
+          npx capacitor-assets generate --android --assetPath assets || echo "아이콘 생성 건너뜀"
+          npx cap sync android
+      - name: APK 빌드
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: 이름 정리
+        run: cp mobile/android/app/build/outputs/apk/debug/app-debug.apk PyNest-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PyNest-apk
+          path: PyNest-android.apk
+      - name: Releases 에 올리기 (항상 최신 하나)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: PyNest Android 앱 (최신)
+          body: "PyNest-android.apk 를 폰에 받아서 설치하세요. (설치 중 '출처를 알 수 없는 앱' 허용이 필요해요)"
+          files: PyNest-android.apk
