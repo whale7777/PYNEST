@@ -62,7 +62,10 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.4b';
+  const APP_VERSION = '4.5.4c';
+  // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
+  const APK_ID = '1BpEsJ6MbUUJK92qgSJaLRJ3Wq3kc4JcX';
+  const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -575,6 +578,15 @@
     return `<div class="tubanner" id="tuBan"><a class="tub-main" href="#/post/${b.post_id}"><span class="tub-ico">🎉</span><span class="tub-txt"><b>${who2}</b> 님이 ${what}승급했어요! <span class="tub-go">축하하러 가기 →</span></span></a><button type="button" class="tub-x" id="tuX" aria-label="닫기" title="닫기">✕</button></div>`;
   }
 
+  // 📱 앱으로 설치 카드 (이미 앱/홈 화면 설치 상태면 숨김)
+  function appCardHtml() {
+    const inApp = window.Capacitor || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    if (inApp) return '';
+    const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    return `<div class="card app-dl"><div class="app-dl-t"><b>📱 앱으로 쓰기</b><span class="muted small">웹을 고치면 앱도 같이 바뀌어요</span></div>
+      ${ios ? '<p class="muted small" style="margin:6px 0">아이폰은 Safari 에서 <b>공유 ▸ 홈 화면에 추가</b> 를 누르면 앱처럼 쓸 수 있어요.</p>' : `<a class="primary btn" href="${APK_URL}" download>⬇️ 안드로이드 앱 다운로드 (APK)</a><p class="muted small" style="margin:6px 0 0">받은 뒤 열어서 설치해요. "출처를 알 수 없는 앱" 허용이 필요할 수 있어요.</p>`}</div>`;
+  }
+
   async function pageHome() {
     const wantProb = tierCan('problem');
     const [n, l, p, st, tu, exl] = await Promise.all([
@@ -621,6 +633,7 @@
       ${nbHtml}
       ${tuBannerHtml(tu)}
       <h2>안녕, ${esc(selfName())}! 👋</h2>
+      ${appCardHtml()}
       ${probHtml}
       <div class="page-head"><h3>📢 최근 공지</h3><a href="#/board/notice">더 보기</a></div>
       <div class="card list">${notices}</div>

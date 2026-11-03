@@ -913,3 +913,8 @@ nav.menu a .nbadge { margin-left: 6px; }
 .ex-room.essay #exCode { font-family: inherit; font-size: 1rem; line-height: 1.6; }
 .ex-room.essay ~ .ex-bar #bRun { display: none; }
 .ex-pehead select { padding: 4px 6px; }
+
+/* V4.5.4c · 앱 다운로드 카드 */
+.app-dl { padding: 12px 16px; }
+.app-dl-t { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.app-dl .btn { display: inline-block; }
