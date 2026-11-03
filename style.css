@@ -851,3 +851,12 @@ nav.menu a .nbadge { margin-left: 6px; }
 .bd-icons button:hover { background: var(--hover); }
 .av-ed > *, .av-ctl { min-width: 0; }
 .bd-q, .mk-bar select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font: inherit; }
+
+/* ===== V4.5.3b 경제 ===== */
+.bdg-rw { font-size: 11px; font-weight: 800; color: #7c3aed; }
+.py-shop { display: grid; gap: 8px; margin: 8px 0 14px; }
+.py-prod { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; }
+.py-prod > div { flex: 1; min-width: 0; }
+.py-ic { font-size: 28px; }
+.gf-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.gf-form select, .gf-form input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font: inherit; }

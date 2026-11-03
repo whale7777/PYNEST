@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.3';
+  const APP_VERSION = '4.5.3b';
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -5052,7 +5052,7 @@ onmessage = (ev) => {
   let growAt = 0;
   const GROW_HINT = '아직 준비되지 않았어요. (관리자가 v450_growth.sql 을 실행하면 쓸 수 있어요)';
   const kstDay = (d = new Date()) => new Date(d).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
-  const PY_WHY = { solve: '문제를 맞췄어요', learn: '학습 레슨 완료', rank_week: '주간 랭킹 보상', rank_month: '월간 랭킹 보상', admin: '선생님이 조정', shield: '연속 학습 방어권', exam_rank: '시험 순위 보상', item_reward: '아이템 보상', event_claim: '행사 보상', item_buy: '아이템 구입', market_sale: '마켓 판매 수익', market_buy: '마켓 구입' };
+  const PY_WHY = { solve: '문제를 맞췄어요', learn: '학습 레슨 완료', rank_week: '주간 랭킹 보상', rank_month: '월간 랭킹 보상', admin: '선생님이 조정', shield: '연속 학습 방어권', exam_rank: '시험 순위 보상', item_reward: '아이템 보상', event_claim: '행사 보상', item_buy: '아이템 구입', market_sale: '마켓 판매 수익', market_buy: '마켓 구입', badge: '🎖️ 배지 보상', gacha: '🎰 뽑기', gift_out: '🎁 선물 보냄', gift_in: '🎁 선물 받음' };
   function growChips() {
     const el = $('#gChips');
     if (!el) return;
@@ -5073,7 +5073,7 @@ onmessage = (ev) => {
     if (!data) return;
     GROW = data;
     growChips();
-    (data.new_badges || []).forEach((b) => toast(`🎖️ 새 배지! ${b.icon} ${b.name}`));
+    (data.new_badges || []).forEach((b) => toast(`🎖️ 새 배지! ${b.icon} ${b.name}${b.reward ? ` · 💎 +${b.reward}` : ''}`));
   }
   function injectHomeGrow() {
     const v = $('#view');
@@ -5179,20 +5179,75 @@ onmessage = (ev) => {
         <li>🗓️ <b>월간 랭킹</b> ${esc(lst(C.month_rank))}</li>
         <li>✅ <b>문제를 처음 맞출 때</b> 랜덤 ${esc(rng(C.solve_rand))}</li>
         <li>📚 <b>학습 레슨을 끝낼 때</b> 랜덤 ${esc(rng(C.learn_rand))}</li>
+        <li>🎖️ <b>배지를 받을 때</b> 배지마다 💎 보상 <a href="#/me/badges">(배지 보기)</a></li>
         <li>🎁 시험 순위 · 행사 · 선생님 지급</li>${(typeof EVENTS !== 'undefined' && EVENTS.filter((e) => Number(e.mult) > 1).map((e) => `<li>${esc(e.emoji)} <b>${esc(e.title)}</b> 행사 중! 문제·학습 보상 💎 ×${Number(e.mult)}</li>`).join('')) || ''}</ul>
         <h3>어디에 써요?</h3><ul class="py-how"><li>🛡️ 연속 학습 방어권 (${esc(String(C.shield_price ?? 60))})</li><li>🧑‍🎤 캐릭터 꾸미기 아이템·🛍️ 마켓 <a href="#/me/avatar">(구경하기)</a></li></ul>
         <a class="btn" href="#/me/streak">🛡️ 방어권 사러 가기</a></div>
       <div class="card list"><h3 style="padding:14px 18px 0;margin:0">최근 내역</h3>${(lg.data || []).map((x) => `<div class="row"><div class="row-main"><b>${esc(PY_WHY[x.reason] || x.reason)}</b> <span class="muted small">${esc(x.note || '')}</span><br><span class="muted small">${fmt(x.created_at)}</span></div><b class="${x.delta > 0 ? 'py-up' : 'py-down'}">${x.delta > 0 ? '+' : ''}${x.delta}</b></div>`).join('') || '<p class="muted center pad">아직 내역이 없어요. 문제를 풀면 모여요!</p>'}</div>`;
+    renderPyShop(el);
+  }
+
+  // ---- 💎 쓰는 곳: 뽑기 · 선물 (v453b_economy.sql)
+  async function renderPyShop(el) {
+    const { data: info, error } = await sb.rpc('py_shop_info');
+    if (error || !info) return;
+    const box = document.createElement('div');
+    box.className = 'card';
+    box.id = 'pyShop';
+    const g = info.gift || {};
+    const others = Array.from(DIR.entries()).filter(([id]) => id !== me.id).map(([id, d]) => [id, d.name || '?']).sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'ko'));
+    const left = (info.sent_today != null ? Math.max(0, (g.daily || 0) - info.sent_today) : g.daily);
+    box.innerHTML = `<h3>🛒 파이포인트 쓰는 곳</h3>
+      <div class="py-shop">
+        <div class="py-prod"><span class="py-ic">🎰</span><div><b>일반 뽑기</b><br><span class="muted small">상점 아이템 중 아직 없는 것 하나 · 남은 후보 ${info.left_basic}개</span></div><button class="primary" data-gacha="basic" ${info.left_basic ? '' : 'disabled'}>💎 ${(info.gacha || {}).basic}</button></div>
+        <div class="py-prod"><span class="py-ic">🌈</span><div><b>고급 뽑기</b><br><span class="muted small">조건부 아이템까지 전부 후보 (점수·티어 잠금도 풀려요!) · 남은 후보 ${info.left_premium}개</span></div><button class="primary" data-gacha="premium" ${info.left_premium ? '' : 'disabled'}>💎 ${(info.gacha || {}).premium}</button></div>
+        <div class="py-prod"><span class="py-ic">🛡️</span><div><b>연속 학습 방어권</b><br><span class="muted small">하루 놓쳐도 연속이 이어져요</span></div><a class="btn" href="#/me/streak">사러 가기</a></div>
+        <div class="py-prod"><span class="py-ic">🛍️</span><div><b>아이템 · 마켓</b><br><span class="muted small">상점 아이템 가격은 기본 가격의 ×${Number(info.mult)} 배예요</span></div><a class="btn" href="#/market">구경하기</a></div>
+      </div>
+      <h4>🎁 친구에게 선물하기</h4>
+      <form id="gfForm" class="gf-form">
+        <select id="gfTo" required><option value="">받을 친구</option>${others.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('')}</select>
+        <input type="number" id="gfAmt" min="${g.min || 10}" max="${g.max || 500}" placeholder="💎 ${g.min || 10}~${g.max || 500}" required>
+        <button class="primary">보내기</button></form>
+      <p class="muted small">수수료 ${g.fee ?? 10}% 가 빠지고 나머지가 친구에게 가요 · 오늘 더 보낼 수 있는 양 💎 ${left}</p>`;
+    el.appendChild(box);
+    const done = async () => { await growRefresh(true); initWalletTab(el); };
+    box.querySelectorAll('[data-gacha]').forEach((b) => (b.onclick = async () => {
+      const tier = b.dataset.gacha;
+      if (!confirm(`💎 ${(info.gacha || {})[tier]} 로 ${tier === 'basic' ? '일반' : '고급'} 뽑기를 할까요?`)) return;
+      b.disabled = true;
+      const { data, error: e } = await sb.rpc('py_gacha', { p_tier: tier });
+      if (e || !data) { b.disabled = false; return toast('뽑지 못했어요', true); }
+      if (data.status !== 'ok') { b.disabled = false; return toast(data.status === 'poor' ? '파이포인트가 부족해요' : data.status === 'empty' ? '뽑을 수 있는 아이템이 없어요' : '뽑지 못했어요', true); }
+      await loadItems();
+      const slotN = (ITEM_SLOTS.find(([k]) => k === data.item.slot) || [])[1] || '';
+      const m = modal(`<h3>🎉 뽑았어요!</h3><div class="mk-big">${avatarSvg({ ...normAv((EXT.get(me.id) || {}).avatar, me.id), items: { [data.item.slot]: data.item.id } }, 180)}</div><p class="center"><b>${esc(data.item.name)}</b> <span class="muted small">(${esc(slotN)})</span></p><div class="form-actions"><button class="ghost" id="gcOk" type="button">좋아요</button><a class="btn" href="#/me/avatar" id="gcGo">입으러 가기</a></div>`);
+      $('#gcOk', m.el).onclick = () => { m.close(); done(); };
+      $('#gcGo', m.el).onclick = () => m.close();
+    }));
+    $('#gfForm', box).onsubmit = async (ev) => {
+      ev.preventDefault();
+      const to = $('#gfTo', box).value; const amt = parseInt($('#gfAmt', box).value, 10);
+      const nm = $('#gfTo', box).selectedOptions[0].textContent;
+      if (!confirm(`${nm} 님에게 💎 ${amt} 를 보낼까요? (수수료 ${g.fee ?? 10}%)`)) return;
+      const { data, error: e } = await sb.rpc('py_gift', { p_to: to, p_amt: amt });
+      if (e) return toast('보내지 못했어요', true);
+      const MSG = { ok: '🎁 선물을 보냈어요!', poor: '파이포인트가 부족해요', amount: `💎 ${g.min || 10}~${g.max || 500} 사이로 보내주세요`, daily: '오늘 보낼 수 있는 양을 넘었어요', nouser: '받을 수 없는 친구예요' };
+      toast(MSG[data] || '보내지 못했어요', data !== 'ok');
+      if (data === 'ok') done();
+    };
   }
 
   // ---- 나 > 배지
   const BADGE_GROUP = [['score', '🏆 점수'], ['solved', '🧩 문제 풀이'], ['streak', '🔥 연속 학습'], ['learn', '📚 학습'], ['exam_join', '📝 시험'], ['exam_first', '📝 시험'], ['pypoint', '💎 파이포인트'], ['tier', '🏅 티어'], ['rank1', '🥇 랭킹 1등'], ['items', '🎒 아이템'], ['sales', '🛍️ 마켓'], ['market_made', '🛍️ 마켓'], ['attend', '📅 출석'], ['event', '🎉 행사'], ['shield', '🛡️ 방어권'], ['posts', '💬 게시판'], ['comments', '💬 게시판'], ['manual', '🎁 특별']];
-  const badgeTile = (b, got) => `<div class="bdg tone-${esc(b.tone)} ${got ? 'on' : ''}" title="${esc(b.descr)}"><div class="bdg-ic">${esc(b.icon)}</div><b>${esc(b.name)}</b><span class="muted small">${got ? `${fmt(got)} 획득` : esc(b.descr)}</span></div>`;
+  let BD_RW = {}; // 배지 id → 보상 💎
+  const badgeTile = (b, got) => `<div class="bdg tone-${esc(b.tone)} ${got ? 'on' : ''}" title="${esc(b.descr)}"><div class="bdg-ic">${esc(b.icon)}</div><b>${esc(b.name)}</b><span class="muted small">${got ? `${fmt(got)} 획득` : esc(b.descr)}</span>${BD_RW[b.id] > 0 ? `<span class="bdg-rw">💎 ${got ? '' : '+'}${BD_RW[b.id]}</span>` : ''}</div>`;
   async function initBadgesTab(el) {
     el.innerHTML = '<p class="muted center pad">불러오는 중…</p>';
     if (!GROW_OK) { el.innerHTML = `<div class="card pad muted">${GROW_HINT}</div>`; return; }
     await growRefresh(true);
-    const [d, u] = await Promise.all([sb.from('badge_defs').select('*').order('position').order('id'), sb.from('user_badges').select('badge_id,earned_at').eq('user_id', me.id)]);
+    const [d, u, rw] = await Promise.all([sb.from('badge_defs').select('*').order('position').order('id'), sb.from('user_badges').select('badge_id,earned_at').eq('user_id', me.id), Promise.resolve(sb.rpc('badge_reward_map')).catch(() => null)]);
+    BD_RW = (rw && rw.data) || {};
     if (d.error) { el.innerHTML = `<div class="card pad muted">${GROW_HINT}</div>`; return; }
     const got = new Map((u.data || []).map((x) => [x.badge_id, x.earned_at]));
     const defs = d.data || [];
@@ -5214,7 +5269,8 @@ onmessage = (ev) => {
     ['event', '행사 보상 횟수', '회'], ['shield', '방어권 구매 개수', '개'], ['posts', '게시판 글 수', '개'], ['comments', '댓글 수', '개'], ['manual', '직접 지급 (선생님이 줘요)', '']];
   const BD_ICONS = '🏅 🎖️ 🥇 🥈 🥉 🏆 👑 ⭐ 🌟 💫 ✨ 🔥 💎 🚀 🎯 🧩 💪 🧠 📚 🎓 📝 💡 🎉 🎊 🛡️ 🎒 🛍️ 🎨 🤝 💬 📅 🌱 🌳 🏔️ 🌋 🐍 🐛 🧪 🍀 🌈 ❤️ 🎁 🦄 🐱 🐶 🦊 🐼'.split(' ');
   async function adminBadges() {
-    const [bd, ub] = await Promise.all([sb.from('badge_defs').select('*').order('position').order('id'), sb.from('user_badges').select('badge_id')]);
+    const [bd, ub, rw] = await Promise.all([sb.from('badge_defs').select('*').order('position').order('id'), sb.from('user_badges').select('badge_id'), Promise.resolve(sb.rpc('badge_reward_map')).catch(() => null)]);
+    BD_RW = (rw && rw.data) || {};
     if (bd.error) return [`<div class="card pad muted">${GROW_HINT}</div>`];
     const defs = bd.data || [];
     const cnt = {}; (ub.data || []).forEach((x) => { cnt[x.badge_id] = (cnt[x.badge_id] || 0) + 1; });
@@ -5235,6 +5291,7 @@ onmessage = (ev) => {
             <label>조건<select id="bdKind">${BD_KINDS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
             <label>기준 값 <span class="muted small" id="bdUnit"></span><input type="number" id="bdTh" min="0" value="10"></label>
             <label>색<select id="bdTone">${TONES.map((t) => `<option>${t}</option>`).join('')}</select></label>
+            <label>보상 💎 <span class="muted small">(비우면 색 기본값)</span><input type="number" id="bdRw" min="0" max="100000" placeholder="기본값"></label>
             <label>고유 ID <span class="muted small">(비우면 자동)</span><input type="text" id="bdId" pattern="[a-z0-9_]{2,40}" placeholder="자동"></label>
           </div>
           <div class="form-actions"><button class="ghost" type="button" id="bdNew">새로 쓰기</button><button class="primary">저장</button></div>
@@ -5253,11 +5310,11 @@ onmessage = (ev) => {
       v.querySelectorAll('[data-ic]').forEach((b) => (b.onclick = () => { $('#bdIcon', v).value = b.dataset.ic; prev(); }));
       const list = () => {
         const fk = $('#bdFk', v).value; const fq = $('#bdFq', v).value.trim().toLowerCase();
-        $('#bdList', v).innerHTML = defs.filter((b) => (!fk || b.kind === fk) && (!fq || b.name.toLowerCase().includes(fq))).map((b) => `<div class="bdg tone-${esc(b.tone)} on"><div class="bdg-ic">${esc(b.icon)}</div><b>${esc(b.name)}</b><span class="muted small">${esc(KN(b.kind))}${b.kind === 'manual' ? '' : ' ' + Number(b.threshold).toLocaleString()} · ${cnt[b.id] || 0}명</span><span><button class="link" data-bedit="${esc(b.id)}" type="button">수정</button> <button class="link danger" data-bdel="${esc(b.id)}" type="button">삭제</button></span></div>`).join('') || '<p class="muted small">없어요.</p>';
+        $('#bdList', v).innerHTML = defs.filter((b) => (!fk || b.kind === fk) && (!fq || b.name.toLowerCase().includes(fq))).map((b) => `<div class="bdg tone-${esc(b.tone)} on"><div class="bdg-ic">${esc(b.icon)}</div><b>${esc(b.name)}</b><span class="muted small">${esc(KN(b.kind))}${b.kind === 'manual' ? '' : ' ' + Number(b.threshold).toLocaleString()} · ${cnt[b.id] || 0}명 · 💎${BD_RW[b.id] ?? 0}</span><span><button class="link" data-bedit="${esc(b.id)}" type="button">수정</button> <button class="link danger" data-bdel="${esc(b.id)}" type="button">삭제</button></span></div>`).join('') || '<p class="muted small">없어요.</p>';
         v.querySelectorAll('[data-bedit]').forEach((b) => (b.onclick = () => {
           const d = defs.find((x) => x.id === b.dataset.bedit);
           $('#bdId', v).value = d.id; $('#bdId', v).readOnly = true; $('#bdName', v).value = d.name; $('#bdIcon', v).value = d.icon; $('#bdDesc', v).value = d.descr;
-          $('#bdKind', v).value = d.kind; $('#bdTh', v).value = d.threshold; $('#bdTone', v).value = d.tone;
+          $('#bdKind', v).value = d.kind; $('#bdTh', v).value = d.threshold; $('#bdTone', v).value = d.tone; $('#bdRw', v).value = d.reward == null ? '' : d.reward;
           prev(); $('#bdForm', v).scrollIntoView({ behavior: 'smooth', block: 'center' });
         }));
         v.querySelectorAll('[data-bdel]').forEach((b) => (b.onclick = async () => {
@@ -5281,7 +5338,7 @@ onmessage = (ev) => {
         const th = k === 'manual' ? 0 : parseInt($('#bdTh', v).value, 10);
         if (k !== 'manual' && !(th > 0)) return toast('기준 값은 1 이상으로 적어주세요', true);
         const old = defs.find((x) => x.id === id);
-        const p = { id, name, icon: $('#bdIcon', v).value.trim() || '🏅', descr: $('#bdDesc', v).value.trim(), kind: k, threshold: th, tone: $('#bdTone', v).value, position: old ? old.position : 1000 };
+        const p = { id, name, icon: $('#bdIcon', v).value.trim() || '🏅', descr: $('#bdDesc', v).value.trim(), kind: k, threshold: th, tone: $('#bdTone', v).value, position: old ? old.position : 1000, reward: $('#bdRw', v).value === '' ? null : parseInt($('#bdRw', v).value, 10) };
         const { data, error } = await sb.rpc('badge_upsert', { p });
         if (error || data !== 'ok') return toast(data === 'invalid' ? '저장하지 못했어요 (입력값을 확인해주세요. 새 조건은 v453 SQL 실행이 필요해요)' : '저장하지 못했어요', true);
         toast('배지를 저장했어요'); route(true);
@@ -5302,7 +5359,7 @@ onmessage = (ev) => {
     const defs = bd.data || [];
     const KINDS = [['score', '랭킹 점수'], ['solved', '푼 문제 수'], ['streak', '연속 학습(일)'], ['learn', '끝낸 레슨 수'], ['exam_join', '시험 응시'], ['exam_first', '시험 1등'], ['pypoint', '누적 파이포인트'], ['manual', '직접 지급']];
     const TONES = ['blue', 'green', 'orange', 'purple', 'red', 'gold', 'teal', 'pink'];
-    const CFG = [['week_rank', '주간 랭킹 1·2·3위 보상', '[30,20,10]'], ['month_rank', '월간 랭킹 1·2·3위 보상', '[100,60,30]'], ['solve_rand', '문제 맞출 때 랜덤 (최소,최대)', '[2,6]'], ['learn_rand', '레슨 끝낼 때 랜덤 (최소,최대)', '[3,8]'], ['shield_price', '방어권 가격', '60'], ['shield_max', '방어권 최대 개수', '2']];
+    const CFG = [['week_rank', '주간 랭킹 1·2·3위 보상', '[30,20,10]'], ['month_rank', '월간 랭킹 1·2·3위 보상', '[100,60,30]'], ['solve_rand', '문제 맞출 때 랜덤 (최소,최대)', '[2,6]'], ['learn_rand', '레슨 끝낼 때 랜덤 (최소,최대)', '[3,8]'], ['shield_price', '방어권 가격', '60'], ['shield_max', '방어권 최대 개수', '2'], ['badge_reward', '🎖️ 배지 보상 (색별 기본 💎)', '{"blue":10,"green":15,"teal":20,"orange":30,"red":40,"purple":60,"pink":80,"gold":150}'], ['item_price_mult', '🛍️ 상점 아이템 가격 배율 (기본 가격 × 이 값)', '3'], ['gacha', '🎰 뽑기 가격', '{"basic":150,"premium":500}'], ['gift', '🎁 선물 (수수료 %, 최소, 최대, 하루 한도)', '{"fee":10,"min":10,"max":500,"daily":1000}']];
     const CV = {}; (cf.data || []).forEach((r) => { CV[r.key] = JSON.stringify(r.val); });
     return [`
       <div class="card"><h3>👤 학생 점수·파이포인트</h3>
