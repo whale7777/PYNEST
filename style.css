@@ -907,3 +907,9 @@ nav.menu a .nbadge { margin-left: 6px; }
   .ex-bar button span { font-size: 11px; font-weight: 700; }
   .ex-bar button.on { background: var(--hover); color: var(--primary); }
 }
+
+/* V4.5.4b · 서술형 문제 */
+.ex-room.essay .ex-in, .ex-room.essay #exRun, .ex-room.essay .judge-out:empty { display: none; }
+.ex-room.essay #exCode { font-family: inherit; font-size: 1rem; line-height: 1.6; }
+.ex-room.essay ~ .ex-bar #bRun { display: none; }
+.ex-pehead select { padding: 4px 6px; }

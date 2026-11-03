@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.4';
+  const APP_VERSION = '4.5.4b';
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -4741,7 +4741,8 @@ onmessage = (ev) => {
     let cur = null; let timer = 0; let roomApi = null; let ending = false;
     const alive = () => document.body.contains(box);
     const stop = () => { clearInterval(timer); document.body.classList.remove('exam-on'); };
-    const adm = isAdmin();
+    const adm = can('content');
+    let keepIdx = 0; let lastRev = Date.now();
 
     const head = () => `<div class="card"><h2 style="margin:0 0 4px">${esc(E.title)}</h2><div class="muted small">🗓️ ${fmt(E.start_at)} ~ ${hhmm(E.end_at)} (${E.duration_min}분) · 문제 ${E.n_problems}개 · 응시 ${E.n_entries}명</div>${E.descr ? `<div style="margin-top:8px">${renderContent(E.descr, true)}</div>` : ''}<div class="muted small" style="margin-top:6px">🎁 ${esc(exRewardText(E.reward))}</div></div>`;
 
@@ -4756,7 +4757,7 @@ onmessage = (ev) => {
         ${E.entered ? '<div class="ex-ok">✅ 입장 완료!</div><div class="muted">시작되면 문제가 자동으로 열려요. 이 화면을 닫지 마세요.</div>' : '<div class="muted">지금 입장하면 시작 시각에 같이 시작해요.</div>'}
         <div class="ex-big" data-cd="start">--</div>
         ${E.entered ? '' : '<button class="primary" id="exEnter" type="button">🚪 입장하기</button>'}
-        <ul class="ex-rules muted small"><li>모든 사람이 같은 시각에 시작하고 같은 시각에 끝나요.</li><li>채점은 자동이에요. 제출은 여러 번 해도 되고, 문제마다 가장 높은 점수가 반영돼요.</li><li>부분 점수가 있어요 (통과한 테스트 비율).</li><li>끝나는 순간 마지막으로 쓴 코드를 자동으로 채점해서 내요.</li></ul></div>`;
+        <ul class="ex-rules muted small"><li>모든 사람이 같은 시각에 시작하고 같은 시각에 끝나요.</li><li>코드 문제는 자동 채점이에요. 제출은 여러 번 해도 되고, 문제마다 가장 높은 점수가 반영돼요.</li><li>부분 점수가 있어요 (통과한 테스트 비율).</li><li>✍️ 서술형 문제는 선생님이 직접 채점해요. 마지막으로 제출한 답이 채점돼요.</li><li>끝나는 순간 마지막으로 쓴 코드를 자동으로 채점해서 내요.</li></ul></div>`;
       bindEnter();
     };
     const bindEnter = () => {
@@ -4789,10 +4790,12 @@ onmessage = (ev) => {
         code[p.id] = d != null ? d : (m ? m.code : '');
         if (m) { best[p.id] = { passed: m.passed, total: m.total }; sentCode[p.id] = m.code; }
       });
-      let idx = 0; let busy = false; let view = 'prob';
-      const sc = (p) => { const b = best[p.id]; return b && b.total ? Math.floor((p.points * b.passed) / b.total) : 0; };
+      let idx = Math.min(keepIdx, P.length - 1); let busy = false; let view = 'prob';
+      const isEs = (p) => p.kind === 'essay';
+      const sc = (p) => { if (isEs(p)) return 0; const b = best[p.id]; return b && b.total ? Math.floor((p.points * b.passed) / b.total) : 0; };
       const totalSc = () => P.reduce((s, p) => s + sc(p), 0);
-      const maxSc = P.reduce((s, p) => s + p.points, 0);
+      const maxSc = P.filter((p) => !isEs(p)).reduce((s, p) => s + p.points, 0);
+      const esPts = P.filter(isEs).reduce((s, p) => s + p.points, 0);
       box.innerHTML = `<div class="ex-top"><b>${esc(E.title)}</b><span class="ex-timer" data-cd="end">--</span><span class="chip" id="exScore"></span><button class="ghost" type="button" id="exList">📋 문제 목록</button></div>
         <div class="ex-room" data-view="prob" id="exRoom">
           <div class="ex-left"><div class="ex-ptabs" id="exTabs"></div><div id="exProb"></div></div>
@@ -4805,15 +4808,17 @@ onmessage = (ev) => {
       if (window.PYIDE) window.PYIDE.attach(ta);
       const out = $('#exOut', box);
       const showOut = (h) => { out.hidden = false; out.innerHTML = h; };
-      const drawScore = () => { $('#exScore', box).textContent = `내 점수 ${totalSc()} / ${maxSc}`; };
+      const drawScore = () => { $('#exScore', box).textContent = `내 점수 ${totalSc()} / ${maxSc}${esPts ? ` (+서술형 ${esPts}점)` : ''}`; };
       const drawTabs = () => {
-        $('#exTabs', box).innerHTML = P.map((p, i) => { const b = best[p.id]; const full = b && b.total && b.passed === b.total; return `<button type="button" data-i="${i}" class="${i === idx ? 'on' : ''}">${i + 1}${full ? ' ✅' : b ? ' ◐' : ''}</button>`; }).join('');
+        $('#exTabs', box).innerHTML = P.map((p, i) => { const b = best[p.id]; const full = b && b.total && b.passed === b.total; const mark = isEs(p) ? (sentCode[p.id] ? ' ✍️✅' : ' ✍️') : full ? ' ✅' : b ? ' ◐' : ''; return `<button type="button" data-i="${i}" class="${i === idx ? 'on' : ''}">${i + 1}${mark}</button>`; }).join('');
         box.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => pick(Number(b.dataset.i))));
       };
       const saveCur = () => { code[P[idx].id] = ta.value; try { localStorage.setItem(key(P[idx].id), ta.value); } catch (e) { /* 무시 */ } };
       const pick = (i) => {
-        saveCur(); idx = i; const p = P[idx];
-        $('#exProb', box).innerHTML = `<h3>${idx + 1}. ${esc(p.title || '문제')} <span class="chip">${p.points}점</span></h3><div class="ex-body">${renderContent(p.body || '', true)}</div><p class="muted small">내 점수: ${sc(p)} / ${p.points}</p>`;
+        saveCur(); idx = i; keepIdx = i; const p = P[idx];
+        $('#exRoom', box).classList.toggle('essay', isEs(p));
+        ta.placeholder = isEs(p) ? '여기에 답을 글로 써요 (서술형)' : '여기에 파이썬 코드를 작성하세요';
+        $('#exProb', box).innerHTML = `<h3>${idx + 1}. ${esc(p.title || '문제')} <span class="chip">${p.points}점</span></h3><div class="ex-body">${renderContent(p.body || '', true)}</div><p class="muted small">${isEs(p) ? '✍️ 서술형 · 선생님이 채점해요' + (sentCode[p.id] ? ' · 제출함' : '') : `내 점수: ${sc(p)} / ${p.points}`}</p>`;
         ta.value = code[p.id] || '';
         out.hidden = true; drawTabs(); drawScore();
       };
@@ -4824,8 +4829,13 @@ onmessage = (ev) => {
       const lock = (on) => { busy = on; box.querySelectorAll('#exRun,#exSend,#bRun,#bSend').forEach((b) => { b.disabled = on; }); };
       const doSubmit = async (i, silent) => {
         const p = P[i]; const c = i === idx ? ta.value : (code[p.id] || '');
-        if (!c.trim()) { if (!silent) toast('코드를 입력하세요', true); return null; }
+        if (!c.trim()) { if (!silent) toast(isEs(p) ? '답을 입력하세요' : '코드를 입력하세요', true); return null; }
         const tests = p.tests || [];
+        if (isEs(p)) {
+          const { data: d2 } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: 0, p_total: 0 });
+          if (d2 && d2.status === 'ok') { sentCode[p.id] = c; best[p.id] = { passed: 0, total: 0 }; drawTabs(); drawScore(); }
+          return { res: { status: 'ES', passed: 0, total: 0 }, st: d2 && d2.status };
+        }
         if (!silent) showOut('<span class="muted">⏳ 채점 중… (처음 한 번은 파이썬 준비로 몇 초 걸려요)</span>');
         const res = await gradeAll(c, tests, (k, n) => { if (!silent) showOut(`<span class="muted">⏳ 채점 중… ${k + 1} / ${n}</span>`); });
         const { data } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: res.passed, p_total: res.total });
@@ -4845,9 +4855,12 @@ onmessage = (ev) => {
           if (r) {
             const M = { closed: '시험이 끝났어요', early: '아직 시작 전이에요', nouser: adm ? '관리자는 제출이 기록되지 않아요 (채점 결과만 보여요)' : '제출하지 못했어요', limit: '제출 횟수 한도를 넘었어요' };
             const p = P[idx];
+            if (r.res.status === 'ES') { showOut(`<div class="jsum ${r.st === 'ok' ? 'ok' : 'bad'}"><b>${r.st === 'ok' ? '✅ 답안을 제출했어요' : '⚠️ ' + (M[r.st] || '제출하지 못했어요')}</b> · 고쳐 쓰고 다시 내면 마지막 답이 채점돼요</div>`); pick(idx); }
+            else {
             showOut(`<div class="jsum ${r.res.status === 'AC' ? 'ok' : 'bad'}"><b>${r.res.status === 'AC' ? '✅ 모두 통과!' : `❌ ${r.res.passed} / ${r.res.total} 통과`}</b> · 이 문제 ${sc(p)} / ${p.points}점${r.st && r.st !== 'ok' ? ` · ⚠️ ${M[r.st] || '기록 실패'}` : ' · 제출 완료'}</div>${casesHtml(r.res)}`);
             pick(idx);
             showOut(out.innerHTML);
+            }
           }
         } catch (e) { showOut(`<div class="jsum bad">⚠️ ${esc(e.message || e)}</div>`); }
         lock(false);
@@ -4863,12 +4876,13 @@ onmessage = (ev) => {
       $('#exSend', box).onclick = sendBtn; $('#bSend', box).onclick = sendBtn;
       $('#exRun', box).onclick = runBtn; $('#bRun', box).onclick = runBtn;
       const openList = () => {
-        const m = modal(`<h3>📋 문제 목록</h3><div class="list">${P.map((p, i) => `<button type="button" class="row ex-lrow" data-go="${i}"><div class="row-main"><b>${i + 1}. ${esc(p.title || '문제')}</b></div><div class="muted small">${sc(p)} / ${p.points}점</div></button>`).join('')}</div><p><b>합계 ${totalSc()} / ${maxSc}점</b></p>`);
+        const m = modal(`<h3>📋 문제 목록</h3><div class="list">${P.map((p, i) => `<button type="button" class="row ex-lrow" data-go="${i}"><div class="row-main"><b>${i + 1}. ${esc(p.title || '문제')}</b></div><div class="muted small">${isEs(p) ? (sentCode[p.id] ? '✍️ 제출함' : '✍️ 서술형') : `${sc(p)} / ${p.points}점`}</div></button>`).join('')}</div><p><b>합계 ${totalSc()} / ${maxSc}점</b>${esPts ? ` <span class="muted small">(+서술형 ${esPts}점)</span>` : ''}</p>`);
         m.el.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { m.close(); pick(Number(b.dataset.go)); setView('prob'); }));
       };
       $('#exList', box).onclick = openList; $('#bList', box).onclick = openList;
-      pick(0);
+      pick(idx);
       roomApi = {
+        save: () => saveCur(),
         // 시간이 다 되면 아직 안 낸 코드를 채점해서 내요
         async finish(msg) {
           saveCur();
@@ -4890,10 +4904,12 @@ onmessage = (ev) => {
       if (!E.entered && !adm) { box.innerHTML = `${head()}<div class="card center muted pad">이 시험은 끝났어요. 응시하지 않았어요.</div>`; return; }
       box.innerHTML = `${head()}<div class="card center muted pad" id="exRes">📊 결과를 정리하는 중…</div>`;
       let b = null;
-      for (let k = 0; k < 20 && alive(); k += 1) {
+      for (let k = 0; alive(); k += 1) {
         const { data } = await sb.rpc('exam_board', { p_id: E.id });
         if (data && data.ready) { b = data; break; }
-        await new Promise((r) => setTimeout(r, 2500));
+        if (data && data.grading) { const el = $('#exRes', box); if (el) el.innerHTML = '✍️ 선생님이 서술형 문제를 채점하고 있어요.<br><span class="small">채점이 끝나면 순위가 나와요. 이 화면은 자동으로 바뀌어요.</span>'; }
+        else if (k >= 20) break;
+        await new Promise((r) => setTimeout(r, data && data.grading ? 10000 : 2500));
       }
       if (!b || !alive()) return;
       const [rv] = await Promise.all([Promise.resolve(sb.rpc('exam_review', { p_id: E.id })).then((r) => (r && r.data) || [], () => [])]);
@@ -4903,7 +4919,7 @@ onmessage = (ev) => {
         <label class="inline" style="justify-content:center;margin-top:8px"><input type="checkbox" id="exPub" ${E.public === false ? '' : 'checked'}> 내 이름과 점수를 순위표에 공개</label></div>` : `<div class="card center muted pad">${adm ? '관리자 보기예요.' : '순위가 없어요 (제출한 기록이 없어요).'}</div>`;
       const rows = (b.rows || []).map((r) => `<div class="row ex-rrow${r.me ? ' me' : ''}"><div class="row-main"><span class="ex-rk">${r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</span> ${r.hidden && !r.me ? '<span class="muted">🔒 비공개</span>' : `<b>${esc(r.name || '')}</b>${r.hidden ? ' <span class="muted small">(나만 보여요)</span>' : ''}`}</div><div><b>${r.score}</b><span class="muted small">점 · ${r.solved}문제</span></div></div>`).join('') || '<p class="muted center pad">참가자가 없어요.</p>';
       box.innerHTML = `${head()}${meHtml}<div class="card list"><h3 style="padding:14px 18px 0;margin:0">🏆 순위표</h3>${rows}</div>
-        ${rv.length ? `<div class="card"><h3>📄 문제와 내 풀이</h3>${rv.map((r, i) => { const p = (E.problems || []).find((x) => x.id === r.problem_id) || {}; return `<details class="ex-rv"><summary><b>${i + 1}. ${esc(r.title || '문제')}</b> <span class="muted small">내 점수 ${r.score} / ${r.points}</span></summary><div class="ex-body">${renderContent(p.body || '', true)}</div>${r.code ? `<div class="muted small">내 최고 점수 코드</div><pre><code>${esc(r.code)}</code></pre>` : '<p class="muted small">제출한 코드가 없어요.</p>'}</details>`; }).join('')}</div>` : ''}`;
+        ${rv.length ? `<div class="card"><h3>📄 문제와 내 풀이</h3>${rv.map((r, i) => { const p = (E.problems || []).find((x) => x.id === r.problem_id) || {}; return `<details class="ex-rv"><summary><b>${i + 1}. ${esc(r.title || '문제')}</b> <span class="muted small">${r.kind === 'essay' ? '✍️ ' : ''}내 점수 ${r.graded === false ? '채점 전' : r.score} / ${r.points}</span></summary><div class="ex-body">${renderContent(p.body || '', true)}</div>${r.code ? `<div class="muted small">${r.kind === 'essay' ? '내 답안' : '내 최고 점수 코드'}</div><pre><code>${esc(r.code)}</code></pre>` : '<p class="muted small">제출한 코드가 없어요.</p>'}</details>`; }).join('')}</div>` : ''}`;
       const pub = $('#exPub', box);
       if (pub) pub.onchange = async () => {
         const { data } = await sb.rpc('exam_set_public', { p_id: E.id, p_on: pub.checked });
@@ -4926,6 +4942,16 @@ onmessage = (ev) => {
         if (ph === 'live' || ph === 'over') await refetch();
         if (!alive()) return;
         if (ph === 'soon') drawSoon(); else if (ph === 'lobby') drawLobby(); else if (ph === 'live') drawLive(); else drawOver();
+      }
+      if (cur === 'live' && roomApi && Date.now() - lastRev > 25000) {
+        lastRev = Date.now();
+        try {
+          const { data: rv2 } = await sb.rpc('exam_rev', { p_id: E.id });
+          if (typeof rv2 === 'number' && rv2 !== E.rev && roomApi) {
+            roomApi.save(); await refetch();
+            if (alive()) { cur = null; toast('📣 선생님이 문제를 고쳤어요! 화면이 새로 바뀌었어요', false); tick(true); return; }
+          }
+        } catch (e) { /* 다음에 다시 */ }
       }
       const t = exNow();
       box.querySelectorAll('[data-cd]').forEach((el) => {
@@ -5540,7 +5566,7 @@ onmessage = (ev) => {
     const R = (cur && cur.reward) || { pt_rank: [300, 200, 100], pt_join: 50, item_first: 'exam_balloon_gold', item_top3: 'exam_balloon_silver', item_join: 'exam_balloon_blue' };
     const loc = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
     const defStart = loc(new Date(Date.now() + 36e5 * 24).toISOString());
-    const rows = (L.exams || []).map((e) => { const ph = exPhase(e); return `<div class="row"><div class="row-main"><b>${esc(e.title)}</b> <span class="badge ${EX_PH[ph][1]}">${EX_PH[ph][0]}</span> <span class="chip">${e.status === 'open' ? '공개' : '비공개'}</span><br><span class="muted small">${fmt(e.start_at)} · ${e.duration_min}분 · 문제 ${e.n_problems} · 응시 ${e.n_entries}${e.settled ? ' · 정산 완료' : ''}</span></div><div><a class="ghost btn" href="#/exam/${e.id}">보기</a> <button class="ghost" data-exedit="${e.id}" type="button">수정</button> <button class="ghost danger" data-exdel="${e.id}" type="button">삭제</button></div></div>`; }).join('') || '<p class="muted center pad">아직 시험이 없어요.</p>';
+    const rows = (L.exams || []).map((e) => { const ph = exPhase(e); return `<div class="row"><div class="row-main"><b>${esc(e.title)}</b> <span class="badge ${EX_PH[ph][1]}">${EX_PH[ph][0]}</span> <span class="chip">${e.status === 'open' ? '공개' : '비공개'}</span><br><span class="muted small">${fmt(e.start_at)} · ${e.duration_min}분 · 문제 ${e.n_problems} · 응시 ${e.n_entries}${e.n_essay ? ` · 서술형 ${e.n_essay}` : ''}${e.settled ? ' · 정산 완료' : ''}</span></div><div><a class="ghost btn" href="#/exam/${e.id}">보기</a> <button class="ghost" data-exnote="${e.id}" type="button">📣 알림</button>${e.n_essay ? ` <button class="ghost" data-exgrade="${e.id}" type="button">✍️ 채점${e.settled ? ' 보기' : ''}</button>` : ''} <button class="ghost" data-exedit="${e.id}" type="button">수정</button> <button class="ghost danger" data-exdel="${e.id}" type="button">삭제</button></div></div>`; }).join('') || '<p class="muted center pad">아직 시험이 없어요.</p>';
     return [`
       <div class="card list"><h3 style="padding:14px 18px 0;margin:0">📝 시험 목록</h3>${rows}</div>
       <div class="card"><h3>${cur ? `✏️ 시험 수정 · #${cur.id}` : '➕ 새 시험 만들기'}</h3>
@@ -5566,22 +5592,23 @@ onmessage = (ev) => {
           <h4>📄 문제 <span class="muted small" id="exCnt"></span></h4>
           <div id="exProbs"></div>
           <div class="form-actions" style="justify-content:flex-start"><button class="ghost" type="button" id="exAdd">+ 문제 직접 추가</button><button class="ghost" type="button" id="exImp">📥 문제집에서 가져오기</button></div>
+          ${cur ? '<label class="inline"><input type="checkbox" id="exFix" checked> 저장하면 응시자에게 📣 "문제가 수정됐어요" 알림 보내기</label><p class="muted small">시험 중에 문제를 고쳐도 제출 기록은 그대로예요. 응시자 화면은 30초 안에 알아서 바뀌어요. 채점 테스트를 바꿨다면 학생이 다시 제출해야 새 기준으로 점수가 나와요.</p>' : ''}
           <div class="form-actions"><button class="ghost" type="button" id="exNew">새로 쓰기</button><button class="primary">${cur ? '저장' : '만들기'}</button></div>
         </form></div>`,
     (v) => {
       const probs = cur ? cur.problems.map((p) => ({ ...p, tests: JSON.stringify(p.tests || [], null, 1) })) : [];
       const drawP = () => {
         $('#exCnt', v).textContent = `(${probs.length}개 · 합계 ${probs.reduce((s, p) => s + (Number(p.points) || 0), 0)}점)`;
-        $('#exProbs', v).innerHTML = probs.map((p, i) => `<div class="card ex-pe"><div class="ex-pehead"><b>${i + 1}번</b><input type="text" data-f="title" data-i="${i}" maxlength="100" placeholder="문제 제목" value="${esc(p.title || '')}"><input type="number" data-f="points" data-i="${i}" min="1" max="1000" value="${p.points || 100}" style="width:80px" title="배점"><button type="button" class="ghost" data-up="${i}">↑</button><button type="button" class="ghost" data-dn="${i}">↓</button><button type="button" class="ghost danger" data-rm="${i}">✕</button></div>
+        $('#exProbs', v).innerHTML = probs.map((p, i) => `<div class="card ex-pe"><div class="ex-pehead"><b>${i + 1}번</b><select data-f="kind" data-i="${i}" title="문제 종류"><option value="code" ${p.kind === 'essay' ? '' : 'selected'}>💻 코드</option><option value="essay" ${p.kind === 'essay' ? 'selected' : ''}>✍️ 서술형</option></select><input type="text" data-f="title" data-i="${i}" maxlength="100" placeholder="문제 제목" value="${esc(p.title || '')}"><input type="number" data-f="points" data-i="${i}" min="1" max="1000" value="${p.points || 100}" style="width:80px" title="배점"><button type="button" class="ghost" data-up="${i}">↑</button><button type="button" class="ghost" data-dn="${i}">↓</button><button type="button" class="ghost danger" data-rm="${i}">✕</button></div>
           <textarea data-f="body" data-i="${i}" rows="5" placeholder="문제 설명 (마크다운)">${esc(p.body || '')}</textarea>
-          <details><summary class="muted small">채점 테스트 (JSON) — [{"input":"1 2","output":"3","hidden":false}, …]</summary><textarea class="code" data-f="tests" data-i="${i}" rows="6">${esc(p.tests)}</textarea></details></div>`).join('') || '<p class="muted small">아직 문제가 없어요.</p>';
-        v.querySelectorAll('[data-f]').forEach((el) => (el.oninput = () => { probs[Number(el.dataset.i)][el.dataset.f] = el.value; if (el.dataset.f === 'points') $('#exCnt', v).textContent = `(${probs.length}개 · 합계 ${probs.reduce((s, p) => s + (Number(p.points) || 0), 0)}점)`; }));
+          ${p.kind === 'essay' ? `<textarea data-f="rubric" data-i="${i}" rows="3" placeholder="채점 기준 (선생님만 보여요) 예) 핵심 개념 2가지를 쓰면 각 25점">${esc(p.rubric || '')}</textarea>` : `<details><summary class="muted small">채점 테스트 (JSON) — [{"input":"1 2","output":"3","hidden":false}, …]</summary><textarea class="code" data-f="tests" data-i="${i}" rows="6">${esc(p.tests)}</textarea></details>`}</div>`).join('') || '<p class="muted small">아직 문제가 없어요.</p>';
+        v.querySelectorAll('[data-f]').forEach((el) => (el.oninput = () => { probs[Number(el.dataset.i)][el.dataset.f] = el.value; if (el.dataset.f === 'kind') drawP(); if (el.dataset.f === 'points') $('#exCnt', v).textContent = `(${probs.length}개 · 합계 ${probs.reduce((s, p) => s + (Number(p.points) || 0), 0)}점)`; }));
         v.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => { probs.splice(Number(b.dataset.rm), 1); drawP(); }));
         v.querySelectorAll('[data-up]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.up); if (i > 0) { [probs[i - 1], probs[i]] = [probs[i], probs[i - 1]]; drawP(); } }));
         v.querySelectorAll('[data-dn]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.dn); if (i < probs.length - 1) { [probs[i + 1], probs[i]] = [probs[i], probs[i + 1]]; drawP(); } }));
       };
       drawP();
-      $('#exAdd', v).onclick = () => { probs.push({ title: '', body: '', points: 100, tests: '[\n {"input":"","output":""}\n]' }); drawP(); };
+      $('#exAdd', v).onclick = () => { probs.push({ kind: 'code', title: '', body: '', points: 100, tests: '[\n {"input":"","output":""}\n]' }); drawP(); };
       $('#exNew', v).onclick = () => { exEditId = null; route(true); };
       $('#exImp', v).onclick = async () => {
         const { data: sets } = await sb.from('problem_sets').select('id,title,week').order('id', { ascending: false });
@@ -5594,10 +5621,45 @@ onmessage = (ev) => {
           $('#imList', m.el).innerHTML = exs.map((x, i) => `<label class="row inline"><input type="checkbox" data-im="${i}"> <span class="row-main"><b>${esc(x.label || '#' + x.id)}</b> <span class="muted small">${esc(x.difficulty || '')} · 테스트 ${(x.tests || []).length}개 · ${esc((x.body || '').replace(/\s+/g, ' ').slice(0, 50))}</span></span></label>`).join('') || '<p class="muted small">문제가 없어요.</p>';
         };
         $('#imGo', m.el).onclick = () => {
-          m.el.querySelectorAll('[data-im]:checked').forEach((c) => { const x = exs[Number(c.dataset.im)]; probs.push({ title: x.label || `문제 ${probs.length + 1}`, body: x.body || '', points: 100, tests: JSON.stringify(x.tests || [], null, 1) }); });
+          m.el.querySelectorAll('[data-im]:checked').forEach((c) => { const x = exs[Number(c.dataset.im)]; probs.push({ kind: 'code', title: x.label || `문제 ${probs.length + 1}`, body: x.body || '', points: 100, tests: JSON.stringify(x.tests || [], null, 1) }); });
           m.close(); drawP();
         };
       };
+      v.querySelectorAll('[data-exnote]').forEach((b) => (b.onclick = () => {
+        const id = Number(b.dataset.exnote);
+        const m = modal(`<h3>📣 시험 알림 보내기</h3><label>내용 <span class="muted small">(200자)</span><textarea id="nfMsg" rows="3" maxlength="200" placeholder="예) 3번 문제 예시 출력이 틀려서 고쳤어요"></textarea></label><label>받는 사람<select id="nfScope"><option value="entrants">입장한 응시자</option><option value="all">모든 학생</option></select></label><div class="form-actions"><button class="primary" id="nfGo" type="button">📣 보내기</button></div>`);
+        $('#nfGo', m.el).onclick = async () => {
+          const msg = $('#nfMsg', m.el).value.trim(); if (!msg) return toast('내용을 입력하세요', true);
+          const { data } = await sb.rpc('exam_notify', { p_id: id, p_msg: msg, p_scope: $('#nfScope', m.el).value });
+          if (typeof data !== 'number' || data < 0) return toast('보내지 못했어요', true);
+          m.close(); toast(`${data}명에게 알림을 보냈어요`);
+        };
+      }));
+      v.querySelectorAll('[data-exgrade]').forEach((b) => (b.onclick = async () => {
+        const id = Number(b.dataset.exgrade);
+        const ex = (L.exams || []).find((x) => x.id === id) || {};
+        const { data: es } = await sb.rpc('exam_essays', { p_id: id });
+        if (!es) return toast('불러오지 못했어요', true);
+        const left = () => es.reduce((n, p) => n + p.answers.filter((a) => a.answer != null && a.score == null).length, 0);
+        const m = modal(`<h3>✍️ 서술형 채점 · ${esc(ex.title || '')}</h3><p class="muted small" id="gdInfo"></p><div style="max-height:62vh;overflow:auto">${es.map((p, pi) => `<div class="card"><b>${esc(p.title || '문제')}</b> <span class="chip">${p.points}점</span><div class="ex-body small">${renderContent(p.body || '', true)}</div>${p.rubric ? `<div class="muted small">📋 기준: ${esc(p.rubric)}</div>` : ''}${p.answers.map((a, ai) => `<div class="row" style="align-items:flex-start;gap:8px"><div class="row-main"><b>${esc(a.name || '')}</b><pre style="white-space:pre-wrap;margin:4px 0">${a.answer == null ? '(제출 안 함)' : esc(a.answer)}</pre></div><div><input type="number" min="0" max="${p.points}" data-g="${pi}:${ai}" value="${a.score == null ? '' : a.score}" placeholder="점수" style="width:70px" ${ex.settled ? 'disabled' : ''}></div></div>`).join('') || '<p class="muted small">응시자가 없어요.</p>'}</div>`).join('') || '<p class="muted">서술형 문제가 없어요.</p>'}</div>${ex.settled ? '<p class="muted">정산이 끝나서 고칠 수 없어요.</p>' : '<div class="form-actions"><button class="primary" id="gdFin" type="button">✅ 채점 끝 · 정산하기</button></div><p class="muted small">점수를 쓰고 칸을 벗어나면 저장돼요. 점수를 안 쓴 답은 0점이에요. 정산하면 순위와 보상이 확정돼요.</p>'}`);
+        const info = () => { const el = $('#gdInfo', m.el); if (el) el.textContent = `아직 점수를 안 쓴 답 ${left()}개`; };
+        info();
+        m.el.querySelectorAll('[data-g]').forEach((inp) => (inp.onchange = async () => {
+          const [pi, ai] = inp.dataset.g.split(':').map(Number); const p = es[pi]; const a = p.answers[ai];
+          if (inp.value === '') return;
+          const { data } = await sb.rpc('exam_grade', { p_problem: p.id, p_user: a.uid, p_score: parseInt(inp.value, 10) });
+          if (data !== 'ok') { toast({ score: `0~${p.points} 사이로 써요`, settled: '이미 정산됐어요' }[data] || '저장하지 못했어요', true); return; }
+          a.score = parseInt(inp.value, 10); info();
+        }));
+        const fin = $('#gdFin', m.el);
+        if (fin) fin.onclick = async () => {
+          if (!confirm(`정산할까요? 점수 안 쓴 답 ${left()}개는 0점으로 처리돼요. 정산 뒤에는 고칠 수 없어요.`)) return;
+          fin.disabled = true;
+          const { data } = await sb.rpc('exam_finalize', { p_id: id });
+          if (data === 'ok' || data === 'done') { m.close(); toast('정산했어요! 순위와 보상이 나갔어요'); route(true); }
+          else { fin.disabled = false; toast(data === 'wait' ? '시험이 끝난 직후(20초)부터 정산할 수 있어요' : '정산하지 못했어요', true); }
+        };
+      }));
       v.querySelectorAll('[data-exedit]').forEach((b) => (b.onclick = () => { exEditId = Number(b.dataset.exedit); route(true); window.scrollTo(0, document.body.scrollHeight); }));
       v.querySelectorAll('[data-exdel]').forEach((b) => (b.onclick = async () => {
         if (!confirm('이 시험과 제출 기록, 결과가 모두 지워져요. 지울까요?')) return;
@@ -5612,8 +5674,8 @@ onmessage = (ev) => {
         try {
           plist = probs.map((p, i) => {
             const t = typeof p.tests === 'string' ? JSON.parse(p.tests || '[]') : (p.tests || []);
-            if (!Array.isArray(t) || t.some((x) => !x || typeof x !== 'object')) throw new Error(`${i + 1}번 문제의 채점 테스트 형식이 올바르지 않아요`);
-            return { title: p.title || '', body: p.body || '', points: Math.max(1, Math.min(1000, parseInt(p.points, 10) || 100)), tests: t.map((x) => ({ input: String(x.input ?? ''), output: String(x.output ?? ''), ...(x.mode ? { mode: x.mode } : {}), ...(x.hidden ? { hidden: true } : {}) })) };
+            if (p.kind !== 'essay' && (!Array.isArray(t) || t.some((x) => !x || typeof x !== 'object'))) throw new Error(`${i + 1}번 문제의 채점 테스트 형식이 올바르지 않아요`);
+            return { id: p.id || null, kind: p.kind === 'essay' ? 'essay' : 'code', rubric: p.kind === 'essay' ? (p.rubric || '') : '', title: p.title || '', body: p.body || '', points: Math.max(1, Math.min(1000, parseInt(p.points, 10) || 100)), tests: p.kind === 'essay' ? [] : t.map((x) => ({ input: String(x.input ?? ''), output: String(x.output ?? ''), ...(x.mode ? { mode: x.mode } : {}), ...(x.hidden ? { hidden: true } : {}) })) };
           });
         } catch (e) { return toast(e.message.includes('JSON') ? '채점 테스트 JSON 형식 오류: ' + e.message : e.message, true); }
         const pts = $('#exPts', v).value.split(',').map((x) => parseInt(x.trim(), 10)).filter((n) => Number.isFinite(n) && n >= 0);
@@ -5624,8 +5686,10 @@ onmessage = (ev) => {
         if (!p.title) return toast('제목을 입력하세요', true);
         if (p.status === 'open' && !plist.length) return toast('문제를 하나 이상 넣고 공개해 주세요', true);
         const { data, error: e2 } = await sb.rpc('exam_save', { p });
-        if (e2 || !data || data.status !== 'ok') return toast({ forbidden: '권한이 없어요', settled: '정산이 끝난 시험은 고칠 수 없어요', started: '이미 응시자가 있어서 문제는 고칠 수 없어요', invalid: '값이 올바르지 않아요' }[data && data.status] || '저장하지 못했어요', true);
-        toast('시험을 저장했어요'); exEditId = data.id; route(true);
+        if (e2 || !data || data.status !== 'ok') return toast({ forbidden: '권한이 없어요', settled: '정산이 끝난 시험은 고칠 수 없어요', invalid: '값이 올바르지 않아요' }[data && data.status] || '저장하지 못했어요', true);
+        toast('시험을 저장했어요');
+        if (cur && $('#exFix', v) && $('#exFix', v).checked && cur.n_entries > 0) { await sb.rpc('exam_notify', { p_id: data.id, p_msg: '문제가 수정됐어요. 화면이 자동으로 바뀌어요. 바뀐 문제를 확인하세요!', p_scope: 'entrants' }); }
+        exEditId = data.id; route(true);
       };
     }];
   }
@@ -6272,7 +6336,7 @@ onmessage = (ev) => {
     if (can('content')) tabs.push(['edit', '✏️ 편집']);
     if (isAdmin()) tabs.push(['growth', '🏆 성장']);
     if (isAdmin()) tabs.push(['badges', '🎖️ 배지']);
-    if (isAdmin()) tabs.push(['exam', '📝 시험']);
+    if (can('content')) tabs.push(['exam', '📝 시험']);
     if (isAdmin()) tabs.push(['items', '🎁 아이템']);
     if (isAdmin()) tabs.push(['market', '🛍️ 마켓·행사']);
     if (isAdmin()) tabs.push(['tier', '🏅 티어']);
@@ -6771,6 +6835,19 @@ onmessage = (ev) => {
   sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT' && !signingUp) { me = null; clearInterval(notifTimer); EXT.clear(); renderAuth(); }
   });
-  window.addEventListener('hashchange', () => route());
+  // 새 버전이 올라왔는지 확인해서, 화면을 옮길 때 자동으로 새로고침 (시험 보는 중엔 건너뜀)
+  let VCHK = Date.now();
+  async function checkNewVersion() {
+    if (Date.now() - VCHK < 90000) return;
+    VCHK = Date.now();
+    try {
+      if (document.body.classList.contains('exam-on') || /^#\/exam\/\d+/.test(location.hash)) return;
+      const r = await fetch('app.js', { cache: 'reload' });
+      const m = /const APP_VERSION = '([^']+)'/.exec(await r.text());
+      if (m && m[1] !== APP_VERSION) { flushDrafts(); location.reload(); }
+    } catch (e) { /* 오프라인이면 그냥 둠 */ }
+  }
+  window.addEventListener('hashchange', () => { checkNewVersion(); route(); });
+  document.addEventListener('visibilitychange', () => { const t = document.activeElement && document.activeElement.tagName; if (!document.hidden && t !== 'TEXTAREA' && t !== 'INPUT') checkNewVersion(); });
   boot();
 })();
