@@ -485,12 +485,13 @@ a.row.pinned:hover { background: color-mix(in srgb, #dc2626 14%, transparent); }
 [data-theme="dark"] .post-title.pinned { color: #f87171; }
 
 /* V4.0.0 — IDE 입력창 (ide.js) */
-.ide { position: relative; margin-top: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); --ig: rgba(128, 128, 128, .30); }
+.ide { position: relative; overflow: hidden; margin-top: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); --ig: rgba(128, 128, 128, .30); }
 .ide:focus-within { outline: 2px solid var(--primary); outline-offset: -1px; }
 .ide .ide-back, .ide textarea.ide-ta {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; line-height: 1.5; letter-spacing: 0;
   padding: 10px 12px; border: 0; margin: 0; tab-size: 4; white-space: pre; box-sizing: border-box;
 }
+.ide .ide-main { position: relative; }
 .ide .ide-back { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: transparent; background: transparent; border-radius: 10px; }
 .ide .ide-back i { display: inline-block; height: 1.5em; vertical-align: top;
   background-image: repeating-linear-gradient(to right, var(--ig) 0, var(--ig) 1px, transparent 1px, transparent 4ch); }
@@ -918,3 +919,10 @@ nav.menu a .nbadge { margin-left: 6px; }
 .app-dl { padding: 12px 16px; }
 .app-dl-t { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .app-dl .btn { display: inline-block; }
+
+/* V4.5.4d · 줄 번호 · 현재 줄 강조 */
+.ide .ide-gut { position: absolute; left: 0; top: 0; bottom: 0; margin: 0; overflow: hidden; text-align: right; user-select: none; pointer-events: none; color: var(--muted, #8a8f98);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; line-height: 1.5; letter-spacing: 0; padding: 10px 10px 10px 8px; box-sizing: border-box;
+  white-space: pre; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--border) 25%, transparent); border-radius: 10px 0 0 10px; }
+.ide .ide-gut b { color: var(--text); font-weight: 600; }
+.ide .ide-cur { position: absolute; left: 0; right: 0; top: 0; pointer-events: none; background: color-mix(in srgb, var(--primary) 9%, transparent); }

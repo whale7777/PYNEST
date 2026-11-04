@@ -4,13 +4,15 @@
  *  · Tab / Shift+Tab 으로 들여쓰기/내어쓰기(여러 줄 선택도 OK) · 앞쪽 공백에서 Backspace 는 4칸씩
  *  · Ctrl(⌘)+/ 로 주석 켜기/끄기
  *  · 들여쓰기 4칸마다 연한 세로줄 (VS Code 처럼 글자 앞 공백에만)
+ *  · 줄 번호(왼쪽) · 현재 줄 강조
+ *  · 줄 편집: Ctrl(⌘)+D 줄 복제 · Alt+↑/↓ 줄 옮기기 · Ctrl(⌘)+Shift+K 줄 지우기 · Ctrl(⌘)+Enter 아래에 새 줄 (Shift 면 위) · Home 은 글자 시작 ↔ 줄 맨앞
  *  사용: PYIDE.attach(textarea)
  */
 (function () {
   'use strict';
   /* 설정(이 브라우저에 저장) — 설정 화면에서 켜고 끌 수 있어요. 바꾸면 열려 있는 입력창에도 바로 적용돼요. */
   const KEY = 'pn_ide';
-  const DEF = { close: true, split: true, indent: true, tab: true, bksp: true, guide: true, comment: true };
+  const DEF = { close: true, split: true, indent: true, tab: true, bksp: true, guide: true, comment: true, lines: true, curline: true, linecmd: true };
   let cache = null;
   const load = () => {
     let o = {};
@@ -43,14 +45,54 @@
     const back = document.createElement('pre');
     back.className = 'ide-back';
     back.setAttribute('aria-hidden', 'true');
+    const gut = document.createElement('pre');
+    gut.className = 'ide-gut';
+    gut.setAttribute('aria-hidden', 'true');
+    const main = document.createElement('div');
+    main.className = 'ide-main';
+    const curl = document.createElement('div');
+    curl.className = 'ide-cur';
     ta.parentNode.insertBefore(wrap, ta);
-    wrap.appendChild(back);
-    wrap.appendChild(ta);
+    wrap.appendChild(gut);
+    wrap.appendChild(main);
+    main.appendChild(curl);
+    main.appendChild(back);
+    main.appendChild(ta);
     ta.classList.add('ide-ta');
+    let lastLine = -1;
+    const lineNo = () => ta.value.slice(0, ta.selectionStart).split('\n').length - 1;
+    const paintSide = () => {
+      const n = ta.value.split('\n').length;
+      const on = opt('lines');
+      gut.style.display = on ? '' : 'none';
+      if (!on) main.style.marginLeft = '0';
+      if (on) {
+        const cl = lineNo();
+        const d = Math.max(2, String(n).length);
+        gut.style.width = 'calc(' + d + 'ch + 22px)';
+        main.style.marginLeft = 'calc(' + d + 'ch + 22px)';
+        let h = '';
+        for (let i = 0; i < n; i += 1) h += (i === cl ? '<b>' + (i + 1) + '</b>' : (i + 1)) + '\n';
+        gut.innerHTML = h;
+        gut.scrollTop = ta.scrollTop;
+      }
+      const showCur = opt('curline') && document.activeElement === ta;
+      curl.style.display = showCur ? '' : 'none';
+      if (showCur) {
+        const cs = getComputedStyle(ta);
+        const lh = parseFloat(cs.lineHeight) || 21;
+        curl.style.height = lh + 'px';
+        curl.style.transform = 'translateY(' + (parseFloat(cs.paddingTop) + lineNo() * lh - ta.scrollTop) + 'px)';
+      }
+    };
+    const cursorMoved = () => { const l = lineNo(); if (l !== lastLine || true) { lastLine = l; paintSide(); } };
+    ['keyup', 'click', 'focus', 'blur', 'select'].forEach((ev) => ta.addEventListener(ev, cursorMoved));
+    ta.addEventListener('input', cursorMoved);
 
     let raf = 0;
     const paint = () => {
       raf = 0;
+      paintSide();
       if (!opt('guide')) { back.innerHTML = ''; return; }
       const lines = ta.value.split('\n');
       let html = '';
@@ -65,7 +107,7 @@
     };
     const later = () => { if (!raf) raf = requestAnimationFrame(paint); };
     ta.addEventListener('input', later);
-    ta.addEventListener('scroll', () => { back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft; });
+    ta.addEventListener('scroll', () => { back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; paintSide(); });
     if (window.ResizeObserver) new ResizeObserver(later).observe(ta);
     // 값이 코드로 바뀌는 경우(불러오기 등)도 따라가요
     const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
@@ -213,6 +255,74 @@
         put(out);
         ta.setSelectionRange(ls, ls + out.length);
         return;
+      }
+
+      /* 줄 편집 */
+      if (opt('linecmd')) {
+        const mod = e.ctrlKey || e.metaKey;
+        const blockRange = () => { const ls = lineStartOf(v, a); const le = lineEndOf(v, b > a && v[b - 1] === '\n' ? b - 1 : b); return [ls, le]; };
+        if (mod && !e.shiftKey && !e.altKey && (e.key === 'd' || e.key === 'D')) { // 줄 복제
+          e.preventDefault();
+          const [ls, le] = blockRange();
+          const blk = v.slice(ls, le);
+          ta.setSelectionRange(le, le);
+          put('\n' + blk);
+          const st = le + 1; ta.setSelectionRange(st + (a - ls), st + (b - ls));
+          return;
+        }
+        if (mod && e.shiftKey && (e.key === 'k' || e.key === 'K')) { // 줄 지우기
+          e.preventDefault();
+          const [ls, le] = blockRange();
+          const from = le < v.length ? ls : Math.max(0, ls - 1);
+          const to = le < v.length ? le + 1 : le;
+          ta.setSelectionRange(from, to);
+          put('');
+          const nv = ta.value; const nls = lineStartOf(nv, Math.min(from, nv.length));
+          const nle = lineEndOf(nv, nls); const col = Math.min(a - ls, nle - nls);
+          ta.setSelectionRange(nls + Math.max(0, col), nls + Math.max(0, col));
+          return;
+        }
+        if (mod && e.key === 'Enter') { // 아래/위에 새 줄
+          e.preventDefault();
+          const ls = lineStartOf(v, a); const le = lineEndOf(v, a);
+          const ind = /^ */.exec(v.slice(ls, le))[0];
+          const extra = !e.shiftKey && /:\s*(#.*)?$/.test(v.slice(ls, le)) ? SP : '';
+          if (e.shiftKey) { ta.setSelectionRange(ls, ls); put(ind + '\n'); ta.setSelectionRange(ls + ind.length, ls + ind.length); }
+          else { ta.setSelectionRange(le, le); put('\n' + ind + extra); }
+          return;
+        }
+        if (e.altKey && !mod && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { // 줄 옮기기
+          e.preventDefault();
+          const [ls, le] = blockRange();
+          const up = e.key === 'ArrowUp';
+          if (up && ls === 0) return;
+          if (!up && le >= v.length) return;
+          const blk = v.slice(ls, le);
+          if (up) {
+            const ps = lineStartOf(v, ls - 1);
+            const prev = v.slice(ps, ls - 1);
+            ta.setSelectionRange(ps, le); put(blk + '\n' + prev);
+            ta.setSelectionRange(ps + (a - ls), ps + (b - ls));
+          } else {
+            const ne = lineEndOf(v, le + 1);
+            const next = v.slice(le + 1, ne);
+            ta.setSelectionRange(ls, ne); put(next + '\n' + blk);
+            const st = ls + next.length + 1; ta.setSelectionRange(st + (a - ls), st + (b - ls));
+          }
+          return;
+        }
+        if (e.key === 'Home' && !mod && !e.altKey) { // 스마트 Home
+          const ls = lineStartOf(v, b === a || e.shiftKey ? (e.shiftKey && ta.selectionDirection === 'backward' ? a : b) : a);
+          const pos = ta.selectionDirection === 'backward' ? a : b;
+          const ls2 = lineStartOf(v, pos); const m = /^ */.exec(v.slice(ls2))[0].length;
+          const target = pos === ls2 + m ? ls2 : ls2 + m;
+          if (target === pos) return;
+          e.preventDefault();
+          if (e.shiftKey) { const anchor = ta.selectionDirection === 'backward' ? b : a; ta.setSelectionRange(Math.min(anchor, target), Math.max(anchor, target), target < anchor ? 'backward' : 'forward'); }
+          else ta.setSelectionRange(target, target);
+          void ls; cursorMoved();
+          return;
+        }
       }
 
       /* Ctrl(⌘)+/ : 주석 */

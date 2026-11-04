@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.4c';
+  const APP_VERSION = '4.5.4d';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '1BpEsJ6MbUUJK92qgSJaLRJ3Wq3kc4JcX';
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
@@ -6164,6 +6164,9 @@ onmessage = (ev) => {
           ['bksp', '스마트 Backspace', '앞쪽 공백은 4칸씩 지워요'],
           ['comment', 'Ctrl(⌘)+/ 주석 켜기/끄기', ''],
           ['guide', '들여쓰기 세로줄', '4칸마다 연한 줄을 보여줘요'],
+          ['lines', '줄 번호', '코드 왼쪽에 줄 번호를 보여줘요'],
+          ['curline', '현재 줄 강조', '커서가 있는 줄을 연하게 칠해요'],
+          ['linecmd', '줄 편집 단축키', 'Ctrl(⌘)+D 줄 복제 · Alt+↑/↓ 줄 옮기기 · Ctrl(⌘)+Shift+K 줄 지우기 · Ctrl(⌘)+Enter 아래에 새 줄(Shift 는 위) · Home 은 글자 시작↔줄 맨앞'],
         ];
         const cur = window.PYIDE.get();
         $('#ideOpts', v).innerHTML = IDE_OPTS.map(([k, t, d]) => `<label class="inline ideopt"><input type="checkbox" data-ide="${k}" ${cur[k] !== false ? 'checked' : ''}> <span><b>${esc(t)}</b>${d ? `<br><span class="muted small">${esc(d)}</span>` : ''}</span></label>`).join('')
