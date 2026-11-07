@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.4e';
+  const APP_VERSION = '4.5.4f';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '1BpEsJ6MbUUJK92qgSJaLRJ3Wq3kc4JcX';
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
@@ -1895,7 +1895,7 @@
     clearTimeout(DR.tm.get(eid)); clearTimeout(DR.stm.get(eid));
     const doLocal = () => { drWriteLocal(); };
     if (now) { doLocal(); drPushServer(eid); } else {
-      DR.tm.set(eid, setTimeout(doLocal, 500));
+      doLocal(); // 이 브라우저에는 글자를 칠 때마다 바로 (새로고침돼도 남도록)
       DR.stm.set(eid, setTimeout(() => drPushServer(eid), 3000));
     }
     return d.t;
@@ -3698,8 +3698,8 @@ onmessage = (ev) => {
   const lrMd = (t) => renderContent(t, true);
   const learnAddXp = (n) => { if (n > 0) { try { Promise.resolve(sb.rpc('learn_add_xp', { p_xp: n })).catch(() => {}); } catch (e) { /* 무시 */ } } };
   const codeKey = (lid, i) => `pn_lc_${me.id.slice(0, 8)}_${lid}_${i}`;
-  const lrSave = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* 무시 */ } };
-  const lrLoad = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const lrSave = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* 무시 */ } try { localStorage.setItem('pn_lr_' + k, v); } catch (e) { /* 무시 */ } };
+  const lrLoad = (k) => { let v = null; try { v = sessionStorage.getItem(k); } catch (e) { /* 무시 */ } if (v == null) { try { v = localStorage.getItem('pn_lr_' + k); } catch (e) { /* 무시 */ } } return v; };
 
   // 실행해 볼 수 있는 코드 칸 (설명 단계용·실습용 공통). opts: {key, rows, stdin}
   function lrCodeBox(root, initial, opts = {}) {
@@ -4803,7 +4803,8 @@ onmessage = (ev) => {
         code[p.id] = d != null ? d : (m ? m.code : '');
         if (m) { best[p.id] = { passed: m.passed, total: m.total }; sentCode[p.id] = m.code; }
       });
-      let idx = Math.min(keepIdx, P.length - 1); let busy = false; let view = 'prob';
+      let kIdx = keepIdx; if (!kIdx) { try { kIdx = Number(localStorage.getItem(`pn_exi_${E.id}`)) || 0; } catch (e) { kIdx = 0; } }
+      let idx = Math.max(0, Math.min(kIdx, P.length - 1)); let busy = false; let view = 'prob';
       const isEs = (p) => p.kind === 'essay';
       const sc = (p) => { if (isEs(p)) return 0; const b = best[p.id]; return b && b.total ? Math.floor((p.points * b.passed) / b.total) : 0; };
       const totalSc = () => P.reduce((s, p) => s + sc(p), 0);
@@ -4827,8 +4828,10 @@ onmessage = (ev) => {
         box.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => pick(Number(b.dataset.i))));
       };
       const saveCur = () => { code[P[idx].id] = ta.value; try { localStorage.setItem(key(P[idx].id), ta.value); } catch (e) { /* 무시 */ } };
+      let firstPick = true;
       const pick = (i) => {
-        saveCur(); idx = i; keepIdx = i; const p = P[idx];
+        if (!firstPick) saveCur(); // 맨 처음엔 빈 입력창 값으로 저장된 글을 덮어쓰지 않게
+        firstPick = false; idx = i; keepIdx = i; try { localStorage.setItem(`pn_exi_${E.id}`, String(i)); } catch (e) { /* 무시 */ } const p = P[idx];
         $('#exRoom', box).classList.toggle('essay', isEs(p));
         ta.placeholder = isEs(p) ? '여기에 답을 글로 써요 (서술형)' : '여기에 파이썬 코드를 작성하세요';
         $('#exProb', box).innerHTML = `<h3>${idx + 1}. ${esc(p.title || '문제')} <span class="chip">${p.points}점</span></h3><div class="ex-body">${renderContent(p.body || '', true)}</div><p class="muted small">${isEs(p) ? '✍️ 서술형 · 선생님이 채점해요' + (sentCode[p.id] ? ' · 제출함' : '') : `내 점수: ${sc(p)} / ${p.points}`}</p>`;
@@ -4836,6 +4839,8 @@ onmessage = (ev) => {
         out.hidden = true; drawTabs(); drawScore();
       };
       ta.addEventListener('input', saveCur);
+      window.addEventListener('pagehide', () => { try { if (!firstPick) saveCur(); } catch (e) { /* 이미 닫힘 */ } });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) { try { if (!firstPick) saveCur(); } catch (e) { /* 이미 닫힘 */ } } });
       const setView = (vw) => { view = vw; $('#exRoom', box).dataset.view = vw; box.querySelectorAll('.ex-bar [data-v]').forEach((b) => b.classList.toggle('on', b.dataset.v === vw)); };
       box.querySelectorAll('.ex-bar [data-v]').forEach((b) => (b.onclick = () => setView(b.dataset.v)));
       setView('prob');
