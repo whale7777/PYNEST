@@ -62,7 +62,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '4.5.4d';
+  const APP_VERSION = '4.5.4e';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '1BpEsJ6MbUUJK92qgSJaLRJ3Wq3kc4JcX';
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
@@ -6864,6 +6864,64 @@ onmessage = (ev) => {
     } catch (e) { /* 오프라인이면 그냥 둠 */ }
   }
   window.addEventListener('hashchange', () => { checkNewVersion(); route(); });
+
+  // ⬇️ 당겨서 새로고침 (터치 화면): 맨 위에서 아래로 끌면 동그라미가 내려오며 진해지고, 충분히 끌었다 놓으면 새로고침
+  (function pullToRefresh() {
+    const TH = 70; // 이만큼(=끈 거리의 절반) 넘게 끌면 새로고침
+    let el = null; let sy = 0; let sx = 0; let armed = false; let pull = 0; let busy = false;
+    const mk = () => {
+      if (el) return el;
+      el = document.createElement('div');
+      el.id = 'ptr';
+      el.setAttribute('aria-hidden', 'true');
+      el.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>';
+      document.body.appendChild(el);
+      return el;
+    };
+    const paint = (p, anim) => {
+      const e = mk();
+      e.style.transition = anim ? 'transform .2s, opacity .2s' : 'none';
+      e.style.opacity = String(Math.min(1, p / TH));
+      e.style.transform = `translate(-50%, ${p - 48}px)`;
+      const s = e.firstChild; if (!e.classList.contains('spin')) s.style.transform = `rotate(${p * 4}deg)`;
+      e.classList.toggle('ready', p >= TH);
+    };
+    const blocked = (t) => {
+      if (document.body.classList.contains('exam-on') || /^#\/exam\/\d+/.test(location.hash) || document.querySelector('.modal-bg') || document.body.classList.contains('menu-open')) return true;
+      for (let n = t; n && n !== document.body; n = n.parentElement) {
+        const tag = n.tagName;
+        if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || tag === 'PRE' || tag === 'VIDEO' || tag === 'IFRAME') return true;
+        if (n.scrollTop > 0) return true; // 안쪽에서 스크롤 중인 상자
+      }
+      return false;
+    };
+    document.addEventListener('touchstart', (e) => {
+      armed = false; pull = 0;
+      if (busy || e.touches.length !== 1 || (window.scrollY || document.documentElement.scrollTop) > 0 || blocked(e.target)) return;
+      sy = e.touches[0].clientY; sx = e.touches[0].clientX; armed = true;
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+      if (!armed || busy) return;
+      const dy = e.touches[0].clientY - sy; const dx = e.touches[0].clientX - sx;
+      if (dy <= 0 || Math.abs(dx) > dy) { if (pull) { pull = 0; paint(0, true); } if (dy <= 0) armed = pull > 0; return; }
+      if ((window.scrollY || document.documentElement.scrollTop) > 0) { armed = false; paint(0, true); return; }
+      pull = Math.min(dy * 0.5, 110);
+      if (e.cancelable) e.preventDefault();
+      paint(pull, false);
+    }, { passive: false });
+    const end = () => {
+      if (!armed) return; armed = false;
+      if (pull >= TH && !busy) {
+        busy = true;
+        const e = mk(); e.classList.add('spin'); e.style.opacity = '1'; e.style.transition = 'transform .2s'; e.style.transform = 'translate(-50%, 24px)';
+        try { flushDrafts(); } catch (er) { /* 임시 저장 실패해도 새로고침은 해요 */ }
+        setTimeout(() => location.reload(), 350);
+      } else if (pull > 0) { paint(0, true); }
+      pull = 0;
+    };
+    document.addEventListener('touchend', end, { passive: true });
+    document.addEventListener('touchcancel', end, { passive: true });
+  })();
   document.addEventListener('visibilitychange', () => { const t = document.activeElement && document.activeElement.tagName; if (!document.hidden && t !== 'TEXTAREA' && t !== 'INPUT') checkNewVersion(); });
   boot();
 })();
