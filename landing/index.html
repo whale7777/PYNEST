@@ -343,10 +343,11 @@ footer a:hover{color:var(--blue)}
 <div class="band" style="margin-top:110px">
   <div class="wrap">
     <div class="stats">
-      <div class="stat rv"><b><span data-to="7">7</span></b><span>티어 체계</span></div>
-      <div class="stat rv s1"><b><span data-to="170">170</span><small>개</small></b><span>수집 가능한 배지</span></div>
-      <div class="stat rv s2"><b><span data-to="3">3</span></b><span>이용 환경 · 웹, 앱, 카카오톡</span></div>
-      <div class="stat rv s3"><b><span data-to="0">0</span><small>분</small></b><span>설치 시간 · 브라우저에서 바로 실행</span></div>
+      <div class="stat rv"><b><span data-to="1794">1,794</span><small>개</small></b><span>자동 채점 문제</span></div>
+      <div class="stat rv s1"><b><span data-to="8">8</span><small>개</small></b><span>문제집 · 기초부터 알고리즘까지</span></div>
+      <div class="stat rv s2"><b><span data-to="61">61</span><small>개</small></b><span>단계별 학습 레슨</span></div>
+      <div class="stat rv s3"><b><span data-to="170">170</span><small>개</small></b><span>수집 가능한 배지 · 8단계 티어</span></div>
+      </div>
     </div>
   </div>
 </div>
@@ -423,7 +424,7 @@ footer a:hover{color:var(--blue)}
       <p class="kicker">랭킹 · 성장</p>
       <h2 class="h2">경쟁은 가볍게,<br>성장은 눈에 보이게</h2>
       <p class="sub">새로 푼 문제와 완료한 레슨이 점수가 되고, 점수는 티어와 순위로 이어집니다.</p>
-      <ul class="pts"><li>주간·월간 랭킹과 7단계 티어</li><li>170종의 배지, 캐릭터 꾸미기와 학생 마켓</li><li>다크 모드를 지원합니다</li></ul>
+      <ul class="pts"><li>주간·월간 랭킹과 8단계 티어</li><li>170종의 배지, 캐릭터 꾸미기와 학생 마켓</li><li>다크 모드를 지원합니다</li></ul>
     </div>
   </div>
 </section>
@@ -623,8 +624,8 @@ footer a:hover{color:var(--blue)}
   $$('.rv').forEach(function(el){io?io.observe(el):el.classList.add('in')});
 
   /* 숫자 올라가기 */
-  function count(el){var to=+el.dataset.to,t0=performance.now(),d=1300;if(reduce||!to){el.textContent=to;return}
-    (function f(t){var p=Math.min(1,(t-t0)/d),e=1-Math.pow(1-p,3);el.textContent=Math.round(to*e);if(p<1)requestAnimationFrame(f)})(t0)}
+  function count(el){var to=+el.dataset.to,t0=performance.now(),d=1300;if(reduce||!to){el.textContent=to.toLocaleString('en-US');return}
+    (function f(t){var p=Math.min(1,(t-t0)/d),e=1-Math.pow(1-p,3);el.textContent=Math.round(to*e).toLocaleString('en-US');if(p<1)requestAnimationFrame(f)})(t0)}
   var did={};
   function after(box){
     $$('[data-to]',box).forEach(function(n){if(!n.dataset.d){n.dataset.d=1;count(n)}});
