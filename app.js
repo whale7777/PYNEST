@@ -64,9 +64,10 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.0.0b';
+  const APP_VERSION = '5.0.0c';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
-  const APK_ID = '1BpEsJ6MbUUJK92qgSJaLRJ3Wq3kc4JcX';
+  const APK_ID = '17VUmyiC1f-G-FT1OqfArJqaeAcUWW6TB';
+  const APK_LATEST = '1.0.0'; // 드라이브에 올린 최신 앱(APK) 버전
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
@@ -586,6 +587,11 @@
 
   // 📱 앱으로 설치 카드 (이미 앱/홈 화면 설치 상태면 숨김)
   function appCardHtml() {
+    const um = /PyNestApp\/([\d.]+)/.exec(navigator.userAgent);
+    if (um) {
+      const nv = (a, b) => { a = a.split('.').map(Number); b = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((b[i] || 0) !== (a[i] || 0)) return (b[i] || 0) > (a[i] || 0); } return false; };
+      return nv(um[1], APK_LATEST) ? `<div class="card app-dl"><div class="app-dl-t"><b>⬆️ 새 앱 버전 ${APK_LATEST}</b><span class="muted small">지금 ${um[1]}</span></div><a class="primary btn" href="${APK_URL}" target="_blank" rel="noopener">새 앱 받기 (APK)</a><p class="muted small" style="margin:6px 0 0">받은 파일을 열면 덮어써져요. 데이터는 그대로예요.</p></div>` : '';
+    }
     const inApp = window.Capacitor || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     if (inApp) return '';
     const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);

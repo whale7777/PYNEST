@@ -972,3 +972,48 @@ a.row:hover { background: var(--hover); }
 /* 자동 업데이트 안내 띠 */
 .upd-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 80; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; background: var(--text); color: var(--bg); border-radius: 14px; box-shadow: var(--shadow-m); font-weight: 600; max-width: calc(100vw - 24px); }
 .upd-bar button { padding: 7px 14px; }
+
+/* ===== v5.0.0c 레이아웃 세련화: 떠 있는 사이드바 · 넓은 본문 · 부드러운 배경 · 떠 있는 탭바 ===== */
+:root { --bg: #f3f5fb; --border: #e6e9f2; --radius: 20px; --bgfx: radial-gradient(900px 420px at 85% -80px, rgba(59,108,246,.10), transparent 70%), radial-gradient(700px 360px at -10% 10%, rgba(124,58,237,.06), transparent 70%); }
+[data-theme="dark"] { --bg: #0b1020; --border: #252d49; --bgfx: radial-gradient(900px 420px at 85% -80px, rgba(108,140,255,.14), transparent 70%); }
+body { background-image: var(--bgfx); background-repeat: no-repeat; background-attachment: fixed; font-size: 15px; }
+header.top { background: transparent; border-bottom: 0; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 14px 24px 6px; }
+header.top button.ghost, header.top a.ghost, header.top .shop { background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow-s); font-weight: 600; font-size: 13.5px; padding: 7px 13px; }
+header.top .who { font-weight: 600; color: var(--muted); }
+.card { border-radius: var(--radius); padding: 22px; border-color: var(--border); box-shadow: 0 1px 2px rgba(20,27,52,.04), 0 6px 20px rgba(20,27,52,.04); }
+[data-theme="dark"] .card { box-shadow: none; }
+.card h3 { font-size: 17px; margin-bottom: 10px; }
+.row { padding: 15px 20px; border-color: var(--border); }
+a.row { transition: background .15s, padding-left .15s; }
+a.row:hover { background: var(--hover); padding-left: 24px; }
+.stat-grid { gap: 14px; }
+.stat { position: relative; overflow: hidden; border-radius: 18px; padding: 18px 18px 16px; border-color: var(--border); }
+.stat::before { content: ""; position: absolute; left: 18px; top: 0; width: 28px; height: 4px; border-radius: 0 0 4px 4px; background: var(--primary); }
+.stat.ok::before { background: #16a34a; } .stat.new::before { background: #2563eb; } .stat.hot::before { background: #ea580c; }
+.stat-n { font-size: 32px; margin-top: 4px; }
+.stat-l { font-size: 13px; }
+.progress, .bar { height: 8px; }
+.btn, button.primary { padding: 11px 20px; font-weight: 700; background-image: linear-gradient(180deg, rgba(255,255,255,.14), transparent); }
+.chip { font-weight: 600; }
+.app-dl { background: linear-gradient(135deg, var(--primary-soft), var(--card) 70%); border-color: transparent; padding: 16px 20px; }
+nav.menu .nav-grp { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; padding: 16px 16px 6px; }
+nav.menu a { border-radius: 12px; padding: 10px 14px; font-size: 14.5px; font-weight: 500; color: var(--muted); }
+nav.menu a:hover { background: var(--hover); color: var(--text); }
+nav.menu a.on { background: var(--primary-soft); color: var(--primary); font-weight: 700; box-shadow: inset 3px 0 0 var(--primary); }
+[data-theme="dark"] nav.menu a.on { color: #b9c8ff; }
+nav.menu .side-brand { font-size: 21px; padding: 8px 16px 12px; }
+@media (min-width: 960px) {
+  body.shell #app, body.shell #verfoot { margin-left: 272px; }
+  nav.menu { top: 12px; left: 12px; bottom: 12px; width: 248px; border: 1px solid var(--border); border-radius: 24px; padding: 14px 10px; box-shadow: 0 10px 40px rgba(20,27,52,.08); }
+  [data-theme="dark"] nav.menu { box-shadow: none; }
+  main#view { max-width: 1040px; padding-left: 28px; padding-right: 28px; }
+  body.shell main#view { padding-top: 14px; }
+  #view > h2:first-child, #view > .page-head:first-child h2 { font-size: 26px; letter-spacing: -.035em; }
+}
+@media (max-width: 959px) {
+  .tabbar { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); padding: 5px; border: 1px solid var(--border); border-radius: 22px; box-shadow: 0 10px 30px rgba(20,27,52,.16); background: color-mix(in srgb, var(--card) 92%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+  .tabbar .on { background: var(--primary-soft); border-radius: 16px; }
+  body.shell { padding-bottom: calc(86px + env(safe-area-inset-bottom)); }
+  header.top { padding: 10px 14px 4px; }
+  .card { padding: 18px; border-radius: 18px; }
+}
