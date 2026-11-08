@@ -1,5 +1,5 @@
 {
-  "name": "PyNest · 파이썬 강의",
+  "name": "PyNest · 파이썬 교육 플랫폼",
   "short_name": "PyNest",
   "description": "파이썬 강의 · 문제 풀이 · 시험",
   "lang": "ko",
@@ -8,7 +8,7 @@
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f4f6fb",
-  "theme_color": "#3b82f6",
+  "theme_color": "#3b6cf6",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

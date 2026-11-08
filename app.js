@@ -24,6 +24,8 @@
   const $ = (s, el = document) => el.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (d) => new Date(d).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  // 함께 쓰는 서비스(민혁닷컴·Nestmate) 바로가기. 설정 > 계정·화면에서 끌 수 있고 기본은 켜짐
+  const sideOn = () => { try { return localStorage.getItem('pn_side') !== '0'; } catch (e) { return true; } };
   const emailOf = (id) => `${id.toLowerCase()}@pyclass.site`; // ID를 가짜 이메일로 바꿔서 로그인에 사용
   const ID_RE = /^[a-z0-9_]{3,20}$/;
   const MAX_FILE = 50 * 1024 * 1024;
@@ -434,7 +436,8 @@
         <div class="spacer"></div>
         <span id="gChips" class="gchips"></span>
         <span class="who">${whoHtml()}</span>
-        ${CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
+        ${sideOn() && CONFIG.NESTMATE_URL ? `<a class="icon shop" href="${esc(CONFIG.NESTMATE_URL)}" target="_blank" rel="noopener" title="Nestmate 바로가기">🪺<span class="lbl"> Nestmate</span></a>` : ''}
+        ${sideOn() && CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
         <a class="icon bellbtn" href="#/me/notif" title="알림" aria-label="알림">🔔<span class="nbadge" data-bell hidden></span></a>
         <a class="avbtn" href="#/me" title="나 (프로필·캐릭터·설정)" aria-label="나"></a>
@@ -6127,6 +6130,7 @@ onmessage = (ev) => {
         <p class="muted small" id="nickNote">불러오는 중…</p>
       </div>
       <div class="card"><h3>화면</h3><button class="ghost" id="themeBtn2">다크모드 켜기/끄기</button></div>
+      <div class="card"><h3>함께 쓰는 서비스</h3><label class="row" style="gap:10px;align-items:center"><input type="checkbox" id="sideTg" ${sideOn() ? 'checked' : ''}><span>상단에 민혁닷컴·Nestmate 바로가기 보이기</span></label><p class="muted small">PyNest만 쓰신다면 꺼 두셔도 됩니다. 같은 계정으로 로그인할 수 있는 별도 사이트입니다.</p></div>
       <div class="card" id="kkCard"><h3>💬 카카오톡 연동</h3><p class="muted small">PyNest 카카오톡 채널 챗봇에서 랭킹·내 프로필·티어를 볼 수 있어요.</p><div id="kkBody" class="muted small">불러오는 중…</div></div>
       </section>
       <section data-sp="prof" ${setTab === 'prof' ? '' : 'hidden'} id="spProf"></section>
@@ -6146,6 +6150,7 @@ onmessage = (ev) => {
       </section>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
+      $('#sideTg', v).onchange = (e) => { try { localStorage.setItem('pn_side', e.target.checked ? '1' : '0'); } catch (x) {} renderShell(); toast(e.target.checked ? '바로가기를 켰습니다.' : '바로가기를 껐습니다.'); };
       bindMyRecords(v);
       const inited = {};
       const INIT = { hub: () => initHubTab($('#spHub', v)), streak: () => initStreakTab($('#spStreak', v)), badges: () => initBadgesTab($('#spBadges', v)), wallet: () => initWalletTab($('#spWallet', v)), prof: () => initProfTab($('#spProf', v)), avatar: () => initAvatarTab($('#spAvatar', v)), dm: () => initDmTab($('#spDm', v), dmUid), notif: () => initNotifTab($('#spNotif', v)), rec: () => { const rc = $('#recCard', v); if (rc && !rc.open) rc.open = true; } };
