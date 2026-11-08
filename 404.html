@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyNest 초대장</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="PyNest에 초대받았어요. 강의부터 시험까지, 파이썬 교육의 전 과정을 한곳에서.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="PyNest">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="PyNest에 초대받았습니다">
+<meta property="og:description" content="초대 링크로 가입을 신청해 보세요. 강의부터 시험까지, 파이썬 교육의 전 과정을 한곳에서.">
+<meta property="og:image" content="https://pynest.kro.kr/landing/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#3b6cf6">
+<script>
+  // pynest.kro.kr/<초대코드> → 소개 페이지로 넘기고 코드는 거기서 처리
+  (function () {
+    var seg = location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || '';
+    if (/^[A-Za-z0-9_-]{3,32}$/.test(seg)) {
+      location.replace('/landing/?invite=' + encodeURIComponent(seg.toUpperCase()));
+    } else {
+      location.replace('/');
+    }
+  })();
+</script>
+</head>
+<body style="font-family:system-ui,sans-serif;text-align:center;padding:48px;color:#445">
+<p>PyNest로 이동하는 중입니다…</p>
+<p><a href="/landing/">자동으로 넘어가지 않으면 여기를 눌러 주세요</a></p>
+</body>
+</html>
