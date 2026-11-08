@@ -64,7 +64,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.0.0a';
+  const APP_VERSION = '5.0.0b';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '1BpEsJ6MbUUJK92qgSJaLRJ3Wq3kc4JcX';
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
@@ -6867,18 +6867,46 @@ onmessage = (ev) => {
   sb.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT' && !signingUp) { me = null; clearInterval(notifTimer); EXT.clear(); renderAuth(); }
   });
-  // 새 버전이 올라왔는지 확인해서, 화면을 옮길 때 자동으로 새로고침 (시험 보는 중엔 건너뜀)
-  let VCHK = Date.now();
-  async function checkNewVersion() {
-    if (Date.now() - VCHK < 90000) return;
+  // 자동 업데이트: 새 버전이 올라오면 알아서 새로고침 (시험 보는 중엔 건너뜀, 코드·글을 쓰는 중엔 안내 띠만 띄움)
+  // 확인 시점: 앱 켤 때 · 다른 앱/탭에 있다가 돌아올 때 · 5분마다 · 화면 이동할 때
+  const RUN_V = ((window.PYNEST_PATCHES || [])[0] || {}).v || APP_VERSION;
+  let VCHK = 0;
+  let updShown = false;
+  async function latestVersion() {
+    const r = await fetch('patchnotes.js?t=' + Date.now(), { cache: 'no-store' });
+    const m = /v:\s*'([^']+)'/.exec(await r.text());
+    return m ? m[1] : null;
+  }
+  function updateBanner() {
+    if (updShown) return;
+    updShown = true;
+    const d = document.createElement('div');
+    d.className = 'upd-bar';
+    d.innerHTML = '<span>🔄 새 버전이 나왔어요.</span><button type="button" class="primary">지금 업데이트</button>';
+    d.querySelector('button').onclick = () => { flushDrafts(); location.reload(); };
+    document.body.appendChild(d);
+  }
+  async function checkNewVersion(force) {
+    if (!force && Date.now() - VCHK < 60000) return;
     VCHK = Date.now();
     try {
       if (document.body.classList.contains('exam-on') || /^#\/exam\/\d+/.test(location.hash)) return;
-      const r = await fetch('app.js', { cache: 'reload' });
-      const m = /const APP_VERSION = '([^']+)'/.exec(await r.text());
-      if (m && m[1] !== APP_VERSION) { flushDrafts(); location.reload(); }
+      const v = await latestVersion();
+      if (!v || v === RUN_V) return;
+      const ae = document.activeElement;
+      const typing = ae && (/^(TEXTAREA|INPUT)$/.test(ae.tagName) || (ae.closest && ae.closest('.CodeMirror, .cm-editor, .ide')));
+      // 같은 버전으로 방금 새로고침했는데도 그대로면(캐시) 무한 새로고침을 막고 안내 띠만 보여줘요
+      let again = false;
+      try { const t = JSON.parse(sessionStorage.getItem('pn_upd') || 'null'); again = !!t && t.v === v && Date.now() - t.at < 180000; sessionStorage.setItem('pn_upd', JSON.stringify({ v, at: Date.now() })); } catch (e) {}
+      if (typing || again) return updateBanner();
+      flushDrafts();
+      location.reload();
     } catch (e) { /* 오프라인이면 그냥 둠 */ }
   }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNewVersion(); });
+  window.addEventListener('focus', () => checkNewVersion());
+  setInterval(() => checkNewVersion(), 5 * 60 * 1000);
+  setTimeout(() => checkNewVersion(true), 4000);
   window.addEventListener('hashchange', () => { checkNewVersion(); route(); });
 
   // ⬇️ 당겨서 새로고침 (터치 화면): 맨 위에서 아래로 끌면 동그라미가 내려오며 진해지고, 충분히 끌었다 놓으면 새로고침

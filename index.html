@@ -45,17 +45,17 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="style.css?v=500a">
+  <link rel="stylesheet" href="style.css?v=500b">
 </head>
 <body>
   <div id="app"><p class="loading">불러오는 중…</p></div>
   <div id="toasts"></div>
   <footer id="verfoot"></footer>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=500a"></script>
-  <script src="ide.js?v=500a"></script>
-  <script src="patchnotes.js?v=500a"></script>
-  <script src="app.js?v=500a"></script>
+  <script>
+    // 2분마다 주소가 바뀌어서, 브라우저가 옛 파일을 오래 붙들고 있지 못해요 (자동 업데이트와 함께 동작)
+    (function () { var b = Math.floor(Date.now() / 120000); ['config', 'ide', 'patchnotes', 'app'].forEach(function (f) { document.write('<script src="' + f + '.js?v=' + b + '"><\/script>'); }); })();
+  </script>
   <script>if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {});</script>
 </body>
 </html>
