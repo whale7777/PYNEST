@@ -257,6 +257,13 @@ footer a:hover{color:var(--blue)}
   .js .rv,.rise{opacity:1!important;transform:none!important}
 }
 
+.nav-sep{width:1px;height:18px;background:var(--line);align-self:center;margin:0 6px}
+.nav a.ext{font-size:14px}
+.quick{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-top:18px;font-size:14px;color:var(--muted)}
+.quick a{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:99px;background:#fff;border:1px solid var(--line);color:var(--ink);font-weight:650;transition:border-color .15s,color .15s}
+.quick a:hover{border-color:var(--blue);color:var(--blue-deep)}
+.am .go{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.am .go a{color:var(--blue-deep);font-weight:650}
 /* 로그인·가입 창 */
 .am{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,48,.55);backdrop-filter:blur(4px)}
 .am.on{display:flex}
@@ -295,7 +302,7 @@ footer a:hover{color:var(--blue)}
     <a class="btn pri" id="loginTop" href="#login">로그인</a>
     <a class="brand" href="./"><img src="assets/icon-192.png" alt="" width="30" height="30">PyNest</a>
     <nav class="nav" aria-label="소개">
-      <a href="#features">기능</a><a href="#start">시작하기</a><a href="#family">함께 쓰는 서비스</a>
+      <a href="#features">기능</a><a href="#start">시작하기</a><span class="nav-sep" aria-hidden="true"></span><a class="ext" href="https://whale7777.github.io/M-com/" target="_blank" rel="noopener">민혁닷컴 ↗</a><a class="ext" href="https://whale7777.github.io/nestmate/" target="_blank" rel="noopener">Nestmate ↗</a>
     </nav>
   </div>
 </header>
@@ -310,6 +317,7 @@ footer a:hover{color:var(--blue)}
       <a class="btn pri lg" id="loginHero" href="#login">PyNest ID로 로그인</a>
       <a class="btn lg" href="#features">기능 살펴보기</a>
     </div>
+    <div class="quick rise d4"><span>로그인 없이 바로 가기</span><a href="https://whale7777.github.io/M-com/" target="_blank" rel="noopener">🛒 민혁닷컴</a><a href="https://whale7777.github.io/nestmate/" target="_blank" rel="noopener">🪺 Nestmate</a></div>
     <p class="cta-note rise d4">가입은 신청 후 선생님이 승인하면 완료됩니다.</p>
 
     <div class="stage rise d5">
@@ -506,10 +514,11 @@ footer a:hover{color:var(--blue)}
       <div class="msg" id="amM" role="status"></div>
       <button class="btn pri lg" id="amB" type="submit">로그인</button>
       <p class="fine" id="amN">가입은 신청 후 선생님이 승인하면 완료됩니다.</p>
+      <div class="go"><span>다른 서비스</span><a href="https://whale7777.github.io/M-com/" target="_blank" rel="noopener">민혁닷컴</a><a href="https://whale7777.github.io/nestmate/" target="_blank" rel="noopener">Nestmate</a></div>
     </form>
   </div>
 </div>
-<script src="../config.js?v=500"></script>
+<script src="../config.js?v=500a"></script>
 <script>
 (function(){
   var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};

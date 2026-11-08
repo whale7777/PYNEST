@@ -934,3 +934,37 @@ html, body { overscroll-behavior-y: contain; }
 #ptr.ready { color: #fff; background: var(--primary); }
 #ptr.spin svg { animation: ptrspin .7s linear infinite; }
 @keyframes ptrspin { to { transform: rotate(360deg); } }
+
+/* ===== v5.0.0a 디자인 다듬기 (소개 페이지와 같은 톤: Pretendard, 부드러운 그림자, 둥근 모서리) ===== */
+:root { --radius: 16px; --shadow-s: 0 1px 2px rgba(20,27,52,.05); --shadow-m: 0 1px 2px rgba(20,27,52,.05), 0 8px 24px rgba(20,27,52,.07); --primary-soft: #e7eeff; --ring: rgba(59,108,246,.28); }
+[data-theme="dark"] { --shadow-s: 0 1px 2px rgba(0,0,0,.35); --shadow-m: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.3); --primary-soft: #1b2b66; --ring: rgba(108,140,255,.35); }
+body { font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; letter-spacing: -.005em; word-break: keep-all; overflow-wrap: break-word; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { letter-spacing: -.025em; text-wrap: balance; }
+.card { box-shadow: var(--shadow-s); transition: box-shadow .2s, border-color .2s; }
+.card.list { padding: 0; overflow: hidden; }
+a.stat, .stat { box-shadow: var(--shadow-s); transition: transform .18s, box-shadow .18s, background .18s; }
+a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-m); }
+.stat-n { letter-spacing: -.03em; }
+.btn, button.primary { border-radius: 11px; padding: 10px 18px; transition: filter .15s, transform .15s, box-shadow .15s; }
+.btn:hover, button.primary:hover { filter: none; box-shadow: 0 8px 20px rgba(59,108,246,.32); transform: translateY(-1px); }
+.btn:active, button.primary:active { transform: none; box-shadow: none; }
+button.ghost, button.icon, a.icon { border-radius: 11px; transition: background .15s, border-color .15s; }
+button.ghost:hover, a.icon:hover, button.icon:hover { border-color: var(--primary); }
+input[type=text], input[type=password], input[type=number], input[type=url], textarea, select { border-radius: 12px; transition: border-color .15s, box-shadow .15s; }
+input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--primary); box-shadow: 0 0 0 4px var(--ring); }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+header.top { background: color-mix(in srgb, var(--card) 86%, transparent); -webkit-backdrop-filter: saturate(1.4) blur(12px); backdrop-filter: saturate(1.4) blur(12px); }
+.brand { letter-spacing: -.03em; }
+nav.menu { box-shadow: 8px 0 32px rgba(20,27,52,.12); }
+nav.menu a { transition: background .15s, color .15s; }
+nav.menu a.on { background: var(--primary-soft); color: var(--primary); font-weight: 700; }
+.tabs button { border-radius: 999px; transition: background .15s, border-color .15s, color .15s; }
+.tabs button:hover { border-color: var(--primary); }
+.tabs button.on { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
+.row { transition: background .15s; }
+a.row:hover { background: var(--hover); }
+.chip { border-radius: 999px; padding: 2px 10px; }
+.page-head h3 { font-size: 18px; }
+.progress, .bar { border-radius: 999px; }
+::selection { background: var(--primary-soft); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

@@ -15,11 +15,12 @@ jobs:
         with: { node-version: 20 }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
-      - name: 사이트 주소를 이 저장소의 GitHub Pages 주소로 맞추기
-        working-directory: mobile
+      - name: 사이트 주소 맞추기 (커스텀 도메인이 있으면 그 주소, 없으면 GitHub Pages 주소)
         run: |
-          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-          node -e "const f='capacitor.config.json';const c=require('./'+f);c.server.url='$URL';require('fs').writeFileSync(f,JSON.stringify(c,null,2));console.log(c.server.url)"
+          if [ -s CNAME ]; then URL="https://$(tr -d '[:space:]' < CNAME)/"; else URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"; fi
+          HOST=$(echo "$URL" | sed -E 's#https://([^/]+)/.*#\1#')
+          cd mobile
+          node -e "const f='capacitor.config.json';const c=require('./'+f);c.server.url='$URL';c.server.allowNavigation=Array.from(new Set([...(c.server.allowNavigation||[]),'$HOST','*.kro.kr']));require('fs').writeFileSync(f,JSON.stringify(c,null,2));console.log(c.server.url)"
       - name: 설치 · 안드로이드 프로젝트 만들기 · 아이콘
         working-directory: mobile
         run: |

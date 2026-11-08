@@ -3,9 +3,18 @@
   "appName": "PyNest",
   "webDir": "www",
   "server": {
-    "url": "https://whale7777.github.io/pynest/",
+    "url": "https://pynest.kro.kr/",
     "cleartext": false,
-    "allowNavigation": ["*.supabase.co", "cdn.jsdelivr.net", "*.github.io"]
+    "allowNavigation": [
+      "*.supabase.co",
+      "cdn.jsdelivr.net",
+      "*.github.io",
+      "pynest.kro.kr",
+      "*.kro.kr"
+    ]
   },
-  "android": { "allowMixedContent": false, "backgroundColor": "#f4f6fb" }
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#f4f6fb"
+  }
 }
