@@ -392,6 +392,8 @@
 
   async function logout() {
     await sb.auth.signOut();
+    try { sessionStorage.removeItem('pn_app'); } catch (e) {}
+    location.replace('landing/'); // 로그아웃하면 소개 페이지로
   }
 
   function renderStatus(kind) {
@@ -6806,7 +6808,11 @@ onmessage = (ev) => {
   /* ---------- 시작 ---------- */
   async function boot() {
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) { me = null; return renderAuth(); }
+    if (!session) {
+      me = null;
+      try { if (!sessionStorage.getItem('pn_app')) { location.replace('landing/'); return; } } catch (e) {} // 앱을 켰는데 로그인이 안 돼 있으면 소개 페이지로
+      return renderAuth();
+    }
     const { data, error } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     if (error || !data) { await sb.auth.signOut(); return renderAuth(); }
     me = data;

@@ -5,19 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PyNest · 파이썬 교육 플랫폼</title>
   <script>
-    // 처음 방문한 로그아웃 사용자는 소개 페이지로. ?app, 해시 경로, 설치 앱, 로그인 기록이 있으면 바로 앱으로.
+    // 로그인 기록이 없으면 소개 페이지로. 소개 페이지의 로그인 버튼(?app)으로 들어온 탭에서만 앱의 로그인 화면을 보여줍니다.
     (function () {
       try {
-        var q = location.search, h = location.hash;
-        if (/(^|[?&])app(=|&|$)/.test(q)) { localStorage.setItem('pn_app', '1'); return; }
-        if (localStorage.getItem('pn_app')) return;
-        if (h && h !== '#' && h !== '#/') return;
-        if (window.Capacitor || matchMedia('(display-mode: standalone)').matches) return;
+        localStorage.removeItem('pn_app');
+        if (/(^|[?&])app(=|&|$)/.test(location.search)) { sessionStorage.setItem('pn_app', '1'); return; }
+        if (sessionStorage.getItem('pn_app')) return;
         for (var i = 0; i < localStorage.length; i++) {
-          var k = localStorage.key(i);
-          if (/^sb-.*-auth-token$/.test(k)) return;
+          if (/^sb-.*-auth-token$/.test(localStorage.key(i))) return;
         }
-        location.replace('landing/' + q);
+        location.replace('landing/' + location.search);
       } catch (e) {}
     })();
   </script>
