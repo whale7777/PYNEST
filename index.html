@@ -5,16 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PyNest · 파이썬 교육 플랫폼</title>
   <script>
-    // 로그인 기록이 없으면 소개 페이지로. 소개 페이지의 로그인 버튼(?app)으로 들어온 탭에서만 앱의 로그인 화면을 보여줍니다.
+    // 로그인 기록이 없으면 소개 페이지의 로그인 창으로 보냅니다.
     (function () {
       try {
         localStorage.removeItem('pn_app');
-        if (/(^|[?&])app(=|&|$)/.test(location.search)) { sessionStorage.setItem('pn_app', '1'); return; }
-        if (sessionStorage.getItem('pn_app')) return;
         for (var i = 0; i < localStorage.length; i++) {
           if (/^sb-.*-auth-token$/.test(localStorage.key(i))) return;
         }
-        location.replace('landing/' + location.search);
+        location.replace('landing/' + (location.search || '?login'));
       } catch (e) {}
     })();
   </script>

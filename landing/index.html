@@ -256,17 +256,43 @@ footer a:hover{color:var(--blue)}
   *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
   .js .rv,.rise{opacity:1!important;transform:none!important}
 }
+
+/* 로그인·가입 창 */
+.am{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,48,.55);backdrop-filter:blur(4px)}
+.am.on{display:flex}
+.am .box{position:relative;width:min(420px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:var(--card);border-radius:20px;padding:30px 28px 26px;box-shadow:0 30px 80px rgba(15,23,48,.35);animation:amIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes amIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.am .x{position:absolute;right:12px;top:12px;width:36px;height:36px;border:0;border-radius:10px;background:transparent;font-size:22px;color:var(--muted);cursor:pointer}
+.am .x:hover{background:var(--blue-soft)}
+.am .lg2{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.02em}
+.am .lg2 img{width:32px;height:32px;border-radius:8px}
+.am h3{margin:18px 0 4px;font-size:24px;letter-spacing:-.03em}
+.am .sub{margin:0 0 16px;color:var(--muted);font-size:14.5px}
+.am .seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--bg);border-radius:12px;margin-bottom:16px}
+.am .seg button{min-height:40px;border:0;border-radius:9px;background:transparent;font:inherit;font-weight:700;color:var(--muted);cursor:pointer}
+.am .seg button[aria-selected="true"]{background:#fff;color:var(--blue-deep);box-shadow:0 1px 4px rgba(15,23,48,.12)}
+.am form{display:grid;gap:12px}
+.am label{display:grid;gap:6px;font-size:13.5px;font-weight:650;color:var(--muted)}
+.am input{min-height:46px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:#fff;font:inherit;color:var(--ink)}
+.am input:focus{outline:3px solid rgba(59,108,246,.25);border-color:var(--blue)}
+.am .msg{min-height:1.3em;font-size:13.5px;font-weight:600}
+.am .msg.err{color:#d64545}.am .msg.ok{color:var(--ok)}
+.am .btn{width:100%;justify-content:center;border:0;cursor:pointer}
+.am .fine{margin:2px 0 0;font-size:12.5px;color:var(--muted);text-align:center}
+.am .inv{display:none;margin:0 0 12px;padding:9px 12px;border-radius:10px;background:var(--blue-soft);color:var(--blue-deep);font-size:13.5px;font-weight:650}
+.am .inv.on{display:block}
+.am [hidden]{display:none!important}
 </style>
 </head>
 <body>
 
 <div class="invite" id="invite" role="status">
-  <div class="wrap"><span>초대 링크로 들어왔습니다. 초대 코드 <code id="inviteCode"></code></span><a id="inviteGo" href="../?app">가입 신청하기</a></div>
+  <div class="wrap"><span>초대 링크로 들어왔습니다. 초대 코드 <code id="inviteCode"></code></span><a id="inviteGo" href="#login">가입 신청하기</a></div>
 </div>
 
 <header class="hd" id="hd">
   <div class="wrap">
-    <a class="btn pri" id="loginTop" href="../?app">로그인</a>
+    <a class="btn pri" id="loginTop" href="#login">로그인</a>
     <a class="brand" href="./"><img src="assets/icon-192.png" alt="" width="30" height="30">PyNest</a>
     <nav class="nav" aria-label="소개">
       <a href="#features">기능</a><a href="#start">시작하기</a><a href="#family">함께 쓰는 서비스</a>
@@ -281,7 +307,7 @@ footer a:hover{color:var(--blue)}
     <h1 class="h1 rise d2">강의부터 시험까지,<br>파이썬 교육의 <em>전 과정</em></h1>
     <p class="lead rise d3">영상 강의, 단계별 학습, 자동 채점 문제 풀이, 시험, 랭킹. 가르치는 사람과 배우는 사람이 같은 화면에서 움직입니다.</p>
     <div class="cta rise d4">
-      <a class="btn pri lg" id="loginHero" href="../?app">PyNest ID로 로그인</a>
+      <a class="btn pri lg" id="loginHero" href="#login">PyNest ID로 로그인</a>
       <a class="btn lg" href="#features">기능 살펴보기</a>
     </div>
     <p class="cta-note rise d4">가입은 신청 후 선생님이 승인하면 완료됩니다.</p>
@@ -450,7 +476,7 @@ footer a:hover{color:var(--blue)}
   <div class="wrap rv">
     <h2 class="h2">오늘 수업, PyNest에서 시작하세요</h2>
     <p class="sub">이미 계정이 있다면 바로 로그인할 수 있습니다.</p>
-    <div class="cta"><a class="btn pri lg" id="loginFinal" href="../?app">PyNest ID로 로그인</a></div>
+    <div class="cta"><a class="btn pri lg" id="loginFinal" href="#login">PyNest ID로 로그인</a></div>
   </div>
 </section>
 </main>
@@ -459,10 +485,31 @@ footer a:hover{color:var(--blue)}
   <div class="wrap">
     <a class="brand" href="./" style="font-size:17px"><img src="assets/icon-192.png" alt="" width="26" height="26">PyNest</a>
     <span>파이썬 교육 플랫폼</span><span class="sp"></span>
-    <a href="../?app">로그인</a><a href="https://whale7777.github.io/M-com/" target="_blank" rel="noopener">민혁닷컴</a>
+    <a href="#login">로그인</a><a href="https://whale7777.github.io/M-com/" target="_blank" rel="noopener">민혁닷컴</a>
   </div>
 </footer>
 
+
+<div class="am" id="am" role="dialog" aria-modal="true" aria-labelledby="amT" hidden>
+  <div class="box">
+    <button class="x" type="button" id="amX" aria-label="닫기">×</button>
+    <div class="lg2"><img src="assets/icon-192.png" alt="" width="32" height="32">PyNest</div>
+    <h3 id="amT">로그인</h3>
+    <p class="sub" id="amS">PyNest ID로 이어서 학습하세요.</p>
+    <div class="inv" id="amInv"></div>
+    <div class="seg" role="tablist"><button type="button" id="amL" aria-selected="true">로그인</button><button type="button" id="amG" aria-selected="false">가입 신청</button></div>
+    <form id="amF" autocomplete="on" novalidate>
+      <label>ID<input id="amId" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="영문 소문자·숫자·_ 3~20자"></label>
+      <label id="amNickW" hidden>별명<input id="amNick" maxlength="20" autocomplete="nickname" placeholder="한글·영문·숫자 1~20자"></label>
+      <label>비밀번호<input id="amPw" type="password" autocomplete="current-password" placeholder="6자 이상"></label>
+      <label id="amPw2W" hidden>비밀번호 확인<input id="amPw2" type="password" autocomplete="new-password"></label>
+      <div class="msg" id="amM" role="status"></div>
+      <button class="btn pri lg" id="amB" type="submit">로그인</button>
+      <p class="fine" id="amN">가입은 신청 후 선생님이 승인하면 완료됩니다.</p>
+    </form>
+  </div>
+</div>
+<script src="../config.js"></script>
 <script>
 (function(){
   var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
@@ -475,11 +522,83 @@ footer a:hover{color:var(--blue)}
       inv=inv.slice(0,24);
       $('#inviteCode').textContent=inv;$('#invite').classList.add('on');
       try{localStorage.setItem('pn_invite',inv)}catch(e){}
-      var go='../?app&invite='+encodeURIComponent(inv);
-      ['#inviteGo','#loginTop','#loginHero','#loginFinal'].forEach(function(s){var a=$(s);if(a)a.href=go});
       history.replaceState(null,'','./'+location.hash);
     }
   }catch(e){}
+
+
+  /* 로그인·가입 창 (앱의 옛 로그인 화면을 대신합니다. 같은 도메인이라 로그인 기록이 앱과 공유됩니다) */
+  var am=$('#am'),sbc=null,sbLoading=null,tab='login',busy=false;
+  var emailOf=function(id){return id.toLowerCase()+'@pyclass.site'};
+  var hasSession=function(){try{for(var i=0;i<localStorage.length;i++)if(/^sb-.*-auth-token$/.test(localStorage.key(i)))return true}catch(e){}return false};
+  function getSb(){
+    if(sbc)return Promise.resolve(sbc);
+    if(sbLoading)return sbLoading;
+    sbLoading=new Promise(function(res,rej){
+      var sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      sc.onload=function(){sbc=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);res(sbc)};
+      sc.onerror=function(){sbLoading=null;rej(new Error('load'))};document.head.appendChild(sc);
+    });
+    return sbLoading;
+  }
+  function msg(t,ok){var m=$('#amM');m.textContent=t||'';m.className='msg'+(t?(ok?' ok':' err'):'')}
+  function setTab(t){
+    tab=t;var su=t==='signup';
+    $('#amL').setAttribute('aria-selected',!su);$('#amG').setAttribute('aria-selected',su);
+    $('#amNickW').hidden=!su;$('#amPw2W').hidden=!su;
+    $('#amT').textContent=su?'가입 신청':'로그인';
+    $('#amS').textContent=su?'신청하면 선생님이 승인한 뒤에 사용할 수 있습니다.':'PyNest ID로 이어서 학습하세요.';
+    $('#amB').textContent=su?'가입 신청하기':'로그인';
+    $('#amPw').autocomplete=su?'new-password':'current-password';
+    $('#amN').style.display=su?'none':'';msg('');
+  }
+  function openAuth(t){
+    if(hasSession()&&t==='login'){location.href='../';return}
+    var code='';try{code=localStorage.getItem('pn_invite')||''}catch(e){}
+    var iv=$('#amInv');if(code){iv.textContent='초대 코드 '+code+' 로 가입을 신청합니다.';iv.classList.add('on')}else iv.classList.remove('on');
+    am.hidden=false;am.classList.add('on');setTab(t||'login');
+    setTimeout(function(){$('#amId').focus()},50);getSb().catch(function(){});
+  }
+  function closeAuth(){am.classList.remove('on');am.hidden=true}
+  $$('a[href="#login"]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();openAuth(a.id==='inviteGo'?'signup':'login')})});
+  $('#amX').onclick=closeAuth;am.addEventListener('mousedown',function(e){if(e.target===am)closeAuth()});
+  addEventListener('keydown',function(e){if(e.key==='Escape'&&am.classList.contains('on'))closeAuth()});
+  $('#amL').onclick=function(){setTab('login')};$('#amG').onclick=function(){setTab('signup')};
+  var NICK_RE=/^[0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ _.-]{1,20}$/,ID_RE=/^[a-z0-9_]{3,20}$/;
+  var NICK_MSG={invalid:'별명은 한글·영문·숫자·공백·_ . - 로 1~20자입니다.',reserved:'운영진처럼 보이는 별명은 쓸 수 없습니다.',taken:'이미 쓰고 있는 별명이거나 다른 사람의 ID입니다.'};
+  $('#amF').addEventListener('submit',function(e){
+    e.preventDefault();if(busy)return;
+    var id=$('#amId').value.trim().toLowerCase(),pw=$('#amPw').value;
+    if(!id||!pw){msg('ID와 비밀번호를 입력해 주세요.');return}
+    var su=tab==='signup',nick='';
+    if(su){
+      if(!ID_RE.test(id)){msg('ID는 영문 소문자, 숫자, _ 로 3~20자입니다.');return}
+      if(pw.length<6){msg('비밀번호는 6자 이상이어야 합니다.');return}
+      if(pw!==$('#amPw2').value){msg('비밀번호 확인이 맞지 않습니다.');return}
+      nick=$('#amNick').value.trim().replace(/\s+/g,' ');
+      if(!NICK_RE.test(nick)){msg(NICK_MSG.invalid);return}
+    }
+    busy=true;$('#amB').disabled=true;msg('');
+    getSb().then(function(sb){
+      if(!su)return sb.auth.signInWithPassword({email:emailOf(id),password:pw}).then(function(r){
+        if(r.error){msg('ID 또는 비밀번호가 맞지 않습니다.');return}
+        msg('로그인했습니다. 이동합니다…',true);location.href='../';
+      });
+      return sb.rpc('nickname_available',{p_nick:nick}).then(function(av){
+        if(!av.error&&av.data!=='ok'){msg(NICK_MSG[av.data]||'쓸 수 없는 별명입니다.');return}
+        var inv='';try{inv=localStorage.getItem('pn_invite')||''}catch(x){}
+        var data={username:id,nickname:nick};if(inv)data.invite=inv;
+        return sb.auth.signUp({email:emailOf(id),password:pw,options:{data:data}}).then(function(r){
+          return sb.auth.signOut().then(function(){
+            if(r.error){msg(/registered|already|exists/i.test(r.error.message)?'이미 있는 ID입니다.':'가입 신청에 실패했습니다. 잠시 후 다시 시도해 주세요.');return}
+            setTab('login');msg('가입을 신청했습니다. 선생님이 승인하면 로그인할 수 있습니다.',true);
+          });
+        });
+      });
+    }).catch(function(){msg('연결에 실패했습니다. 네트워크를 확인해 주세요.')}).then(function(){busy=false;$('#amB').disabled=false});
+  });
+  var q0=new URLSearchParams(location.search);
+  if(q0.has('signup'))openAuth('signup');else if(q0.has('login'))openAuth('login');
 
   /* 헤더 */
   var hd=$('#hd');function onS(){hd.classList.toggle('stuck',scrollY>8)}addEventListener('scroll',onS,{passive:true});onS();
