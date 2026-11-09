@@ -1,5 +1,8 @@
 /* PyNest 패치 노트 — 하단 버전을 5번 누르면 보여요. 새 버전은 맨 위에 추가하세요. at 은 한국 시간(KST). */
 window.PYNEST_PATCHES = [
+  { v: '5.1.2a', at: '2026-11-09 19:30', t: '🔬 연구소: pip 한 줄 설치', items: [
+    '코드에 !pip install 패키지 (또는 %pip install, pip install) 한 줄을 쓰면 그 패키지를 설치하고 실행해요. 버전도 지정할 수 있어요. 예) !pip install rich==13.7.0',
+    '브라우저 안이라 진짜 pip 는 아니고 micropip 으로 설치해요. 그래서 순수 파이썬 패키지만 돼요.'] },
   { v: '5.1.2', at: '2026-11-09 20:00', t: '🧩 연구소: 웹 안에서 상호작용', items: [
     '설정 → 코드 입력창 탭(또는 연구소 출력 옆 선택)에서 그래프·터틀 결과를 "웹 페이지 안"에 보여주도록 바꿀 수 있어요. 기본은 지금처럼 팝업이에요.',
     '웹 안 모드의 turtle: 방향키·글자 키·마우스 클릭·끌기·ontimer 가 파이썬 코드에 전달돼요. onkey·onkeypress·onscreenclick·ondrag·ontimer 로 만든 게임이 움직여요. (mainloop 를 기다리며 무한 반복하는 while 루프는 안 돼요)',

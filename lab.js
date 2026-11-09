@@ -753,15 +753,20 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
           const dO = new TextDecoder(), dE = new TextDecoder();
           py.setStdout({ write: (b) => { say({ t: 'out', s: dO.decode(b, { stream: true }) }); return b.length; } });
           py.setStderr({ write: (b) => { say({ t: 'out', s: dE.decode(b, { stream: true }), bad: true }); return b.length; } });
+          // 0) !pip install x / %pip install x / pip install x 한 줄은 설치로 바꿔줘요
+          let code = d.code;
+          const reqs = [];
+          code = code.replace(/^([ \t]*)[!%]?[ \t]*pip3?[ \t]+install[ \t]+(.+)$/gm, (m, ind, rest) => { rest.split(/\s+/).filter((x) => x && x[0] !== '-').forEach((x) => reqs.push(x.replace(/^['"]|['"]$/g, ''))); return ind + 'pass'; });
+          for (const r of reqs) await install(r);
           // 1) 파이오다이드 기본 제공 패키지 (numpy, pandas, matplotlib …)
-          try { await py.loadPackagesFromImports(d.code, { messageCallback: () => {}, errorCallback: () => {} }); } catch (e) { /* 아래에서 다시 확인 */ }
+          try { await py.loadPackagesFromImports(code, { messageCallback: () => {}, errorCallback: () => {} }); } catch (e) { /* 아래에서 다시 확인 */ }
           // 2) 그래도 없는 것은 PyPI 에서 (순수 파이썬 패키지만 가능)
-          const miss = JSON.parse(py.globals.get('lab_missing')(d.code));
+          const miss = JSON.parse(py.globals.get('lab_missing')(code));
           for (const m of miss) await install(ALIAS[m] || m);
           // 3) 실행
           py.globals.get('lab_setin')(d.stdin || '');
           const ns = py.toPy({ __name__: '__main__' });
-          try { await py.runPythonAsync(d.code, { globals: ns }); }
+          try { await py.runPythonAsync(code, { globals: ns }); }
           finally { ns.destroy(); }
         } catch (e) {
           const m = String(e && e.message ? e.message : e);
@@ -1252,6 +1257,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
             <b>ℹ️ 알아두기</b>
             <ul class="small muted">
               <li>그래프(matplotlib)와 turtle 그림은 기본으로 팝업 창에 떠요(그림만). 출력 옆 선택이나 설정에서 <b>웹 안</b>으로 바꾸면 turtle 키보드·클릭·타이머, 그래프 확대·이동이 돼요.</li>
+              <li>코드에 <code>!pip install 이름</code> 한 줄을 써도 설치돼요. (진짜 pip 가 아니라 micropip 이라 순수 파이썬 패키지만 돼요)</li>
               <li>순수 파이썬 패키지는 거의 다 돼요. 컴파일이 필요한 패키지는 파이오다이드 기본 제공(numpy·pandas·scipy 등)만 돼요.</li>
               <li><code>requests</code> 같은 인터넷 접속, <code>tkinter</code>·pygame 같은 창(GUI)은 브라우저 제한으로 안 돼요. turtle 의 이벤트는 웹 안 모드에서만 돼요.</li>
               <li>무한 반복이면 <b>중지</b>를 눌러요. 파이썬이 새로 시작돼도 작업 공간 파일은 그대로예요.</li>

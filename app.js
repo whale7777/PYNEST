@@ -64,7 +64,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.1.2';
+  const APP_VERSION = '5.1.2a';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '1qdtb3vywirS-Y_vuoxLLM5Y_mXHY937B';
   const APK_LATEST = '1.1.0'; // 드라이브에 올린 최신 앱(APK) 버전
