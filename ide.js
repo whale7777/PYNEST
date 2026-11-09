@@ -127,6 +127,12 @@
     ta.addEventListener('input', cursorMoved);
 
     let raf = 0;
+    // 들여쓰기 선은 글자와 같이 움직여야 해서, 안쪽 상자를 옆으로 밀어요 (내용이 좁으면 scrollLeft 가 먹지 않아요)
+    const syncBack = () => {
+      back.scrollTop = ta.scrollTop;
+      const ib = back.firstChild;
+      if (ib && ib.style) ib.style.transform = ta.scrollLeft ? 'translateX(' + (-ta.scrollLeft) + 'px)' : '';
+    };
     const paint = () => {
       raf = 0;
       paintSide();
@@ -141,13 +147,12 @@
         if (m && m[0].length >= 1) html += '<i style="width:' + m[0].length + 'ch"></i>';
         html += '\n';
       }
-      back.innerHTML = html;
-      back.scrollTop = ta.scrollTop;
-      back.scrollLeft = ta.scrollLeft;
+      back.innerHTML = '<div class="ib">' + html + '</div>';
+      syncBack();
     };
     const later = () => { if (!raf) raf = requestAnimationFrame(paint); };
     ta.addEventListener('input', later);
-    ta.addEventListener('scroll', () => { back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft; hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; paintSide(); });
+    ta.addEventListener('scroll', () => { syncBack(); hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; paintSide(); });
     if (window.ResizeObserver) new ResizeObserver(later).observe(ta);
     // 값이 코드로 바뀌는 경우(불러오기 등)도 따라가요
     const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
