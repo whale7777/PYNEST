@@ -64,19 +64,12 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.0.0g';
+  const APP_VERSION = '5.0.0h';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '1qdtb3vywirS-Y_vuoxLLM5Y_mXHY937B';
   const APK_LATEST = '1.1.0'; // 드라이브에 올린 최신 앱(APK) 버전
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
   const verNewer = (cur, latest) => { const x = String(cur).split('.').map(Number), y = String(latest).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((y[i] || 0) !== (x[i] || 0)) return (y[i] || 0) > (x[i] || 0); } return false; };
-  // 헤더(다크모드 버튼 옆)의 앱 버튼: 앱 밖에서는 "앱 받기", 앱 안에서는 새 버전이 있을 때만 "새 앱"
-  function appBtnHtml() {
-    const ua = navigator.userAgent, um = /PyNestApp\/([\d.]+)/.exec(ua);
-    if (um) return verNewer(um[1], APK_LATEST) ? `<a class="icon shop appbtn" href="${APK_URL}" target="_blank" rel="noopener" title="새 앱 ${APK_LATEST} 받기">⬆️<span class="lbl"> 새 앱</span></a>` : '';
-    if (/iPhone|iPad|iPod/.test(ua)) return '';
-    return `<a class="icon shop appbtn" href="${APK_URL}" title="안드로이드 앱 받기 (APK)">📱<span class="lbl"> 앱</span></a>`;
-  }
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -450,7 +443,6 @@
         <span class="who">${whoHtml()}</span>
         ${sideOn() && CONFIG.NESTMATE_URL ? `<a class="icon shop" href="${esc(CONFIG.NESTMATE_URL)}" target="_blank" rel="noopener" title="Nestmate 바로가기">🪺<span class="lbl"> Nestmate</span></a>` : ''}
         ${sideOn() && CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
-        ${appBtnHtml()}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
         <a class="icon bellbtn" href="#/me/notif" title="알림" aria-label="알림">🔔<span class="nbadge" data-bell hidden></span></a>
         <a class="avbtn" href="#/me" title="나 (프로필·캐릭터·설정)" aria-label="나"></a>
@@ -478,6 +470,11 @@
     document.onkeydown = (e) => { if (e.key === 'Escape') setMenu(false); };
     setTheme(document.documentElement.dataset.theme || 'light');
     $('#themeBtn').onclick = toggleTheme;
+    // 좁은 화면에서 위쪽 줄이 넘치면 로고 글자만 접어서 한 줄에 맞춰요 (로고 🐍 은 그대로)
+    const hd = document.querySelector('header.top');
+    const fitHeader = () => { hd.classList.remove('tight'); if (hd.scrollWidth > hd.clientWidth + 1) hd.classList.add('tight'); };
+    fitHeader(); window.addEventListener('resize', fitHeader);
+    new MutationObserver(fitHeader).observe(hd, { childList: true, subtree: true });
     $('#logoutBtn').onclick = logout;
   }
 
