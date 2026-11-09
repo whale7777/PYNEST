@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.2.0a';
+  const APP_VERSION = '5.2.0b';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -6982,9 +6982,8 @@ onmessage = (ev) => {
       if (dy <= 0 || Math.abs(dx) > dy) { if (pull) { pull = 0; paint(0, true); } if (dy <= 0) armed = pull > 0; return; }
       if ((window.scrollY || document.documentElement.scrollTop) > 0) { armed = false; paint(0, true); return; }
       pull = Math.min(dy * 0.5, 110);
-      if (e.cancelable) e.preventDefault();
-      paint(pull, false);
-    }, { passive: false });
+      paint(pull, false); // 스크롤을 막지 않으려고 preventDefault 는 쓰지 않아요
+    }, { passive: true });
     const end = () => {
       if (!armed) return; armed = false;
       if (pull >= TH && !busy) {

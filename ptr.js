@@ -2,10 +2,12 @@
 (function () {
   if (window.__pnPtr) return; window.__pnPtr = 1;
   if (!('ontouchstart' in window) && !(navigator.maxTouchPoints > 0)) return;
+  // 앱(APK)·홈 화면에 설치한 화면에서만 켜요. 일반 브라우저는 자체 당겨서 새로고침이 있어요.
+  var inApp = /PyNestApp/.test(navigator.userAgent) || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  if (!inApp) return;
   var TH = 64, MAXP = 96;
   var st = document.createElement('style');
-  st.textContent = 'html{overscroll-behavior-y:contain}' +
-    '.ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);width:40px;height:40px;margin-left:-20px;border-radius:50%;' +
+  st.textContent = '.ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);width:40px;height:40px;margin-left:-20px;border-radius:50%;' +
     'background:var(--card,var(--bg,#fff));color:var(--primary,var(--blue,#3b6cf6));box-shadow:0 4px 16px rgba(20,27,45,.22);border:1px solid var(--border,var(--line,rgba(0,0,0,.08)));' +
     'display:flex;align-items:center;justify-content:center;z-index:99999;pointer-events:none;opacity:0;transform:translateY(-60px)}' +
     '.ptr svg{width:22px;height:22px}.ptr.go svg{animation:ptrspin .7s linear infinite}.ptr.back{transition:transform .22s,opacity .22s}' +
@@ -53,9 +55,8 @@
     }
     if (!atTop() || dy <= 0) { on = false; if (pull) { pull = 0; hide(); } return; }
     pull = dy - 12;
-    if (e.cancelable) e.preventDefault();
     show(pull);
-  }, { passive: false });
+  }, { passive: true });
 
   function end() {
     if (!on) return; on = false;
