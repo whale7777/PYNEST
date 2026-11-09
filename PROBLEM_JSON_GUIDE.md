@@ -43,6 +43,7 @@
 | 자리 | 설명 |
 |---|---|
 | `title` / `short_name` / `week` / `description` | 문제집 이름, 짧은 이름, 주차(없으면 `""`), 설명 |
+| `folder` | 문제 탭에서 묶어 보여 줄 폴더 이름 (선택, 60자 이하). 같은 이름끼리 한 폴더로 모여요. 먼저 `v530_set_folder.sql` 실행 |
 | `chapters[].title` + `subtitle` | 큰 묶음 (화면에 `title · subtitle` 로 나와요) |
 | `chapters[].sections[].title` | 작은 묶음 |
 | `problems[].difficulty` | 난이도 이름. **관리자 화면에 있는 난이도 이름만** 써요(대소문자 무시). 없는 이름은 `Beginner` 로 들어가요 |

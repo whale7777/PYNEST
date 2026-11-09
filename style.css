@@ -530,7 +530,7 @@ select.pro-pick { width: auto; max-width: 100%; min-width: 180px; margin: 0; pad
 .ideopt input { margin-top: 3px; }
 
 /* 하단 버전 (이스터에그) */
-#verfoot { text-align: center; padding: 18px 12px 28px; font-size: 12px; color: var(--muted, #888); min-height: 24px; }
+#verfoot { text-align: center; padding: 18px 12px 28px; font-size: 12px; color: var(--muted); min-height: 24px; }
 #verfoot .vf-btn { background: none; border: 0; padding: 2px 6px; color: inherit; font: inherit; cursor: default; opacity: .7; }
 #verfoot .vf-btn:hover { opacity: 1; }
 .pn-list { max-height: 70vh; overflow: auto; margin-top: 8px; }
@@ -931,7 +931,7 @@ nav.menu a .nbadge { margin-left: 6px; }
 html { overscroll-behavior-y: contain; }
 body { overscroll-behavior-y: auto; } /* body 까지 contain 이면 폰에서 터치 스크롤이 화면까지 전달되지 않아요 */
 #ptr { position: fixed; top: 0; left: 50%; z-index: 9000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  background: var(--card, #fff); color: var(--primary); box-shadow: 0 2px 10px rgba(0,0,0,.2); border: 1px solid var(--border); opacity: 0; pointer-events: none; transform: translate(-50%, -48px); }
+  background: var(--card); color: var(--primary); box-shadow: 0 2px 10px rgba(0,0,0,.2); border: 1px solid var(--border); opacity: 0; pointer-events: none; transform: translate(-50%, -48px); }
 #ptr.ready { color: #fff; background: var(--primary); }
 #ptr.spin svg { animation: ptrspin .7s linear infinite; }
 @keyframes ptrspin { to { transform: rotate(360deg); } }
@@ -1171,3 +1171,12 @@ body { overflow-x: clip; }
 .it-was{opacity:.55;text-decoration:line-through;font-weight:400}
 .it-off{color:#dc2626;font-weight:800;font-size:.9em}
 [data-theme="dark"] .it-off{color:#fca5a5}
+
+/* v5.3.0 문제집 폴더 */
+details.fold { margin: 0 0 12px; }
+details.fold > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); list-style: none; user-select: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: "▸"; display: inline-block; width: 1em; transition: transform .15s; color: var(--muted); }
+details.fold[open] > summary::before { transform: rotate(90deg); }
+details.fold > summary .fold-name { font-weight: 700; }
+details.fold > .sets { margin: 12px 0 4px; }

@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.2.1';
+  const APP_VERSION = '5.3.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -1198,7 +1198,7 @@
     (d.elite || []).forEach((p) => add(p, null, null, true));
     if (!rows.length && !notes.length) throw new Error('문제도 설명 글도 하나도 없어요');
     return {
-      title: d.title || '', short: d.short_name || '', week: d.week || '', desc: d.description || '', rows, notes,
+      title: d.title || '', short: d.short_name || '', week: d.week || '', desc: d.description || '', folder: String(d.folder || '').trim(), rows, notes,
       nElite: rows.filter((r) => r.difficulty === 'ELITE').length,
     };
   }
@@ -1220,7 +1220,7 @@
       else extra.problems = L.tail.map(text);
     }
     const out = {
-      format: 'pynest-problemset-v1', title: set.title, short_name: set.short_name || '', week: set.week, description: set.description || '',
+      format: 'pynest-problemset-v1', title: set.title, short_name: set.short_name || '', folder: set.folder || '', week: set.week, description: set.description || '',
       chapters, ...extra,
       elite: flowOut(L.eliteFlow),
     };
@@ -1234,6 +1234,8 @@
 
   /* ---------- 문제집 목록 ---------- */
   // 문제 보기 방식: 'sets' 문제집별 / 'num' 번호(절대번호)순
+  let SET_FOLDERS = [];
+  const folderList = () => `<datalist id="setFolders">${SET_FOLDERS.map((f) => `<option value="${esc(f)}">`).join('')}</datalist>`;
   let setsView = 'sets';
   try { if (localStorage.getItem('pn_sets_view') === 'num') setsView = 'num'; } catch (e) { /* 무시 */ }
   let numQ = '';
@@ -1259,16 +1261,36 @@
     const seen = new Set();
     mine.forEach((s) => { if (!seen.has(s.exercise_id)) { seen.add(s.exercise_id); solved[s.set_id] = (solved[s.set_id] || 0) + 1; } });
 
-    const cards = sr.data.length ? sr.data.map((s) => {
+    SET_FOLDERS = [...new Set(sr.data.map((x) => x.folder).filter(Boolean))];
+    const cardOf = (s) => {
       const t = total[s.id] || 0;
       const d = solved[s.id] || 0;
-      return `<a class="card set-card" href="#/set/${s.id}">
+      return `<a class="card set-card" href="#/set/${s.id}" data-st="${esc((s.title + ' ' + (s.short_name || '') + ' ' + (s.description || '')).toLowerCase())}">
         <div class="set-top">${s.week ? `<span class="week">${s.week}주차</span>` : ''}<h3>${esc(s.title)}</h3>${can('content') ? pubChip(s.is_public) : ''}</div>
         ${s.description ? `<p class="muted small">${esc(s.description)}</p>` : ''}
         <div class="muted small">문제 ${t}개${can('content') ? '' : ` · 내가 푼 문제 ${d}개`}${can('content') ? '' : resumeChips(s.id)}</div>
         ${can('content') ? '' : `<div class="bar"><i style="width:${t ? Math.round((d / t) * 100) : 0}%"></i></div>`}
       </a>`;
-    }).join('') : '<div class="card pad center muted">아직 올라온 문제집이 없어요.</div>';
+    };
+    // 폴더별로 묶기 (폴더 없는 문제집은 맨 아래 "폴더 없음")
+    let foldOpen = new Set();
+    try { foldOpen = new Set(JSON.parse(localStorage.getItem('pn_sets_open') || '[]')); } catch (e) { /* 무시 */ }
+    const fmap = new Map();
+    sr.data.forEach((x) => { const k = x.folder || ''; if (!fmap.has(k)) fmap.set(k, []); fmap.get(k).push(x); });
+    const fkeys = [...fmap.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'ko', { numeric: true })));
+    const useFolders = fkeys.some((k) => k !== '');
+    const cards = !sr.data.length ? '<div class="card pad center muted">아직 올라온 문제집이 없어요.</div>'
+      : !useFolders ? `<div class="sets">${sr.data.map(cardOf).join('')}</div>`
+        : fkeys.map((k) => {
+          const list = fmap.get(k);
+          const tt = list.reduce((n, x) => n + (total[x.id] || 0), 0);
+          const dd = list.reduce((n, x) => n + (solved[x.id] || 0), 0);
+          const open = foldOpen.has(k) || list.some((x) => LP.map.has(x.id) && !can('content'));
+          return `<details class="fold" data-fk="${esc(k)}" ${open ? 'open' : ''}>
+            <summary><span class="fold-name">${k ? '📁 ' + esc(k) : '🗂️ 폴더 없음'}</span>
+              <span class="muted small">문제집 ${list.length}개 · 문제 ${tt}개${can('content') ? '' : ` · 푼 문제 ${dd}개`}</span></summary>
+            <div class="sets">${list.map(cardOf).join('')}</div></details>`;
+        }).join('');
 
     // 번호로 보기: 모든 문제를 고유 번호(#id) 순서로
     const setBy = new Map(sr.data.map((x) => [x.id, x]));
@@ -1290,10 +1312,11 @@
       ? `<div class="card numtools"><input type="search" id="numQ" placeholder="번호(예: 123) 또는 제목 검색" value="${esc(numQ)}">
           <select id="numD">${diffOpts.map((d) => `<option value="${esc(d)}" ${d === numDiff ? 'selected' : ''}>${d ? esc(d) : '모든 난이도'}</option>`).join('')}</select></div>
          <div class="card list" id="numList">${numBody()}</div>`
-      : `<div class="sets">${cards}</div>`;
+      : cards;
     return [`
       <div class="page-head"><h2>📄 문제</h2>${can('content') ? '<span><button class="ghost" id="newSetLive" title="라이브에서 냈던 문제를 골라 새 문제집으로 만들어요">📡 라이브 문제로 만들기</button> <button class="primary" id="newSet">＋ 새 문제집</button></span>' : ''}</div>
       <div class="tabs"><button data-sv="sets" class="${num ? '' : 'on'}">📚 문제집으로 보기</button><button data-sv="num" class="${num ? 'on' : ''}">🔢 번호로 보기</button></div>
+      ${!num && useFolders ? '<div class="card numtools"><input type="search" id="setQ" placeholder="문제집 검색"><span><button class="ghost" data-fold="open">모두 펼치기</button> <button class="ghost" data-fold="close">모두 접기</button></span></div>' : ''}
       <p class="muted">${num ? `모든 문제를 <b>고유 번호</b> 순서로 보여줘요 (총 ${ex.length}문제). 눌러서 문제집 안의 그 문제로 이동해요.` : '문제를 하나씩 보고, <b class="redtxt">풀어보기</b>로 코드를 제출해요. 제출한 풀이는 선생님만 볼 수 있어요.'}</p>
       ${view}
       <p class="muted small"><a href="#/board/problem">📁 예전에 올린 문제 파일 보기</a></p>`,
@@ -1308,7 +1331,28 @@
         numLimit = 100;
         route();
       }));
-      if (!num) return;
+      if (!num) {
+        const saveOpen = () => {
+          const o = [...v.querySelectorAll('details.fold[open]')].map((d) => d.dataset.fk);
+          try { localStorage.setItem('pn_sets_open', JSON.stringify(o)); } catch (e) { /* 무시 */ }
+        };
+        v.querySelectorAll('details.fold').forEach((d) => d.addEventListener('toggle', saveOpen));
+        v.querySelectorAll('[data-fold]').forEach((b) => (b.onclick = () => {
+          v.querySelectorAll('details.fold').forEach((d) => { d.open = b.dataset.fold === 'open'; });
+          saveOpen();
+        }));
+        const sq = $('#setQ', v);
+        if (sq) sq.oninput = () => {
+          const t = sq.value.trim().toLowerCase();
+          v.querySelectorAll('.set-card').forEach((c) => { c.style.display = t && !c.dataset.st.includes(t) ? 'none' : ''; });
+          v.querySelectorAll('details.fold').forEach((d) => {
+            const any = [...d.querySelectorAll('.set-card')].some((c) => c.style.display !== 'none');
+            d.style.display = any ? '' : 'none';
+            if (t && any) d.open = true;
+          });
+        };
+        return;
+      }
       const redraw = () => {
         $('#numList', v).innerHTML = numBody();
         bindNum();
@@ -1348,7 +1392,8 @@
         </div>
         <div class="grid2">
           <label>짧은 이름 <span class="muted small">(제출함에 "student1 - A" 처럼 표시)</span><input type="text" id="nsShort" placeholder="A"></label>
-          <span></span>
+          <label>📁 폴더 <span class="muted small">(목록에서 묶어 보여줘요)</span><input type="text" id="nsFolder" list="setFolders" maxlength="60" placeholder="예: 정보과학 1-1 중간"></label>
+          ${folderList()}
         </div>
         <label>설명 (선택)<textarea id="nsDesc" style="min-height:70px"></textarea></label>
         ${pr ? `<div class="pubpick"><div class="muted small">공개 설정</div>
@@ -1367,6 +1412,7 @@
         q('#nsInfo').textContent = `✅ 일반 ${parsed.rows.length - parsed.nElite}문제 + ELITE ${parsed.nElite}문제${parsed.notes.length ? ` + 설명 글 ${parsed.notes.length}개` : ''}를 읽었어요.`;
         if (parsed.title) q('#nsTitle').value = parsed.title;
         if (parsed.week) q('#nsWeek').value = parsed.week;
+        q('#nsFolder').value = parsed.folder || '';
         q('#nsShort').value = parsed.short || ((parsed.title.match(/\[(.+?)\]/) || [])[1] || '');
         q('#nsDesc').value = parsed.desc;
       } catch (err) {
@@ -1382,6 +1428,7 @@
         title: q('#nsTitle').value.trim(), short_name: q('#nsShort').value.trim() || null,
         week: Number(q('#nsWeek').value) || null, description: q('#nsDesc').value.trim() || null,
       };
+      if (q('#nsFolder').value.trim()) setRow.folder = q('#nsFolder').value.trim();
       if (pr) setRow.is_public = (m.el.querySelector('input[name="nsPub"]:checked') || { value: '1' }).value === '1';
       const { data: s, error } = await sb.from('problem_sets').insert(setRow).select('id').single();
       if (error || !s) { btn.disabled = false; return toast('만들지 못했어요', true); }
@@ -3213,6 +3260,8 @@ onmessage = (ev) => {
           <label>주차<input type="number" id="cWeek" min="1" value="${set.week ?? ''}"></label>
         </div>
         <label>짧은 이름 <span class="muted small">(제출함에서 "student1 - A")</span><input type="text" id="cShort" value="${esc(set.short_name || '')}"></label>
+        <label>📁 폴더 <span class="muted small">(목록에서 묶어 보여줘요. 비우면 "폴더 없음")</span><input type="text" id="cFolder" list="setFolders" maxlength="60" value="${esc(set.folder || '')}"></label>
+        ${folderList()}
         <label>설명<textarea id="cDesc" style="min-height:70px">${esc(set.description || '')}</textarea></label>
         ${fileRow('original_file', '문제 원본 PDF (선택)', set.original_file)}
         ${fileRow('answer_file', '정답 PDF (선택)', set.answer_file)}
@@ -3238,7 +3287,7 @@ onmessage = (ev) => {
       btn.disabled = true;
       const upd = {
         title: q('#cTitle').value.trim(), week: Number(q('#cWeek').value) || null,
-        short_name: q('#cShort').value.trim() || null, description: q('#cDesc').value.trim() || null,
+        short_name: q('#cShort').value.trim() || null, description: q('#cDesc').value.trim() || null, folder: q('#cFolder').value.trim() || null,
         answer_public: q('#cPub').checked, updated_at: new Date().toISOString(),
       };
       const trash = [];
