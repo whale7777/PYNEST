@@ -64,11 +64,19 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.0.0f';
+  const APP_VERSION = '5.0.0g';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
-  const APK_ID = '17VUmyiC1f-G-FT1OqfArJqaeAcUWW6TB';
-  const APK_LATEST = '1.0.0'; // 드라이브에 올린 최신 앱(APK) 버전
+  const APK_ID = '1qdtb3vywirS-Y_vuoxLLM5Y_mXHY937B';
+  const APK_LATEST = '1.1.0'; // 드라이브에 올린 최신 앱(APK) 버전
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
+  const verNewer = (cur, latest) => { const x = String(cur).split('.').map(Number), y = String(latest).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((y[i] || 0) !== (x[i] || 0)) return (y[i] || 0) > (x[i] || 0); } return false; };
+  // 헤더(다크모드 버튼 옆)의 앱 버튼: 앱 밖에서는 "앱 받기", 앱 안에서는 새 버전이 있을 때만 "새 앱"
+  function appBtnHtml() {
+    const ua = navigator.userAgent, um = /PyNestApp\/([\d.]+)/.exec(ua);
+    if (um) return verNewer(um[1], APK_LATEST) ? `<a class="icon shop appbtn" href="${APK_URL}" target="_blank" rel="noopener" title="새 앱 ${APK_LATEST} 받기">⬆️<span class="lbl"> 새 앱</span></a>` : '';
+    if (/iPhone|iPad|iPod/.test(ua)) return '';
+    return `<a class="icon shop appbtn" href="${APK_URL}" title="안드로이드 앱 받기 (APK)">📱<span class="lbl"> 앱</span></a>`;
+  }
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
   // 티어 표는 DB(tiers)에 있고 [관리 → 🏅 티어]에서 고쳐요. DB 표가 없을 때만 아래 기본표를 써요. (v320_tiers.sql 의 시작값과 같아요)
   const DEFAULT_TIERS = [
@@ -436,12 +444,13 @@
     app.innerHTML = `
       <header class="top">
         <button class="icon" id="menuBtn" aria-label="메뉴" aria-expanded="false" title="메뉴">☰</button>
-        <a class="brand" href="#/home">${esc(ICON)} ${esc(SITE)}</a>
+        <a class="brand" href="#/home">${esc(ICON)}<span class="bt"> ${esc(SITE)}</span></a>
         <div class="spacer"></div>
         <span id="gChips" class="gchips"></span>
         <span class="who">${whoHtml()}</span>
         ${sideOn() && CONFIG.NESTMATE_URL ? `<a class="icon shop" href="${esc(CONFIG.NESTMATE_URL)}" target="_blank" rel="noopener" title="Nestmate 바로가기">🪺<span class="lbl"> Nestmate</span></a>` : ''}
         ${sideOn() && CONFIG.SHOP_URL ? `<a class="icon shop" href="${esc(CONFIG.SHOP_URL)}" target="_blank" rel="noopener" title="${esc(CONFIG.SHOP_NAME || '민혁닷컴')} 바로가기">🛒<span class="lbl"> ${esc(CONFIG.SHOP_NAME || '민혁닷컴')}</span></a>` : ''}
+        ${appBtnHtml()}
         <button class="icon" id="themeBtn" title="다크모드 켜기/끄기"></button>
         <a class="icon bellbtn" href="#/me/notif" title="알림" aria-label="알림">🔔<span class="nbadge" data-bell hidden></span></a>
         <a class="avbtn" href="#/me" title="나 (프로필·캐릭터·설정)" aria-label="나"></a>
@@ -589,8 +598,7 @@
   function appCardHtml() {
     const um = /PyNestApp\/([\d.]+)/.exec(navigator.userAgent);
     if (um) {
-      const nv = (a, b) => { a = a.split('.').map(Number); b = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((b[i] || 0) !== (a[i] || 0)) return (b[i] || 0) > (a[i] || 0); } return false; };
-      return nv(um[1], APK_LATEST) ? `<div class="card app-dl"><div class="app-dl-t"><b>⬆️ 새 앱 버전 ${APK_LATEST}</b><span class="muted small">지금 ${um[1]}</span></div><a class="primary btn" href="${APK_URL}" target="_blank" rel="noopener">새 앱 받기 (APK)</a><p class="muted small" style="margin:6px 0 0">받은 파일을 열면 덮어써져요. 데이터는 그대로예요.</p></div>` : '';
+      return verNewer(um[1], APK_LATEST) ? `<div class="card app-dl"><div class="app-dl-t"><b>⬆️ 새 앱 버전 ${APK_LATEST}</b><span class="muted small">지금 ${um[1]}</span></div><a class="primary btn" href="${APK_URL}" target="_blank" rel="noopener">새 앱 받기 (APK)</a><p class="muted small" style="margin:6px 0 0">받은 파일을 열면 덮어써져요. 데이터는 그대로예요.</p></div>` : '';
     }
     const inApp = window.Capacitor || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     if (inApp) return '';
@@ -6177,6 +6185,7 @@ onmessage = (ev) => {
       if (window.PYIDE) {
         const IDE_OPTS = [
           ['close', '괄호·따옴표 자동 닫기', '( 를 치면 ) 가 같이 생기고, ) 를 치면 건너뛰어요. 지울 때는 한 쌍이 같이 지워져요'],
+          ['color', '문법 색 입히기', '키워드·문자열·숫자·주석·함수 이름을 색으로 구분해서 보여줘요'],
           ['split', '괄호 사이에서 Enter → 닫는 괄호를 아래 줄로', '끄면 괄호 안 내용만 내려오고 닫는 괄호는 그 줄 끝에 그대로 있어요  f(↵  →  f(\\n    )'],
           ['indent', '줄바꿈 자동 들여쓰기', '콜론(:) 뒤에는 4칸 더, return·pass·break 뒤에는 4칸 덜 들여써요'],
           ['tab', 'Tab / Shift+Tab 들여쓰기', '여러 줄을 선택하고 눌러도 돼요. 끄면 Tab 이 다음 칸으로 이동해요'],

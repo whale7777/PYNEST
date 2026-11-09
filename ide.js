@@ -12,7 +12,7 @@
   'use strict';
   /* 설정(이 브라우저에 저장) — 설정 화면에서 켜고 끌 수 있어요. 바꾸면 열려 있는 입력창에도 바로 적용돼요. */
   const KEY = 'pn_ide';
-  const DEF = { close: true, split: true, indent: true, tab: true, bksp: true, guide: true, comment: true, lines: true, curline: true, linecmd: true };
+  const DEF = { close: true, split: true, indent: true, tab: true, bksp: true, guide: true, comment: true, lines: true, curline: true, linecmd: true, color: true };
   let cache = null;
   const load = () => {
     let o = {};
@@ -22,6 +22,39 @@
   };
   const opt = (k) => (cache || load())[k] !== false;
   const painters = new Set();
+
+  /* 파이썬 문법 색 (textarea 뒤에 같은 글자를 색칠해서 깔아 둬요) */
+  const KW = new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield'.split(' '));
+  const BI = new Set('print input len range int str float list dict set tuple bool sum min max abs sorted reversed enumerate zip map filter open type isinstance round any all chr ord divmod pow bin hex oct id iter next format repr hash sep end self cls object super Exception ValueError TypeError IndexError KeyError ZeroDivisionError'.split(' '));
+  const TOK = /(#[^\n]*)|([rRbBfFuU]{0,2}(?:'''[\s\S]*?(?:'''|$)|"""[\s\S]*?(?:"""|$)|'(?:\\.|[^'\\\n])*'?|"(?:\\.|[^"\\\n])*"?))|(\b\d[\d_]*(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+)|(@[A-Za-z_]\w*)|([A-Za-z_\u00C0-\uFFFF][\w\u00C0-\uFFFF]*)|([+\-*/%=<>!&|^~]+)/g;
+  const escH = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  function colorize(src) {
+    let out = '', last = 0, prevKw = '';
+    TOK.lastIndex = 0;
+    let m;
+    while ((m = TOK.exec(src))) {
+      if (m[0] === '') { TOK.lastIndex += 1; continue; }
+      out += escH(src.slice(last, m.index));
+      const t = escH(m[0]);
+      let c = '';
+      if (m[1]) c = 'c';
+      else if (m[2]) c = 's';
+      else if (m[3]) c = 'n';
+      else if (m[4]) c = 'a';
+      else if (m[5]) {
+        const w = m[5];
+        if (KW.has(w)) c = 'k';
+        else if (prevKw === 'def' || prevKw === 'class') c = 'd';
+        else if (BI.has(w)) c = 'b';
+        else if (/^\s*\(/.test(src.slice(TOK.lastIndex, TOK.lastIndex + 40))) c = 'f';
+        prevKw = KW.has(w) ? w : '';
+      } else if (m[6]) c = 'o';
+      if (!m[5]) prevKw = '';
+      out += c ? '<span class="t' + c + '">' + t + '</span>' : t;
+      last = TOK.lastIndex;
+    }
+    return out + escH(src.slice(last));
+  }
 
   const IND = 4;
   const SP = ' '.repeat(IND);
@@ -44,6 +77,9 @@
     wrap.className = 'ide';
     const back = document.createElement('pre');
     back.className = 'ide-back';
+    const hl = document.createElement('pre');
+    hl.className = 'ide-hl';
+    hl.setAttribute('aria-hidden', 'true');
     back.setAttribute('aria-hidden', 'true');
     const gut = document.createElement('pre');
     gut.className = 'ide-gut';
@@ -57,6 +93,7 @@
     wrap.appendChild(main);
     main.appendChild(curl);
     main.appendChild(back);
+    main.appendChild(hl);
     main.appendChild(ta);
     ta.classList.add('ide-ta');
     let lastLine = -1;
@@ -93,6 +130,9 @@
     const paint = () => {
       raf = 0;
       paintSide();
+      const colorOn = opt('color');
+      wrap.classList.toggle('hl', colorOn);
+      if (colorOn) { hl.innerHTML = colorize(ta.value) + '\n'; hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; } else hl.innerHTML = '';
       if (!opt('guide')) { back.innerHTML = ''; return; }
       const lines = ta.value.split('\n');
       let html = '';
@@ -107,7 +147,7 @@
     };
     const later = () => { if (!raf) raf = requestAnimationFrame(paint); };
     ta.addEventListener('input', later);
-    ta.addEventListener('scroll', () => { back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; paintSide(); });
+    ta.addEventListener('scroll', () => { back.scrollTop = ta.scrollTop; back.scrollLeft = ta.scrollLeft; hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop; paintSide(); });
     if (window.ResizeObserver) new ResizeObserver(later).observe(ta);
     // 값이 코드로 바뀌는 경우(불러오기 등)도 따라가요
     const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');

@@ -1017,3 +1017,26 @@ nav.menu .side-brand { font-size: 21px; padding: 8px 16px 12px; }
   header.top { padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 4px; }
   .card { padding: 18px; border-radius: 18px; }
 }
+
+/* ===== v5.0.0g: 코드 입력창 문법 색 + 모바일 헤더 넘침 수정 ===== */
+.ide { --tc: #6b7280; --ts: #15803d; --tn: #c2410c; --tk: #7c3aed; --tb: #0369a1; --tf: #1d4ed8; --td: #b45309; --ta: #be185d; --to: #475569; }
+[data-theme="dark"] .ide { --tc: #8b93a7; --ts: #86efac; --tn: #fdba74; --tk: #c4a5ff; --tb: #7dd3fc; --tf: #93c5fd; --td: #fcd34d; --ta: #f9a8d4; --to: #a5b4d4; }
+.ide .ide-hl { position: absolute; inset: 0; overflow: hidden; pointer-events: none; margin: 0; background: transparent; color: var(--text); border-radius: 10px; display: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; line-height: 1.5; letter-spacing: 0; padding: 10px 12px; border: 0; tab-size: 4; white-space: pre; box-sizing: border-box; }
+.ide.hl .ide-hl { display: block; }
+.ide.hl textarea.ide-ta { color: transparent; caret-color: var(--text); }
+.ide.hl textarea.ide-ta::selection { background: color-mix(in srgb, var(--primary) 32%, transparent); color: transparent; }
+.ide.hl textarea.ide-ta::placeholder { color: var(--muted); }
+.ide .ide-hl .tc { color: var(--tc); } .ide .ide-hl .ts { color: var(--ts); } .ide .ide-hl .tn { color: var(--tn); }
+.ide .ide-hl .tk { color: var(--tk); font-weight: 600; } .ide .ide-hl .tb { color: var(--tb); } .ide .ide-hl .tf { color: var(--tf); }
+.ide .ide-hl .td { color: var(--td); font-weight: 600; } .ide .ide-hl .ta { color: var(--ta); } .ide .ide-hl .to { color: var(--to); }
+html, body { max-width: 100%; overflow-x: hidden; }
+@media (max-width: 560px) {
+  header.top { flex-wrap: nowrap; gap: 5px; padding-left: 10px; padding-right: 10px; }
+  header.top > * { min-width: 0; }
+  header.top .shop, header.top .icon, header.top .bellbtn { padding: 5px 8px; font-size: 15px; flex: none; }
+  header.top .gchips { flex-shrink: 1; min-width: 0; gap: 4px; }
+  header.top .gchip { padding: 2px 7px; font-size: 12.5px; }
+  header.top .brand .bt { display: none; }
+  header.top .spacer { flex: 1 1 0; min-width: 0; }
+}
