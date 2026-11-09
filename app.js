@@ -64,7 +64,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.0.0h';
+  const APP_VERSION = '5.0.0i';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '1qdtb3vywirS-Y_vuoxLLM5Y_mXHY937B';
   const APK_LATEST = '1.1.0'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -418,6 +418,7 @@
   /* ---------- 앱 뼈대 ---------- */
   const NAV = [
     ['home', '🏠', '홈', '', '배우기'], ['learn', '📚', '학습', '', '배우기'], ['lectures', '🎬', '강의', '', '배우기'], ['sets', '📄', '문제', '', '배우기'], ['golive/', '📡', '라이브 · 저지', 'ext', '배우기'],
+    ['lab', '🔬', '연구', '', '배우기'],
     ['ranking', '🏆', '랭킹', '', '경쟁'], ['exam', '📝', '시험', '', '경쟁'],
     ['board', '💬', '게시판', '', '소통'], ['market', '🛍️', '마켓', '', '소통'],
   ];
@@ -504,6 +505,7 @@
       board: () => (b === 'problem' ? pageBoard('problem') : pageBoardAll(b)),
       market: () => pageMarket(b),
       exam: () => pageExam(b),
+      lab: () => (window.PYLAB ? window.PYLAB.page() : notFound()),
       post: () => pagePost(b),
       write: () => (BOARDS[b] ? pageWrite(b) : notFound()),
       edit: () => pageEdit(b),

@@ -1042,3 +1042,50 @@ html, body { max-width: 100%; overflow-x: hidden; }
   header.top.tight .brand .bt { display: none; }
   header.top .spacer { flex: 1 1 0; min-width: 0; }
 }
+
+/* ===== v5.0.0i 파이썬 자유 연구소 ===== */
+.lab-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.lab-head h1 { font-size: 24px; margin: 0 0 2px; }
+.lab-head p { margin: 0; }
+.lab-state { font-size: 12.5px; font-weight: 700; padding: 5px 12px; border-radius: 999px; background: var(--hover); color: var(--muted); white-space: nowrap; }
+.lab-state.ok { background: #16a34a22; color: #16a34a; }
+.lab-state.busy { background: #f59e0b22; color: #d97706; }
+.lab-state.bad { background: #dc262622; color: var(--danger); }
+.lab-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.lab-main, .lab-side { min-width: 0; }
+.lab-card { padding: 16px; }
+.lab-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.lab-bar .grow { flex: 1; }
+.lab-bar select { width: auto; max-width: 100%; }
+.muted-k { opacity: .7; font-weight: 500; font-size: 11px; margin-left: 4px; }
+.lab-code, .lab .ide { min-height: 300px; }
+.lab-code { width: 100%; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+.lab-stdin { margin-top: 10px; }
+.lab-stdin summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.lab-stdin textarea { width: 100%; margin-top: 8px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.lab-out { margin: 0; background: var(--code); border: 1px solid var(--border); border-radius: 10px; padding: 12px; min-height: 120px; max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 13.5px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.lab-out .lab-err { color: var(--danger); }
+.lab-out .lab-dim, .lab-dim { color: var(--muted); }
+.lab-figs { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.lab-figs img { max-width: 100%; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.lab-sbox { display: flex; gap: 8px; }
+.lab-sbox input { flex: 1; min-width: 0; }
+.lab-res { margin-top: 10px; max-height: 480px; overflow: auto; }
+.lab-sec { font-size: 12px; font-weight: 700; color: var(--muted); margin: 10px 0 4px; letter-spacing: .02em; }
+.lab-pk { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.lab-pk-t { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.lab-pk-a { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.lab-pk-a button { padding: 5px 12px; font-size: 13px; }
+.lab-b { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; }
+.b-in { background: var(--hover); color: var(--primary); }
+.b-ok { background: #16a34a22; color: #16a34a; }
+.b-warn { background: #f59e0b22; color: #d97706; }
+.lab-inst { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.lab-ipk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.lab-note ul { margin: 6px 0 0; padding-left: 18px; }
+.lab-note li { margin-bottom: 4px; }
+.lab code { background: var(--code); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; }
+@media (max-width: 900px) {
+  .lab-grid { grid-template-columns: minmax(0, 1fr); }
+  .lab-code, .lab .ide { min-height: 240px; }
+}
