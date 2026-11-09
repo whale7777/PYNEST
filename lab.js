@@ -16,6 +16,9 @@
   const Q_FILE = 10 * 1024 * 1024;  // 파일 하나
   const Q_COUNT = 100;              // 파일 개수
   const LIB_MAX = 12;
+  const KEY_VIEW = 'pn_lab_view';
+  const getMode = () => (lsGet(KEY_VIEW, 'popup') === 'inline' ? 'inline' : 'popup');
+  const setMode = (m) => lsSet(KEY_VIEW, m === 'inline' ? 'inline' : 'popup');
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
@@ -52,6 +55,8 @@
     '    return json.dumps(miss)',
     'def lab_setin(inp):',
     '    sys.modules.pop("turtle", None)',
+    '    _home.clear()',
+    '    if "matplotlib.pyplot" in sys.modules: sys.modules["matplotlib.pyplot"].close("all")',
     '    sys.stdin = io.StringIO(inp)',
     '    def _inp(prompt=""):',
     '        if prompt: sys.stdout.write(str(prompt))',
@@ -61,15 +66,78 @@
     '        sys.stdout.write(s + "\\n")',
     '        return s',
     '    builtins.input = _inp',
-    'def lab_figs():',
+    '_home = {}',
+    'def lab_figs(keep=False):',
     '    out = []',
     '    if "matplotlib.pyplot" in sys.modules:',
     '        plt = sys.modules["matplotlib.pyplot"]',
     '        for n in plt.get_fignums():',
+    '            fig = plt.figure(n)',
     '            b = io.BytesIO()',
-    '            plt.figure(n).savefig(b, format="png", dpi=110, bbox_inches="tight")',
-    '            out.append(base64.b64encode(b.getvalue()).decode())',
-    '        plt.close("all")',
+    '            if keep:',
+    '                for i, ax in enumerate(fig.axes):',
+    '                    try: _home[(n, i)] = (ax.get_xlim(), ax.get_ylim())',
+    '                    except Exception: pass',
+    '                fig.savefig(b, format="png")',
+    '            else:',
+    '                fig.savefig(b, format="png", dpi=110, bbox_inches="tight")',
+    '            out.append({"n": n, "png": base64.b64encode(b.getvalue()).decode(), "w": int(fig.bbox.width), "h": int(fig.bbox.height)})',
+    '        if not keep: plt.close("all")',
+    '    return json.dumps(out)',
+    'def _axes_at(fig, x, fy):',
+    '    for ax in reversed(fig.axes):',
+    '        try:',
+    '            if ax.get_visible() and ax.get_window_extent().contains(x, fy): return ax',
+    '        except Exception: pass',
+    '    return None',
+    'def _png(fig):',
+    '    b = io.BytesIO()',
+    '    fig.savefig(b, format="png")',
+    '    return base64.b64encode(b.getvalue()).decode()',
+    'def _lab_mpl(p):',
+    '    plt = sys.modules["matplotlib.pyplot"]',
+    '    fig = plt.figure(p["n"])',
+    '    a = p["a"]',
+    '    x = p.get("x", 0)',
+    '    fy = fig.bbox.height - p.get("y", 0)',
+    '    if a == "reset":',
+    '        for i, ax in enumerate(fig.axes):',
+    '            h = _home.get((p["n"], i))',
+    '            if h:',
+    '                ax.set_xlim(h[0]); ax.set_ylim(h[1])',
+    '        return {"png": _png(fig)}',
+    '    ax = _axes_at(fig, x, fy)',
+    '    if ax is None: return {"txt": ""}',
+    '    inv = ax.transData.inverted()',
+    '    if a == "pos":',
+    '        xd, yd = inv.transform((x, fy))',
+    '        return {"txt": ax.format_coord(xd, yd).strip()}',
+    '    if getattr(ax, "name", "") != "rectilinear": return {"txt": "(이 그래프는 확대·이동을 지원하지 않아요)"}',
+    '    xl, yl = ax.get_xlim(), ax.get_ylim()',
+    '    if a == "zoom":',
+    '        f = float(p["f"])',
+    '        xd, yd = inv.transform((x, fy))',
+    '        if ax.get_xscale() == "linear": ax.set_xlim(xd + (xl[0] - xd) * f, xd + (xl[1] - xd) * f)',
+    '        if ax.get_yscale() == "linear": ax.set_ylim(yd + (yl[0] - yd) * f, yd + (yl[1] - yd) * f)',
+    '    elif a == "pan":',
+    '        d0 = inv.transform((x, fy))',
+    '        d1 = inv.transform((x + p["dx"], fy - p["dy"]))',
+    '        if ax.get_xscale() == "linear": ax.set_xlim(xl[0] - (d1[0] - d0[0]), xl[1] - (d1[0] - d0[0]))',
+    '        if ax.get_yscale() == "linear": ax.set_ylim(yl[0] - (d1[1] - d0[1]), yl[1] - (d1[1] - d0[1]))',
+    '    return {"png": _png(fig)}',
+    'def lab_event(kind, payload):',
+    '    p = json.loads(payload)',
+    '    out = {}',
+    '    t = sys.modules.get("turtle")',
+    '    try:',
+    '        if kind == "mpl":',
+    '            out = _lab_mpl(p)',
+    '        elif t is not None and hasattr(t, "_lab_event"):',
+    '            t._lab_event(kind, p)',
+    '    except BaseException as e:',
+    '        import traceback',
+    '        out["err"] = "".join(traceback.format_exception_only(type(e), e)).strip()',
+    '    if t is not None and hasattr(t, "_lab_pop"): out["ops"] = t._lab_pop()',
     '    return json.dumps(out)',
     'def lab_turtle():',
     '    t = sys.modules.get("turtle")',
@@ -102,6 +170,12 @@ _cm = [1.0]
 _nid = [0]
 _def = [None]
 _scr = [None]
+_kh = {}
+_clk = [None]
+_tm = {}
+_tmid = [0]
+_all = []
+_drag = [None]
 
 
 class Terminator(Exception):
@@ -118,6 +192,48 @@ def _lab_pop():
     o = list(_ops)
     del _ops[:]
     return o
+
+
+def _near(t, x, y, r=18):
+    return math.hypot(t._x - x, t._y - y) <= r * max(t._sx, t._sy, 1)
+
+
+def _lab_event(kind, p):
+    if kind == "key":
+        k, ph = p["key"], p["ph"]
+        fn = _kh.get((k, ph)) or _kh.get((k.lower(), ph)) or _kh.get((None, ph))
+        if fn:
+            fn()
+    elif kind == "click":
+        x, y = p["x"], p["y"]
+        for t in list(_all):
+            if t._onclick and _near(t, x, y):
+                t._onclick(x, y)
+        if _clk[0]:
+            _clk[0](x, y)
+    elif kind == "down":
+        _drag[0] = None
+        for t in list(_all):
+            if t._ondrag and _near(t, p["x"], p["y"]):
+                _drag[0] = t
+    elif kind == "drag":
+        t = _drag[0]
+        if t is not None and t._ondrag:
+            t._ondrag(p["x"], p["y"])
+    elif kind == "up":
+        _drag[0] = None
+    elif kind == "timer":
+        fn = _tm.pop(p["id"], None)
+        if fn:
+            fn()
+
+
+def _bindk(key, ph, fun):
+    _emit(["EVT"])
+    if fun is None:
+        _kh.pop((key, ph), None)
+    else:
+        _kh[(key, ph)] = fun
 
 
 def _col(*a):
@@ -146,6 +262,9 @@ class Turtle:
         self._sy = 1
         self._vis = visible
         self._fill = None
+        self._onclick = None
+        self._ondrag = None
+        _all.append(self)
         self._ap()
         _emit(["SP", self._id, 3])
         if not visible:
@@ -381,14 +500,16 @@ class Turtle:
     def radians(self):
         pass
 
-    def onclick(self, *a, **k):
-        pass
+    def onclick(self, fun, btn=1, add=None):
+        _emit(["EVT"])
+        self._onclick = fun
 
     def onrelease(self, *a, **k):
         pass
 
-    def ondrag(self, *a, **k):
-        pass
+    def ondrag(self, fun, btn=1, add=None):
+        _emit(["EVT"])
+        self._ondrag = fun
 
 
 Pen = Turtle
@@ -453,9 +574,22 @@ class _Screen:
     def listen(self, *a, **k):
         pass
 
-    def onkey(self, *a, **k):
-        pass
-    onkeypress = onkeyrelease = onclick = onscreenclick = ontimer = onkey
+    def onkeypress(self, fun, key=None):
+        _bindk(key, "down", fun)
+
+    def onkey(self, fun, key):
+        _bindk(key, "up", fun)
+    onkeyrelease = onkey
+
+    def onscreenclick(self, fun, btn=1, add=None):
+        _emit(["EVT"])
+        _clk[0] = fun
+    onclick = onscreenclick
+
+    def ontimer(self, fun, t=0):
+        _tmid[0] += 1
+        _tm[_tmid[0]] = fun
+        _emit(["TM", _tmid[0], int(t)])
 
     def textinput(self, title, prompt):
         return input(str(prompt) + " ")
@@ -601,6 +735,12 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
         say({ t: 'installed', id: d.id, ok, name: d.name });
         return;
       }
+      if (d.t === 'ev') {
+        let r = {};
+        try { r = JSON.parse(py.globals.get('lab_event')(d.kind, d.payload)); } catch (e) { r = { err: String(e) }; }
+        say(Object.assign({ t: 'evdone', id: d.id }, r));
+        return;
+      }
       if (d.t !== 'run') return;
       const t0 = Date.now();
       let err = null, figs = [], turtle = [], files = null, over = 0;
@@ -628,7 +768,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
           if (!/SystemExit/.test(m)) err = fmtErr(e);
         }
       }
-      try { figs = JSON.parse(py.globals.get('lab_figs')()); } catch (e) { /* 그림 없음 */ }
+      try { figs = JSON.parse(py.globals.get('lab_figs')(!!d.inline)); } catch (e) { /* 그림 없음 */ }
       try { turtle = JSON.parse(py.globals.get('lab_turtle')()); } catch (e) { /* 터틀 없음 */ }
       const tr = [];
       try {
@@ -652,6 +792,10 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     return new Promise((res) => { const id = ++seq; waiters.set(id, res); W.w.postMessage({ t: 'install', id, name, quiet }); });
   }
 
+  function reqEv(kind, payload) {
+    return new Promise((res) => { if (!W) { res(null); return; } const id = ++seq; waiters.set(id, res); W.w.postMessage({ t: 'ev', id, kind, payload: JSON.stringify(payload) }); });
+  }
+
   function startWorker() {
     if (W) return W.ready;
     const w = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' })));
@@ -666,7 +810,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     w.addEventListener('message', (ev) => {
       const d = ev.data;
       if (d.t === 'pkg' && d.ok) installed.set(d.name, d.tops || []);
-      if (d.t === 'installed') { const r = waiters.get(d.id); if (r) { waiters.delete(d.id); r(d); } }
+      if (d.t === 'installed' || d.t === 'evdone') { const r = waiters.get(d.id); if (r) { waiters.delete(d.id); r(d); } }
       if (listener) listener(d);
     });
     const me = { w, ready, pre: null };
@@ -781,34 +925,71 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     return w;
   }
 
-  function figWindow(figs) {
+  const dataUrlToBlob = (u) => { const bin = atob(u.split(',')[1]), a = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) a[k] = bin.charCodeAt(k); return new Blob([a], { type: 'image/png' }); };
+
+  /* 그래프: interactive=false → 그림만 (팝업), true → 휠 확대·끌어서 이동·좌표 표시 (웹 안) */
+  function figView(figs, interactive) {
     const box = document.createElement('div');
     box.className = 'lab-figbox';
-    figs.forEach((b64, i) => {
-      const f = document.createElement('figure');
-      const im = document.createElement('img'); im.src = 'data:image/png;base64,' + b64; im.alt = '그래프 ' + (i + 1);
-      const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ghost'; bt.textContent = '💾 PNG 저장';
-      bt.onclick = () => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k); saveBlob(new Blob([u], { type: 'image/png' }), 'figure' + (i + 1) + '.png'); };
-      f.append(im, bt); box.appendChild(f);
+    figs.forEach((f, idx) => {
+      const fig = document.createElement('figure');
+      const img = document.createElement('img');
+      img.src = 'data:image/png;base64,' + f.png; img.alt = '그래프 ' + (idx + 1); img.draggable = false;
+      const bar = document.createElement('div'); bar.className = 'lab-fbar2';
+      const mk = (txt, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost'; b.textContent = txt; b.onclick = fn; return b; };
+      const coord = document.createElement('span'); coord.className = 'muted small lab-coord';
+      const save = mk('💾 PNG 저장', () => saveBlob(dataUrlToBlob(img.src), 'figure' + (idx + 1) + '.png'));
+      if (!interactive) { bar.append(save); fig.append(img, bar); box.appendChild(fig); return; }
+      let busy = false, pend = null;
+      async function send(p) {
+        if (busy) { if (p.a === 'pan' && pend && pend.a === 'pan') { pend.dx += p.dx; pend.dy += p.dy; } else if (p.a !== 'pos') pend = p; return; }
+        busy = true;
+        const r = await reqEv('mpl', Object.assign({ n: f.n }, p));
+        if (r && r.png) img.src = 'data:image/png;base64,' + r.png;
+        if (r && r.txt !== undefined) coord.textContent = r.txt;
+        if (r && r.err) coord.textContent = r.err;
+        busy = false;
+        if (pend) { const q = pend; pend = null; send(q); }
+      }
+      const mp = (e) => { const r = img.getBoundingClientRect(); return { x: (e.clientX - r.left) * img.naturalWidth / r.width, y: (e.clientY - r.top) * img.naturalHeight / r.height }; };
+      const cx = () => ({ x: img.naturalWidth / 2, y: img.naturalHeight / 2 });
+      bar.append(mk('＋', () => send(Object.assign({ a: 'zoom', f: 0.7 }, cx()))), mk('－', () => send(Object.assign({ a: 'zoom', f: 1.4 }, cx()))), mk('🏠 처음으로', () => send({ a: 'reset' })), save, coord);
+      let down = null;
+      img.addEventListener('wheel', (e) => { e.preventDefault(); send(Object.assign({ a: 'zoom', f: e.deltaY < 0 ? 0.8 : 1.25 }, mp(e))); }, { passive: false });
+      img.addEventListener('pointerdown', (e) => { down = mp(e); img.setPointerCapture(e.pointerId); img.classList.add('grab'); });
+      img.addEventListener('pointermove', (e) => {
+        const q = mp(e);
+        if (down) { send({ a: 'pan', x: down.x, y: down.y, dx: q.x - down.x, dy: q.y - down.y }); down = q; } else if (!busy) send(Object.assign({ a: 'pos' }, q));
+      });
+      const up = () => { down = null; img.classList.remove('grab'); };
+      img.addEventListener('pointerup', up); img.addEventListener('pointercancel', up);
+      const hint = document.createElement('div'); hint.className = 'muted small'; hint.textContent = '🖱️ 휠로 확대·축소 · 끌어서 이동 · 올려두면 좌표가 보여요';
+      fig.append(bar, img, hint); box.appendChild(fig);
     });
-    return openWin('📈 그래프 (Figure ' + figs.length + '개)', box, { w: 680 });
+    return box;
+  }
+  function figWindow(figs) {
+    return openWin('📈 그래프 (Figure ' + figs.length + '개)', figView(figs, false), { w: 680 });
   }
 
-  /* 터틀 그림 재생기: 파이썬이 기록한 명령을 캔버스에서 차례로 그려요 */
-  function turtleWindow(ops) {
+  /* 터틀 그림 재생기: 파이썬이 기록한 명령을 캔버스에서 차례로 그려요.
+     interactive=true 이면 키보드·마우스·타이머를 파이썬에 보내서 새 그림 명령을 받아 이어서 그려요. onErr(문장) 은 콜백 오류 표시용 */
+  function turtleView(ops, interactive, onErr) {
+    ops = ops.slice();
     const box = document.createElement('div');
     box.className = 'lab-turtle';
-    box.innerHTML = '<canvas width="600" height="600"></canvas><div class="lab-turtle-bar"><button type="button" class="ghost" data-a="replay">🔁 다시 그리기</button><button type="button" class="ghost" data-a="skip">⏩ 바로 완성</button><button type="button" class="ghost" data-a="save">💾 PNG 저장</button></div>';
+    box.innerHTML = `<canvas width="600" height="600"${interactive ? ' tabindex="0"' : ''}></canvas>${interactive ? '<div class="muted small lab-thint">🖱️ 그림을 한 번 클릭하면 키보드가 먹어요. (방향키·글자·클릭·끌기)</div>' : ''}<div class="lab-turtle-bar">${interactive ? '' : '<button type="button" class="ghost" data-a="replay">🔁 다시 그리기</button>'}<button type="button" class="ghost" data-a="skip">⏩ 바로 완성</button><button type="button" class="ghost" data-a="save">💾 PNG 저장</button></div>`;
     const canvas = box.querySelector('canvas'), ctx = canvas.getContext('2d');
     const W = 600, H = 600;
     const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
     const lx = layer.getContext('2d');
     const HAS = { SP: 1, V: 1, A: 1, H: 1, G: 1, L: 1, F: 1, D: 1, W: 1, ST: 1 };
     const SPD = [1e9, 4, 8, 14, 20, 28, 40, 55, 75, 100, 140];
-    let i = 0, partial = null, bg = 'white', tur = {}, instant = false, raf = 0, title = '';
+    let i = 0, partial = null, bg = 'white', tur = {}, instant = false, raf = 0, dead = false;
+    const timers = new Set();
     const X = (x) => W / 2 + x, Y = (y) => H / 2 - y;
     const T = (id) => tur[id] || (tur[id] = { x: 0, y: 0, h: 0, show: true, shape: 'classic', sx: 1, sy: 1, pc: 'black', fc: 'black', sp: 3 });
-    function reset() { cancelAnimationFrame(raf); i = 0; partial = null; bg = 'white'; tur = {}; instant = false; lx.clearRect(0, 0, W, H); }
+    function reset() { cancelAnimationFrame(raf); raf = 0; i = 0; partial = null; bg = 'white'; tur = {}; instant = false; lx.clearRect(0, 0, W, H); }
     function sprite(c, t, x, y, h) {
       c.save(); c.translate(X(x), Y(y)); c.rotate(-h * Math.PI / 180); c.scale(t.sx, t.sy);
       c.fillStyle = t.fc; c.strokeStyle = t.pc; c.lineWidth = 1.5; c.beginPath();
@@ -823,7 +1004,6 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     function apply(op) {
       switch (op[0]) {
         case 'bg': bg = op[1]; break;
-        case 'T': title = op[1]; break;
         case 'I': instant = !!op[1]; break;
         case 'CLR': lx.clearRect(0, 0, W, H); break;
         case 'SP': T(op[1]).sp = op[2]; break;
@@ -840,6 +1020,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
           lx.textAlign = op[7] === 'center' ? 'center' : op[7] === 'right' ? 'right' : 'left'; lx.fillText(op[4], X(op[2]), Y(op[3])); break;
         }
         case 'ST': sprite(lx, T(op[1]), op[2], op[3], op[4]); break;
+        case 'T': box.dataset.title = op[1]; break;
         default: break;
       }
     }
@@ -848,6 +1029,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
       Object.keys(tur).forEach((k) => { const t = tur[k]; if (t.show) sprite(ctx, t, t.x, t.y, t.h); });
     }
     function frame() {
+      if (dead) return;
       const t0 = performance.now();
       let budget = null;
       while (i < ops.length && performance.now() - t0 < 14) {
@@ -872,24 +1054,63 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
         }
       }
       render();
-      if (i < ops.length) raf = requestAnimationFrame(frame);
+      if (i < ops.length) raf = requestAnimationFrame(() => { raf = 0; frame(); });
     }
+    const kick = () => { if (!raf && !dead) raf = requestAnimationFrame(() => { raf = 0; frame(); }); };
     function finishNow() {
-      cancelAnimationFrame(raf);
-      if (partial) { partial = null; }
+      cancelAnimationFrame(raf); raf = 0; partial = null;
       while (i < ops.length) { apply(ops[i]); i++; }
       render();
     }
-    const win = openWin('🐢 터틀 그림', box, { w: 640 });
+
+    /* 상호작용: 이벤트를 파이썬으로 보내고, 돌아온 새 명령을 이어 붙여요 */
+    const q = []; let pumping = false;
+    function schedule(list) {
+      list.forEach((op) => { if (op[0] === 'TM') { const h = setTimeout(() => { timers.delete(h); ev('timer', { id: op[1] }); }, Math.max(0, op[2])); timers.add(h); } });
+    }
+    function push(list) { ops.push(...list); schedule(list); kick(); }
+    async function pump() {
+      if (pumping) return;
+      pumping = true;
+      while (q.length && !dead) {
+        const [k, p] = q.shift();
+        const r = await reqEv(k, p);
+        if (r) { if (r.err && onErr) onErr(r.err); if (r.ops && r.ops.length) push(r.ops); }
+      }
+      pumping = false;
+    }
+    function ev(kind, p) {
+      if (dead || q.length > 60) return;
+      if (kind === 'drag' && q.length && q[q.length - 1][0] === 'drag') q[q.length - 1] = [kind, p]; else q.push([kind, p]);
+      pump();
+    }
+    if (interactive) {
+      const KN = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Return', ' ': 'space', Backspace: 'BackSpace' };
+      const pt = (e) => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width - W / 2, y: H / 2 - (e.clientY - r.top) * H / r.height }; };
+      const key = (e, ph) => { if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return; e.preventDefault(); ev('key', { key: KN[e.key] || e.key, ph }); };
+      canvas.addEventListener('keydown', (e) => key(e, 'down'));
+      canvas.addEventListener('keyup', (e) => key(e, 'up'));
+      let down = null;
+      canvas.addEventListener('pointerdown', (e) => { canvas.focus(); down = { cx: e.clientX, cy: e.clientY, moved: false }; try { canvas.setPointerCapture(e.pointerId); } catch (er) { /* 무시 */ } ev('down', pt(e)); });
+      canvas.addEventListener('pointermove', (e) => { if (!down) return; if (Math.hypot(e.clientX - down.cx, e.clientY - down.cy) > 5) down.moved = true; if (down.moved) ev('drag', pt(e)); });
+      canvas.addEventListener('pointerup', (e) => { if (!down) return; const d = down; down = null; ev('up', pt(e)); if (!d.moved) ev('click', pt(e)); });
+    }
     box.addEventListener('click', (e) => {
       const b = e.target.closest('[data-a]'); if (!b) return;
       if (b.dataset.a === 'replay') { reset(); frame(); }
       else if (b.dataset.a === 'skip') finishNow();
       else if (b.dataset.a === 'save') canvas.toBlob((bl) => bl && saveBlob(bl, 'turtle.png'));
     });
-    win._onClose = () => cancelAnimationFrame(raf);
-    reset(); frame();
-    return win;
+    box._dispose = () => { dead = true; cancelAnimationFrame(raf); timers.forEach(clearTimeout); timers.clear(); q.length = 0; };
+    box._hasEvents = ops.some((o) => o[0] === 'TM' || o[0] === 'EVT');
+    reset(); schedule(ops); frame();
+    return box;
+  }
+  function turtleWindow(ops) {
+    const box = turtleView(ops, false);
+    const w = openWin('🐢 터틀 그림', box, { w: 640 });
+    w._onClose = box._dispose;
+    return w;
   }
 
   /* ---------- PyPI 검색 ---------- */
@@ -988,9 +1209,13 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
             <details class="lab-stdin"${open0 ? ' open' : ''}><summary>⌨️ 입력 (input() 에 넣을 값, 한 줄에 하나)</summary><textarea id="labIn" rows="3" placeholder="예) 철수">${esc(lsGet(KEY_STDIN, ''))}</textarea></details>
           </div>
           <div class="card lab-card">
-            <div class="lab-bar"><b>출력</b><span class="grow"></span><span class="muted small" id="labTime"></span><button class="link" id="labClear">지우기</button></div>
+            <div class="lab-bar"><b>출력</b><span class="grow"></span><span class="muted small" id="labTime"></span><select id="labMode" class="lab-mode" title="그래프·터틀 결과를 보여주는 방식"><option value="popup">🪟 팝업</option><option value="inline">🧩 웹 안 (상호작용)</option></select><button class="link" id="labClear">지우기</button></div>
             <pre class="lab-out" id="labOut"><span class="lab-dim">▶ 실행을 누르면 결과가 여기에 나와요.</span></pre>
             <div class="lab-chips" id="labChips"></div>
+          </div>
+          <div class="card lab-card" id="labViewCard" hidden>
+            <div class="lab-bar"><b>🖼 결과 화면</b><span class="muted small">상호작용 가능</span></div>
+            <div id="labViewBody"></div>
           </div>
         </div>
         <aside class="lab-side">
@@ -1026,9 +1251,9 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
           <div class="card lab-card lab-note">
             <b>ℹ️ 알아두기</b>
             <ul class="small muted">
-              <li>그래프(matplotlib)와 turtle 그림은 팝업 창으로 떠요. 창은 끌어서 옮길 수 있어요.</li>
+              <li>그래프(matplotlib)와 turtle 그림은 기본으로 팝업 창에 떠요(그림만). 출력 옆 선택이나 설정에서 <b>웹 안</b>으로 바꾸면 turtle 키보드·클릭·타이머, 그래프 확대·이동이 돼요.</li>
               <li>순수 파이썬 패키지는 거의 다 돼요. 컴파일이 필요한 패키지는 파이오다이드 기본 제공(numpy·pandas·scipy 등)만 돼요.</li>
-              <li><code>requests</code> 같은 인터넷 접속, <code>tkinter</code>·pygame 같은 창(GUI)은 브라우저 제한으로 안 돼요. turtle 의 키보드·마우스 이벤트도 아직 안 돼요.</li>
+              <li><code>requests</code> 같은 인터넷 접속, <code>tkinter</code>·pygame 같은 창(GUI)은 브라우저 제한으로 안 돼요. turtle 의 이벤트는 웹 안 모드에서만 돼요.</li>
               <li>무한 반복이면 <b>중지</b>를 눌러요. 파이썬이 새로 시작돼도 작업 공간 파일은 그대로예요.</li>
             </ul>
           </div>
@@ -1049,7 +1274,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     // 새로고침·닫기 경고
     const bu = (e) => { if (FS.size || [...installed.keys()].some((k) => !getLibs().includes(k))) { e.preventDefault(); e.returnValue = ''; return ''; } return undefined; };
     window.addEventListener('beforeunload', bu);
-    const leave = () => { if (location.hash.replace(/^#\//, '').split('/')[0] !== 'lab') { window.removeEventListener('beforeunload', bu); window.removeEventListener('hashchange', leave); closeAllWins(); if (listener === onMsg) listener = null; } };
+    const leave = () => { if (location.hash.replace(/^#\//, '').split('/')[0] !== 'lab') { window.removeEventListener('beforeunload', bu); window.removeEventListener('hashchange', leave); closeAllWins(); clearInline(); if (listener === onMsg) listener = null; } };
     window.addEventListener('hashchange', leave);
 
     const setState = (txt, cls) => { stateEl.textContent = txt; stateEl.className = 'lab-state ' + (cls || ''); };
@@ -1130,10 +1355,26 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     card.addEventListener('drop', (e) => { if (!running && e.dataTransfer && e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]); });
 
     /* --- 결과 창 --- */
+    let inlineDisp = [];
+    const clearInline = () => { inlineDisp.forEach((f) => f()); inlineDisp = []; $('#labViewBody').innerHTML = ''; $('#labViewCard').hidden = true; };
+    const onTurtleErr = (m) => append('\n' + m + '\n', 'lab-err');
     const showResults = (figs, turtle) => {
       last = { figs, turtle };
-      closeAllWins();
-      if (turtle.length) turtleWindow(turtle);
+      closeAllWins(); clearInline();
+      const inline = getMode() === 'inline';
+      if (inline) {
+        if (!turtle.length && !figs.length) return;
+        const body = $('#labViewBody');
+        if (turtle.length) { const t = turtleView(turtle, true, onTurtleErr); inlineDisp.push(t._dispose); body.appendChild(t); }
+        if (figs.length) body.appendChild(figView(figs, true));
+        $('#labViewCard').hidden = false;
+        chipsEl.innerHTML = '';
+        return;
+      }
+      if (turtle.length) {
+        const w = turtleWindow(turtle);
+        if (w.querySelector('.lab-turtle') && w.querySelector('.lab-turtle')._hasEvents) append('\n💡 이 그림은 키보드·마우스·타이머를 써요. 팝업에서는 움직이지 않아요. 출력 옆 선택(또는 설정)에서 "웹 안"으로 바꾸면 움직여요.\n', 'lab-dim');
+      }
       if (figs.length) figWindow(figs);
       chipsEl.innerHTML = (turtle.length ? '<button class="ghost" data-open="t">🐢 터틀 창 다시 열기</button>' : '') + (figs.length ? '<button class="ghost" data-open="f">📈 그래프 창 다시 열기</button>' : '');
     };
@@ -1171,7 +1412,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
       lsSet(KEY_CODE, code); lsSet(KEY_STDIN, $('#labIn').value);
       if (/\binput\s*\(/.test(code) && !$('#labIn').value.trim()) $('.lab-stdin').open = true;
       outEl.textContent = ''; outLen = 0; chipsEl.innerHTML = ''; timeEl.textContent = '';
-      closeAllWins();
+      closeAllWins(); clearInline();
       running = true; runBtn.disabled = true; stopBtn.hidden = false; busy(true);
       t0 = Date.now();
       setState('파이썬 준비 중…', 'busy');
@@ -1181,7 +1422,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
       const id = ++seq; runId = id;
       tick = setInterval(() => { timeEl.textContent = ((Date.now() - t0) / 1000).toFixed(0) + '초째…'; }, 500);
       setState('실행 중…', 'busy');
-      W.w.postMessage({ t: 'run', id, code, stdin: $('#labIn').value, files: [...FS] });
+      W.w.postMessage({ t: 'run', id, code, stdin: $('#labIn').value, files: [...FS], inline: getMode() === 'inline' });
     }
     function stop() {
       if (!running) return;
@@ -1261,6 +1502,8 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
       }
     });
 
+    $('#labMode').value = getMode();
+    $('#labMode').onchange = (e) => setMode(e.target.value);
     renderInst(); renderFiles();
     setState('파이썬 깨우는 중…', 'busy');
     ensureReady().then(() => { if (v.isConnected && !running) setState('준비 완료', 'ok'); }).catch(() => { if (v.isConnected) setState('불러오기 실패', 'bad'); });
@@ -1272,11 +1515,17 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     const say = toast || (() => {});
     const draw = () => {
       const libs = getLibs();
-      el.innerHTML = `<h3>🔬 연구소 상시 설치 패키지</h3>
+      const mode = getMode();
+      el.innerHTML = `<h3>🔬 연구소 설정</h3>
+        <b>그래프·터틀 결과를 보여주는 방식</b>
+        <label class="inline ideopt"><input type="radio" name="labView" value="popup" ${mode === 'popup' ? 'checked' : ''}> <span><b>🪟 팝업 창 (기본)</b><br><span class="muted small">따로 뜬 창에 그림만 보여줘요. 끌어서 옮길 수 있어요. 상호작용은 없어요.</span></span></label>
+        <label class="inline ideopt"><input type="radio" name="labView" value="inline" ${mode === 'inline' ? 'checked' : ''}> <span><b>🧩 웹 페이지 안 (상호작용)</b><br><span class="muted small">출력 아래에 결과 화면이 생겨요. turtle 은 방향키·글자·클릭·끌기·ontimer 가 움직이고, 그래프는 휠 확대·끌어서 이동·좌표 표시가 돼요.</span></span></label>
+        <h3 style="margin-top:18px">📦 상시 설치 패키지</h3>
         <p class="muted small">여기에 넣은 패키지는 연구소(연구 탭)를 열 때마다 자동으로 설치돼요. 새로고침하면 설치한 패키지가 사라지니까, 늘 쓰는 것만 등록해 두세요. (최대 ${LIB_MAX}개 · 이 기기에 저장 · 많을수록 시작이 느려져요)</p>
         <div class="lab-sbox"><input type="text" id="labLibIn" placeholder="패키지 이름 (예: rich, sympy, python-dateutil)" autocomplete="off"><button class="primary" id="labLibAdd" type="button">추가</button></div>
         <p class="small muted" id="labLibMsg" style="margin:6px 0 0"></p>
         <div class="lab-libs">${libs.length ? libs.map((n) => `<span class="lab-chip">${esc(n)} <button class="link danger" type="button" data-rm="${esc(n)}" aria-label="${esc(n)} 빼기">✕</button></span>`).join('') : '<span class="muted small">아직 없어요.</span>'}</div>`;
+      el.querySelectorAll('[name=labView]').forEach((r) => { r.onchange = () => { if (r.checked) { setMode(r.value); say(r.value === 'inline' ? '웹 안에 보여줄게요' : '팝업으로 보여줄게요'); } }; });
       const msg = el.querySelector('#labLibMsg');
       el.querySelector('#labLibAdd').onclick = async () => {
         const name = el.querySelector('#labLibIn').value.trim().replace(/^pip\s+install\s+/i, '');

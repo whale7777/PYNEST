@@ -1130,3 +1130,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .lab-win { left: 8px !important; right: 8px; top: 70px !important; width: auto !important; }
   .lab-win-h { cursor: default; }
 }
+
+/* ===== v5.1.2 연구소: 웹 안 결과 ===== */
+.lab-mode { width: auto; max-width: 100%; padding: 4px 8px; font-size: 13px; }
+.lab-thint { margin: 6px 0 0; }
+.lab-turtle canvas:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+.lab-fbar2 { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lab-fbar2 button { padding: 4px 11px; font-size: 13px; }
+.lab-coord { margin-left: 4px; font-variant-numeric: tabular-nums; }
+.lab-figbox img { touch-action: none; cursor: crosshair; user-select: none; }
+.lab-figbox img.grab { cursor: grabbing; }
+#labViewBody { display: flex; flex-direction: column; gap: 16px; }
