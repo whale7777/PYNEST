@@ -1180,3 +1180,12 @@ details.fold > summary::before { content: "▸"; display: inline-block; width: 1
 details.fold[open] > summary::before { transform: rotate(90deg); }
 details.fold > summary .fold-name { font-weight: 700; }
 details.fold > .sets { margin: 12px 0 4px; }
+
+/* 시험 단답형 (5.4.0): 칸마다 답을 쓰는 화면 */
+.ex-parts { display: flex; flex-direction: column; gap: 10px; }
+.ex-parts .part { display: block; }
+.ex-parts .plabel { display: block; font-weight: 700; margin-bottom: 4px; }
+.ex-parts textarea.pans { width: 100%; min-height: 44px; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
+.ex-room.short .ex-in, .ex-room.short #exRun, .ex-room.short ~ .ex-bar #bRun { display: none; }
+@media (max-width: 760px) { .ex-parts textarea.pans { min-height: 48px; } }
+.ex-parts[hidden], .ex-right textarea.code[hidden], .ex-right .ide[hidden] { display: none !important; }

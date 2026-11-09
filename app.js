@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.3.0';
+  const APP_VERSION = '5.4.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -4881,6 +4881,10 @@ onmessage = (ev) => {
       let kIdx = keepIdx; if (!kIdx) { try { kIdx = Number(localStorage.getItem(`pn_exi_${E.id}`)) || 0; } catch (e) { kIdx = 0; } }
       let idx = Math.max(0, Math.min(kIdx, P.length - 1)); let busy = false; let view = 'prob';
       const isEs = (p) => p.kind === 'essay';
+      const isSh = (p) => p.kind === 'short'; // 단답형: 칸마다 자동 채점
+      const partsOf = (p) => normAnswers(p.tests).filter((a) => a.type !== 'm');
+      const readVals = () => [...box.querySelectorAll('#exParts .pans')].map((t) => t.value);
+      const parseVals = (s) => { try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; } };
       const sc = (p) => { if (isEs(p)) return 0; const b = best[p.id]; return b && b.total ? Math.floor((p.points * b.passed) / b.total) : 0; };
       const totalSc = () => P.reduce((s, p) => s + sc(p), 0);
       const maxSc = P.filter((p) => !isEs(p)).reduce((s, p) => s + p.points, 0);
@@ -4888,7 +4892,7 @@ onmessage = (ev) => {
       box.innerHTML = `<div class="ex-top"><b>${esc(E.title)}</b><span class="ex-timer" data-cd="end">--</span><span class="chip" id="exScore"></span><button class="ghost" type="button" id="exList">📋 문제 목록</button></div>
         <div class="ex-room" data-view="prob" id="exRoom">
           <div class="ex-left"><div class="ex-ptabs" id="exTabs"></div><div id="exProb"></div></div>
-          <div class="ex-right"><textarea class="code" id="exCode" spellcheck="false" placeholder="여기에 파이썬 코드를 작성하세요"></textarea>
+          <div class="ex-right"><div id="exParts" class="ex-parts" hidden></div><textarea class="code" id="exCode" spellcheck="false" placeholder="여기에 파이썬 코드를 작성하세요"></textarea>
             <details class="ex-in"><summary>직접 실행해 보기 (입력값)</summary><textarea id="exIn" rows="3" placeholder="input() 으로 읽을 값을 줄마다 적어요"></textarea></details>
             <div class="ex-btns"><button class="ghost" id="exRun" type="button">▶ 실행</button><button class="solve" id="exSend" type="button">✅ 채점하고 제출</button></div>
             <div class="judge-out" id="exOut" hidden></div></div></div>
@@ -4902,15 +4906,23 @@ onmessage = (ev) => {
         $('#exTabs', box).innerHTML = P.map((p, i) => { const b = best[p.id]; const full = b && b.total && b.passed === b.total; const mark = isEs(p) ? (sentCode[p.id] ? ' ✍️✅' : ' ✍️') : full ? ' ✅' : b ? ' ◐' : ''; return `<button type="button" data-i="${i}" class="${i === idx ? 'on' : ''}">${i + 1}${mark}</button>`; }).join('');
         box.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => pick(Number(b.dataset.i))));
       };
-      const saveCur = () => { code[P[idx].id] = ta.value; try { localStorage.setItem(key(P[idx].id), ta.value); } catch (e) { /* 무시 */ } };
+      const saveCur = () => { const sv = isSh(P[idx]) ? JSON.stringify(readVals()) : ta.value; code[P[idx].id] = sv; try { localStorage.setItem(key(P[idx].id), sv); } catch (e) { /* 무시 */ } };
       let firstPick = true;
       const pick = (i) => {
         if (!firstPick) saveCur(); // 맨 처음엔 빈 입력창 값으로 저장된 글을 덮어쓰지 않게
         firstPick = false; idx = i; keepIdx = i; try { localStorage.setItem(`pn_exi_${E.id}`, String(i)); } catch (e) { /* 무시 */ } const p = P[idx];
         $('#exRoom', box).classList.toggle('essay', isEs(p));
+        const sh = isSh(p);
+        $('#exRoom', box).classList.toggle('short', sh);
+        const pe = $('#exParts', box); pe.hidden = !sh; (ta.closest('.ide') || ta).hidden = sh;
+        if (sh) {
+          const saved = parseVals(code[p.id]);
+          pe.innerHTML = partsOf(p).map((a, k) => `<label class="part"><span class="plabel">${esc(a.label || k + 1)}</span><textarea class="pans code" data-k="${k}" rows="${a.type === 't' ? Math.min(6, Math.max(1, String(a.value).split('\n').length)) : 1}" spellcheck="false" placeholder="${a.type === 'c' ? '번호를 써요 (예: 2)' : a.type === 'x' ? '코드 한 줄' : '답을 써요'}">${esc(saved[k] || '')}</textarea></label>`).join('') + '<p class="muted small">칸마다 자동으로 채점돼요. 고쳐 쓰고 다시 제출하면 가장 높은 점수가 남아요.</p>';
+          pe.querySelectorAll('.pans').forEach((t) => t.addEventListener('input', saveCur));
+        }
         ta.placeholder = isEs(p) ? '여기에 답을 글로 써요 (서술형)' : '여기에 파이썬 코드를 작성하세요';
-        $('#exProb', box).innerHTML = `<h3>${idx + 1}. ${esc(p.title || '문제')} <span class="chip">${p.points}점</span></h3><div class="ex-body">${renderContent(p.body || '', true)}</div><p class="muted small">${isEs(p) ? '✍️ 서술형 · 선생님이 채점해요' + (sentCode[p.id] ? ' · 제출함' : '') : `내 점수: ${sc(p)} / ${p.points}`}</p>`;
-        ta.value = code[p.id] || '';
+        $('#exProb', box).innerHTML = `<h3>${idx + 1}. ${esc(p.title || '문제')} <span class="chip">${p.points}점</span></h3><div class="ex-body">${renderContent(p.body || '', true)}</div><p class="muted small">${isEs(p) ? '✍️ 서술형 · 선생님이 채점해요' + (sentCode[p.id] ? ' · 제출함' : '') : `${sh ? '📝 단답형 · 자동 채점 · ' : ''}내 점수: ${sc(p)} / ${p.points}`}</p>`;
+        ta.value = sh ? '' : (code[p.id] || '');
         out.hidden = true; drawTabs(); drawScore();
       };
       ta.addEventListener('input', saveCur);
@@ -4921,8 +4933,20 @@ onmessage = (ev) => {
       setView('prob');
       const lock = (on) => { busy = on; box.querySelectorAll('#exRun,#exSend,#bRun,#bSend').forEach((b) => { b.disabled = on; }); };
       const doSubmit = async (i, silent) => {
-        const p = P[i]; const c = i === idx ? ta.value : (code[p.id] || '');
-        if (!c.trim()) { if (!silent) toast(isEs(p) ? '답을 입력하세요' : '코드를 입력하세요', true); return null; }
+        const p = P[i]; const sh = isSh(p);
+        const c = sh ? (i === idx ? JSON.stringify(readVals()) : (code[p.id] || '[]')) : (i === idx ? ta.value : (code[p.id] || ''));
+        if (sh ? !parseVals(c).some((x) => x.trim()) : !c.trim()) { if (!silent) toast(sh || isEs(p) ? '답을 입력하세요' : '코드를 입력하세요', true); return null; }
+        if (sh) {
+          const g = gradeParts(partsOf(p), parseVals(c));
+          const { data: d3 } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: g.passed, p_total: g.total });
+          const st3 = d3 && d3.status;
+          if (st3 === 'ok') {
+            sentCode[p.id] = c; const b3 = best[p.id];
+            if (!b3 || g.passed / (g.total || 1) >= b3.passed / (b3.total || 1)) best[p.id] = { passed: g.passed, total: g.total };
+            drawTabs(); drawScore();
+          }
+          return { res: { status: g.passed === g.total ? 'AC' : 'WA', passed: g.passed, total: g.total, short: true }, st: st3 };
+        }
         const tests = p.tests || [];
         if (isEs(p)) {
           const { data: d2 } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: 0, p_total: 0 });
@@ -4950,7 +4974,7 @@ onmessage = (ev) => {
             const p = P[idx];
             if (r.res.status === 'ES') { showOut(`<div class="jsum ${r.st === 'ok' ? 'ok' : 'bad'}"><b>${r.st === 'ok' ? '✅ 답안을 제출했어요' : '⚠️ ' + (M[r.st] || '제출하지 못했어요')}</b> · 고쳐 쓰고 다시 내면 마지막 답이 채점돼요</div>`); pick(idx); }
             else {
-            showOut(`<div class="jsum ${r.res.status === 'AC' ? 'ok' : 'bad'}"><b>${r.res.status === 'AC' ? '✅ 모두 통과!' : `❌ ${r.res.passed} / ${r.res.total} 통과`}</b> · 이 문제 ${sc(p)} / ${p.points}점${r.st && r.st !== 'ok' ? ` · ⚠️ ${M[r.st] || '기록 실패'}` : ' · 제출 완료'}</div>${casesHtml(r.res)}`);
+            showOut(`<div class="jsum ${r.res.status === 'AC' ? 'ok' : 'bad'}"><b>${r.res.short ? (r.res.status === 'AC' ? '✅ 모두 정답!' : `📝 ${r.res.passed} / ${r.res.total}칸 정답`) : (r.res.status === 'AC' ? '✅ 모두 통과!' : `❌ ${r.res.passed} / ${r.res.total} 통과`)}</b> · 이 문제 ${sc(p)} / ${p.points}점${r.st && r.st !== 'ok' ? ` · ⚠️ ${M[r.st] || '기록 실패'}` : ' · 제출 완료'}</div>${r.res.short ? '' : casesHtml(r.res)}`);
             pick(idx);
             showOut(out.innerHTML);
             }
@@ -5012,7 +5036,7 @@ onmessage = (ev) => {
         <label class="inline" style="justify-content:center;margin-top:8px"><input type="checkbox" id="exPub" ${E.public === false ? '' : 'checked'}> 내 이름과 점수를 순위표에 공개</label></div>` : `<div class="card center muted pad">${adm ? '관리자 보기예요.' : '순위가 없어요 (제출한 기록이 없어요).'}</div>`;
       const rows = (b.rows || []).map((r) => `<div class="row ex-rrow${r.me ? ' me' : ''}"><div class="row-main"><span class="ex-rk">${r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</span> ${r.hidden && !r.me ? '<span class="muted">🔒 비공개</span>' : `<b>${esc(r.name || '')}</b>${r.hidden ? ' <span class="muted small">(나만 보여요)</span>' : ''}`}</div><div><b>${r.score}</b><span class="muted small">점 · ${r.solved}문제</span></div></div>`).join('') || '<p class="muted center pad">참가자가 없어요.</p>';
       box.innerHTML = `${head()}${meHtml}<div class="card list"><h3 style="padding:14px 18px 0;margin:0">🏆 순위표</h3>${rows}</div>
-        ${rv.length ? `<div class="card"><h3>📄 문제와 내 풀이</h3>${rv.map((r, i) => { const p = (E.problems || []).find((x) => x.id === r.problem_id) || {}; return `<details class="ex-rv"><summary><b>${i + 1}. ${esc(r.title || '문제')}</b> <span class="muted small">${r.kind === 'essay' ? '✍️ ' : ''}내 점수 ${r.graded === false ? '채점 전' : r.score} / ${r.points}</span></summary><div class="ex-body">${renderContent(p.body || '', true)}</div>${r.code ? `<div class="muted small">${r.kind === 'essay' ? '내 답안' : '내 최고 점수 코드'}</div><pre><code>${esc(r.code)}</code></pre>` : '<p class="muted small">제출한 코드가 없어요.</p>'}</details>`; }).join('')}</div>` : ''}`;
+        ${rv.length ? `<div class="card"><h3>📄 문제와 내 풀이</h3>${rv.map((r, i) => { const p = (E.problems || []).find((x) => x.id === r.problem_id) || {}; return `<details class="ex-rv"><summary><b>${i + 1}. ${esc(r.title || '문제')}</b> <span class="muted small">${r.kind === 'essay' ? '✍️ ' : r.kind === 'short' ? '📝 ' : ''}내 점수 ${r.graded === false ? '채점 전' : r.score} / ${r.points}</span></summary><div class="ex-body">${renderContent(p.body || '', true)}</div>${r.code ? `<div class="muted small">${r.kind === 'essay' ? '내 답안' : r.kind === 'short' ? '내 최고 점수 답안' : '내 최고 점수 코드'}</div><pre><code>${esc(r.kind === 'short' ? (() => { try { return JSON.parse(r.code).map((x, k) => `(${k + 1}) ${x}`).join('\n'); } catch (e) { return r.code; } })() : r.code)}</code></pre>` : '<p class="muted small">제출한 코드가 없어요.</p>'}</details>`; }).join('')}</div>` : ''}`;
       const pub = $('#exPub', box);
       if (pub) pub.onchange = async () => {
         const { data } = await sb.rpc('exam_set_public', { p_id: E.id, p_on: pub.checked });
@@ -5685,18 +5709,34 @@ onmessage = (ev) => {
           <p class="muted small">아이템 ID 는 🎁 아이템 탭에서 확인해요. 기본: 금빛·은빛·파란 풍선 장식. 비우면 주지 않아요.</p>
           <h4>📄 문제 <span class="muted small" id="exCnt"></span></h4>
           <div id="exProbs"></div>
-          <div class="form-actions" style="justify-content:flex-start"><button class="ghost" type="button" id="exAdd">+ 문제 직접 추가</button><button class="ghost" type="button" id="exImp">📥 문제집에서 가져오기</button></div>
+          <div class="form-actions" style="justify-content:flex-start"><button class="ghost" type="button" id="exAdd">+ 문제 직접 추가</button><button class="ghost" type="button" id="exImp">📥 문제집에서 가져오기</button><button class="ghost" type="button" id="exJson">📄 시험 JSON 가져오기</button><input type="file" id="exFile" accept=".json,application/json" hidden></div>
           ${cur ? '<label class="inline"><input type="checkbox" id="exFix" checked> 저장하면 응시자에게 📣 "문제가 수정됐어요" 알림 보내기</label><p class="muted small">시험 중에 문제를 고쳐도 제출 기록은 그대로예요. 응시자 화면은 30초 안에 알아서 바뀌어요. 채점 테스트를 바꿨다면 학생이 다시 제출해야 새 기준으로 점수가 나와요.</p>' : ''}
           <div class="form-actions"><button class="ghost" type="button" id="exNew">새로 쓰기</button><button class="primary">${cur ? '저장' : '만들기'}</button></div>
         </form></div>`,
     (v) => {
       const probs = cur ? cur.problems.map((p) => ({ ...p, tests: JSON.stringify(p.tests || [], null, 1) })) : [];
+      // 문제 하나를 시험 문제로 바꿔요 (문제집 JSON · 시험 JSON · 문제집 DB 모두 같은 규칙)
+      const exConv = (q, n) => {
+        const tests = Array.isArray(q.tests) ? q.tests : [];
+        const k0 = q.kind;
+        const ans = normAnswers(q.answers && q.answers.length ? q.answers : (k0 === 'short' ? q.tests : []));
+        const auto = ans.filter((a) => a.type !== 'm');
+        const pts = Math.max(1, Math.min(1000, parseInt(q.points, 10) || 100));
+        const title = q.title || q.label || `문제 ${n}`;
+        const body = q.body || '';
+        if (k0 === 'essay' || (!k0 && !tests.length && !auto.length)) {
+          const model = ans.filter((a) => a.type === 'm').map((a) => a.value).join('\n');
+          return { kind: 'essay', title, body, points: pts, tests: '[]', rubric: [q.rubric || q.check || '', model ? '모범 답안: ' + model : ''].filter(Boolean).join('\n') };
+        }
+        if (k0 === 'short' || (!k0 && !tests.length && auto.length)) return { kind: 'short', title, body, points: pts, rubric: '', tests: JSON.stringify(auto, null, 1) };
+        return { kind: 'code', title, body, points: pts, rubric: '', tests: JSON.stringify(tests, null, 1) };
+      };
       const drawP = () => {
         $('#exCnt', v).textContent = `(${probs.length}개 · 합계 ${probs.reduce((s, p) => s + (Number(p.points) || 0), 0)}점)`;
-        $('#exProbs', v).innerHTML = probs.map((p, i) => `<div class="card ex-pe"><div class="ex-pehead"><b>${i + 1}번</b><select data-f="kind" data-i="${i}" title="문제 종류"><option value="code" ${p.kind === 'essay' ? '' : 'selected'}>💻 코드</option><option value="essay" ${p.kind === 'essay' ? 'selected' : ''}>✍️ 서술형</option></select><input type="text" data-f="title" data-i="${i}" maxlength="100" placeholder="문제 제목" value="${esc(p.title || '')}"><input type="number" data-f="points" data-i="${i}" min="1" max="1000" value="${p.points || 100}" style="width:80px" title="배점"><button type="button" class="ghost" data-up="${i}">↑</button><button type="button" class="ghost" data-dn="${i}">↓</button><button type="button" class="ghost danger" data-rm="${i}">✕</button></div>
+        $('#exProbs', v).innerHTML = probs.map((p, i) => `<div class="card ex-pe"><div class="ex-pehead"><b>${i + 1}번</b><select data-f="kind" data-i="${i}" title="문제 종류"><option value="code" ${p.kind === 'essay' || p.kind === 'short' ? '' : 'selected'}>💻 코드</option><option value="short" ${p.kind === 'short' ? 'selected' : ''}>📝 단답(자동 채점)</option><option value="essay" ${p.kind === 'essay' ? 'selected' : ''}>✍️ 서술형</option></select><input type="text" data-f="title" data-i="${i}" maxlength="100" placeholder="문제 제목" value="${esc(p.title || '')}"><input type="number" data-f="points" data-i="${i}" min="1" max="1000" value="${p.points || 100}" style="width:80px" title="배점"><button type="button" class="ghost" data-up="${i}">↑</button><button type="button" class="ghost" data-dn="${i}">↓</button><button type="button" class="ghost danger" data-rm="${i}">✕</button></div>
           <textarea data-f="body" data-i="${i}" rows="5" placeholder="문제 설명 (마크다운)">${esc(p.body || '')}</textarea>
-          ${p.kind === 'essay' ? `<textarea data-f="rubric" data-i="${i}" rows="3" placeholder="채점 기준 (선생님만 보여요) 예) 핵심 개념 2가지를 쓰면 각 25점">${esc(p.rubric || '')}</textarea>` : `<details><summary class="muted small">채점 테스트 (JSON) — [{"input":"1 2","output":"3","hidden":false}, …]</summary><textarea class="code" data-f="tests" data-i="${i}" rows="6">${esc(p.tests)}</textarea></details>`}</div>`).join('') || '<p class="muted small">아직 문제가 없어요.</p>';
-        v.querySelectorAll('[data-f]').forEach((el) => (el.oninput = () => { probs[Number(el.dataset.i)][el.dataset.f] = el.value; if (el.dataset.f === 'kind') drawP(); if (el.dataset.f === 'points') $('#exCnt', v).textContent = `(${probs.length}개 · 합계 ${probs.reduce((s, p) => s + (Number(p.points) || 0), 0)}점)`; }));
+          ${p.kind === 'essay' ? `<textarea data-f="rubric" data-i="${i}" rows="3" placeholder="채점 기준 (선생님만 보여요) 예) 핵심 개념 2가지를 쓰면 각 25점">${esc(p.rubric || '')}</textarea>` : `<details ${p.kind === 'short' ? 'open' : ''}><summary class="muted small">${p.kind === 'short' ? '정답 (JSON) — [{"label":"(1)","type":"t","value":"30","alts":[]}, …] · type: t 글자 그대로 / c 번호 / x 식·코드 / k 키워드' : '채점 테스트 (JSON) — [{"input":"1 2","output":"3","hidden":false}, …]'}</summary><textarea class="code" data-f="tests" data-i="${i}" rows="6">${esc(p.tests)}</textarea></details>`}</div>`).join('') || '<p class="muted small">아직 문제가 없어요.</p>';
+        v.querySelectorAll('[data-f]').forEach((el) => (el.oninput = () => { const pi = probs[Number(el.dataset.i)]; pi[el.dataset.f] = el.value; if (el.dataset.f === 'kind') { const tx = String(pi.tests || ''); if (el.value === 'short' && (!tx.trim() || tx.includes('"input"'))) pi.tests = '[\n {"label":"(1)","type":"t","value":"","alts":[]}\n]'; else if (el.value === 'code' && tx.includes('"type"')) pi.tests = '[\n {"input":"","output":""}\n]'; drawP(); } if (el.dataset.f === 'points') $('#exCnt', v).textContent = `(${probs.length}개 · 합계 ${probs.reduce((s, p) => s + (Number(p.points) || 0), 0)}점)`; }));
         v.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => { probs.splice(Number(b.dataset.rm), 1); drawP(); }));
         v.querySelectorAll('[data-up]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.up); if (i > 0) { [probs[i - 1], probs[i]] = [probs[i], probs[i - 1]]; drawP(); } }));
         v.querySelectorAll('[data-dn]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.dn); if (i < probs.length - 1) { [probs[i + 1], probs[i]] = [probs[i], probs[i + 1]]; drawP(); } }));
@@ -5704,18 +5744,42 @@ onmessage = (ev) => {
       drawP();
       $('#exAdd', v).onclick = () => { probs.push({ kind: 'code', title: '', body: '', points: 100, tests: '[\n {"input":"","output":""}\n]' }); drawP(); };
       $('#exNew', v).onclick = () => { exEditId = null; route(true); };
+      $('#exJson', v).onclick = () => $('#exFile', v).click();
+      $('#exFile', v).onchange = async (ev) => {
+        const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
+        if (!f) return;
+        try {
+          const o = JSON.parse(await f.text());
+          let list = [];
+          const isExam = Array.isArray(o.problems);
+          if (isExam) list = o.problems;
+          else if (Array.isArray(o.chapters)) { o.chapters.forEach((c) => (c.sections || []).forEach((sc) => (sc.problems || []).forEach((q) => list.push(q)))); (o.elite || []).forEach((q) => list.push(q)); }
+          else throw new Error('시험 JSON 이나 문제집 JSON 이 아니에요');
+          if (!list.length) throw new Error('문제가 하나도 없어요');
+          if (probs.length && confirm('지금 있는 문제를 지우고 바꿀까요?\n(취소를 누르면 뒤에 이어 붙여요)')) probs.length = 0;
+          const add = list.map((q, i) => exConv(q, probs.length + i + 1));
+          probs.push(...add);
+          if (isExam || !$('#exTitle', v).value.trim()) { if (o.title && !$('#exTitle', v).value.trim()) $('#exTitle', v).value = String(o.title).slice(0, 60); }
+          if (!$('#exDesc', v).value.trim() && (o.descr || o.description)) $('#exDesc', v).value = String(o.descr || o.description).slice(0, 2000);
+          if (isExam && o.duration_min) $('#exDur', v).value = Math.max(5, Math.min(600, parseInt(o.duration_min, 10) || 60));
+          if (isExam && o.entry_min != null) $('#exEntry', v).value = Math.max(0, Math.min(1440, parseInt(o.entry_min, 10) || 0));
+          drawP();
+          const cnt = (k) => add.filter((x) => x.kind === k).length;
+          toast(`${add.length}문제를 가져왔어요 (코드 ${cnt('code')} · 단답 ${cnt('short')} · 서술 ${cnt('essay')}). 시작 시각을 정하고 저장하세요`);
+        } catch (e) { toast('가져오지 못했어요: ' + (e.message || e), true); }
+      };
       $('#exImp', v).onclick = async () => {
         const { data: sets } = await sb.from('problem_sets').select('id,title,week').order('id', { ascending: false });
-        const m = modal(`<h3>📥 문제집에서 가져오기</h3><label>문제집<select id="imSet"><option value="">— 고르세요 —</option>${(sets || []).map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select></label><div id="imList" class="list" style="max-height:50vh;overflow:auto"></div><div class="form-actions"><button class="primary" id="imGo" type="button">선택한 문제 가져오기</button></div><p class="muted small">제목·설명·채점 테스트를 복사해요. 가져온 뒤 배점을 고쳐 주세요. (채점 테스트가 없는 문제는 가져와도 자동 채점이 안 돼요)</p>`);
+        const m = modal(`<h3>📥 문제집에서 가져오기</h3><label>문제집<select id="imSet"><option value="">— 고르세요 —</option>${(sets || []).map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select></label><div id="imList" class="list" style="max-height:50vh;overflow:auto"></div><div class="form-actions"><button class="primary" id="imGo" type="button">선택한 문제 가져오기</button></div><p class="muted small">제목·설명·채점 테스트를 복사해요. 코드 문제는 💻 코드, 정답 칸이 있는 문제는 📝 단답, 서술뿐인 문제는 ✍️ 서술형으로 가져와요. 가져온 뒤 배점을 고쳐 주세요.</p>`);
         let exs = [];
         $('#imSet', m.el).onchange = async (e) => {
           const sid = Number(e.target.value); if (!sid) { $('#imList', m.el).innerHTML = ''; return; }
-          const { data } = await sb.from('exercises').select('id,position,label,difficulty,body,tests').eq('set_id', sid).order('position').order('id');
+          const { data } = await sb.from('exercises').select('id,position,label,difficulty,body,tests,answers').eq('set_id', sid).order('position').order('id');
           exs = data || [];
-          $('#imList', m.el).innerHTML = exs.map((x, i) => `<label class="row inline"><input type="checkbox" data-im="${i}"> <span class="row-main"><b>${esc(x.label || '#' + x.id)}</b> <span class="muted small">${esc(x.difficulty || '')} · 테스트 ${(x.tests || []).length}개 · ${esc((x.body || '').replace(/\s+/g, ' ').slice(0, 50))}</span></span></label>`).join('') || '<p class="muted small">문제가 없어요.</p>';
+          $('#imList', m.el).innerHTML = exs.map((x, i) => `<label class="row inline"><input type="checkbox" data-im="${i}"> <span class="row-main"><b>${esc(x.label || '#' + x.id)}</b> <span class="muted small">${esc(x.difficulty || '')} · 테스트 ${(x.tests || []).length}개${(x.answers || []).length ? ` · 정답칸 ${(x.answers || []).length}` : ''} · ${esc((x.body || '').replace(/\s+/g, ' ').slice(0, 50))}</span></span></label>`).join('') || '<p class="muted small">문제가 없어요.</p>';
         };
         $('#imGo', m.el).onclick = () => {
-          m.el.querySelectorAll('[data-im]:checked').forEach((c) => { const x = exs[Number(c.dataset.im)]; probs.push({ kind: 'code', title: x.label || `문제 ${probs.length + 1}`, body: x.body || '', points: 100, tests: JSON.stringify(x.tests || [], null, 1) }); });
+          m.el.querySelectorAll('[data-im]:checked').forEach((c) => { const x = exs[Number(c.dataset.im)]; probs.push(exConv({ ...x, points: 100 }, probs.length + 1)); });
           m.close(); drawP();
         };
       };
@@ -5769,7 +5833,14 @@ onmessage = (ev) => {
           plist = probs.map((p, i) => {
             const t = typeof p.tests === 'string' ? JSON.parse(p.tests || '[]') : (p.tests || []);
             if (p.kind !== 'essay' && (!Array.isArray(t) || t.some((x) => !x || typeof x !== 'object'))) throw new Error(`${i + 1}번 문제의 채점 테스트 형식이 올바르지 않아요`);
-            return { id: p.id || null, kind: p.kind === 'essay' ? 'essay' : 'code', rubric: p.kind === 'essay' ? (p.rubric || '') : '', title: p.title || '', body: p.body || '', points: Math.max(1, Math.min(1000, parseInt(p.points, 10) || 100)), tests: p.kind === 'essay' ? [] : t.map((x) => ({ input: String(x.input ?? ''), output: String(x.output ?? ''), ...(x.mode ? { mode: x.mode } : {}), ...(x.hidden ? { hidden: true } : {}) })) };
+            const kd = p.kind === 'essay' ? 'essay' : p.kind === 'short' ? 'short' : 'code';
+            let shortT = null;
+            if (kd === 'short') {
+              const na = normAnswers(t);
+              if (!na.length || na.length !== t.length || na.some((a) => a.type === 'm')) throw new Error(`${i + 1}번 단답형 정답 형식이 올바르지 않아요 (type 은 t, c, x, k 중 하나, value 는 꼭 있어야 해요)`);
+              shortT = na;
+            }
+            return { id: p.id || null, kind: kd, rubric: kd === 'essay' ? (p.rubric || '') : '', title: p.title || '', body: p.body || '', points: Math.max(1, Math.min(1000, parseInt(p.points, 10) || 100)), tests: kd === 'essay' ? [] : kd === 'short' ? shortT : t.map((x) => ({ input: String(x.input ?? ''), output: String(x.output ?? ''), ...(x.mode ? { mode: x.mode } : {}), ...(x.hidden ? { hidden: true } : {}) })) };
           });
         } catch (e) { return toast(e.message.includes('JSON') ? '채점 테스트 JSON 형식 오류: ' + e.message : e.message, true); }
         const pts = $('#exPts', v).value.split(',').map((x) => parseInt(x.trim(), 10)).filter((n) => Number.isFinite(n) && n >= 0);
