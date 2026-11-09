@@ -64,10 +64,10 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.1.2c';
+  const APP_VERSION = '5.1.2d';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
-  const APK_ID = '1N2c1t83HvD5ODLBDdKU1PT5cqMYCAFZC';
-  const APK_LATEST = '1.2.0'; // 드라이브에 올린 최신 앱(APK) 버전
+  const APK_ID = '1QPyfZv9eNwPcr9Ockn9LGON4KIfhHeoD';
+  const APK_LATEST = '1.3.0'; // 드라이브에 올린 최신 앱(APK) 버전
   const APK_URL = `https://drive.google.com/uc?export=download&id=${APK_ID}`;
   const verNewer = (cur, latest) => { const x = String(cur).split('.').map(Number), y = String(latest).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((y[i] || 0) !== (x[i] || 0)) return (y[i] || 0) > (x[i] || 0); } return false; };
   // 누적 점수 → 티어. Bronze·Silver·Gold 는 V~I 5단계, Platinum~Master 는 X~I 10단계로 똑같이 나눠요.
