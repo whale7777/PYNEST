@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.2.0d';
+  const APP_VERSION = '5.2.1';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -4505,7 +4505,7 @@ onmessage = (ev) => {
     const v = $('#view');
     if (!v || !EVENTS.length || $('.ev-banner', v) || !/^#\/home|^#?\/?$/.test(location.hash || '#/home')) return;
     const box = document.createElement('div');
-    box.innerHTML = EVENTS.map((e) => `<a class="card ev-banner tone-${esc(e.tone)}" href="#/me/avatar"><span class="ev-emoji">${esc(e.emoji)}</span><span class="ev-t"><b>${esc(e.title)}</b>${Number(e.mult) > 1 ? ` <span class="ev-mult">💎 ×${Number(e.mult)}</span>` : ''}${e.items > 0 ? ` <span class="ev-mult">🎁 한정 ${e.items}</span>` : ''}<br><span class="small">${esc(e.descr || '')} <span class="muted">· ${evLeft(e)} (~${new Date(e.ends_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })})</span></span></span></a>`).join('');
+    box.innerHTML = EVENTS.map((e) => `<a class="card ev-banner tone-${esc(e.tone)}" href="#/me/avatar"><span class="ev-emoji">${esc(e.emoji)}</span><span class="ev-t"><b>${esc(e.title)}</b>${Number(e.mult) > 1 ? ` <span class="ev-mult">💎 ×${Number(e.mult)}</span>` : ''}${Number(e.disc) > 0 ? ` <span class="ev-mult">🏷️ -${Number(e.disc)}% 할인</span>` : ''}${e.items > 0 ? ` <span class="ev-mult">🎁 한정 ${e.items}</span>` : ''}<br><span class="small">${esc(e.descr || '')} <span class="muted">· ${evLeft(e)} (~${new Date(e.ends_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })})</span></span></span></a>`).join('');
     while (box.lastChild) v.insertBefore(box.lastChild, v.firstChild);
   }
   const IT = (a, slot) => { const id = a.items && a.items[slot]; const it = id && ITEMS.get(id); return it && it.slot === slot ? `<g>${it.svg}</g>` : ''; };
@@ -5130,7 +5130,8 @@ onmessage = (ev) => {
     const itemTile = (i) => {
       const on = av.items[i.slot] === i.id;
       const buyable = i.kind === 'price' || (i.kind === 'event' && i.ev && i.price > 0);
-      const st = on ? '착용 중' : i.owned ? '입기' : i.can_claim ? '🎁 받기' : buyable ? `💎 ${i.price}${i.kind === 'event' ? ' 🎪' : ''}` : lockTxt(i);
+      const sale = buyable && Number(i.full_price) > Number(i.price);
+      const st = on ? '착용 중' : i.owned ? '입기' : i.can_claim ? '🎁 받기' : buyable ? `${sale ? `<s class="it-was">${i.full_price}</s> ` : ''}💎 ${i.price}${i.kind === 'event' ? ' 🎪' : ''}${sale ? ` <b class="it-off">-${Math.round((1 - i.price / i.full_price) * 100)}%</b>` : ''}` : lockTxt(i);
       const cls = on ? 'on' : i.owned ? 'own' : i.can_claim || (buyable && cat.py >= i.price) ? 'can' : 'lock';
       return `<button type="button" class="it-tile ${cls}" data-it="${esc(i.id)}" title="${esc(i.descr || i.name)}"><span class="it-pv">${avatarSvg({ ...av, items: { ...av.items, [i.slot]: i.id } }, 56)}</span><b>${esc(i.name)}</b>${i.market && i.creator ? `<span class="it-by">by ${esc(dname(i.creator, '친구'))}</span>` : ''}<span class="it-st">${st}</span></button>`;
     };
@@ -5164,7 +5165,7 @@ onmessage = (ev) => {
         toast(`🎁 ${i.name} 을(를) 받았어요!`);
       } else if (i.kind === 'price' || (i.kind === 'event' && i.ev && i.price > 0)) {
         if (cat.py < i.price) return toast('파이포인트가 부족해요', true);
-        if (!confirm(`${i.name} 을(를) 💎 ${i.price} 에 살까요?`)) return;
+        if (!confirm(`${i.name} 을(를) 💎 ${i.price} 에 살까요?${Number(i.full_price) > Number(i.price) ? ` (원래 ${i.full_price}, 행사 할인 중)` : ''}`)) return;
         const { data: r, error } = await sb.rpc('item_buy', { p_item: i.id });
         if (error) return toast('사지 못했어요: ' + error.message, true);
         toast(r === 'ok' ? `🛍️ ${i.name} 을(를) 샀어요!` : r === 'poor' ? '파이포인트가 부족해요' : r === 'have' ? '이미 가지고 있어요' : '사지 못했어요', r !== 'ok');
@@ -5944,12 +5945,15 @@ onmessage = (ev) => {
           <label>배너 색<select id="evTone">${TONES.map((t) => `<option>${t}</option>`).join('')}</select></label>
           <label>시작<input type="datetime-local" id="evFrom" required value="${toLocalInput(new Date())}"></label>
           <label>끝<input type="datetime-local" id="evTo" required value="${toLocalInput(new Date(Date.now() + 7 * 864e5))}"></label>
-          <label>파이포인트 배수 (1=그대로, 2=2배)<input type="number" id="evMult" min="1" max="10" step="0.5" value="1"></label></div>
+          <label>파이포인트 배수 (1=그대로, 2=2배)<input type="number" id="evMult" min="1" max="10" step="0.5" value="1"></label>
+          <label>아이템 할인 % (0=없음, 최대 90)<input type="number" id="evDisc" min="0" max="90" step="1" value="0"></label>
+          <label>할인 대상<select id="evDiscScope"><option value="shop">상점의 파이포인트 아이템 전체</option><option value="event">이 행사에 붙인 한정 아이템만</option></select></label></div>
+          <p class="muted small" style="margin:2px 0 8px">할인은 행사 기간에만 적용돼요. 마켓에서 학생이 올린 아이템은 판매자 몫이 줄지 않게 할인하지 않아요. 행사가 겹치면 가장 큰 할인율 하나만 적용돼요.</p>
           <label>설명<input type="text" id="evDesc" maxlength="300" placeholder="행사 기간 동안 문제 풀이·학습 보상 파이포인트가 2배!"></label>
           <label class="inline"><input type="checkbox" id="evOn" checked> 켜기 (끄면 기간이어도 열리지 않아요)</label>
           <div class="form-actions"><button class="primary">저장</button><button class="ghost" type="button" id="evReset">새로 쓰기</button></div></form></div>
       <div class="card"><h3>🎪 행사 목록 (${evs.length})</h3>
-        ${evs.map((e) => `<div class="mk-row"><span class="it-pv">${esc(e.emoji)}</span><div class="mk-info"><b>${esc(e.title)}</b> <span class="chip">${evState(e)}</span>${Number(e.py_mult) > 1 ? ` <span class="chip">💎 ×${Number(e.py_mult)}</span>` : ''}<br><span class="muted small">${fmt(e.starts_at)} ~ ${fmt(e.ends_at)} · 한정 아이템 ${its.filter((x) => x.event_id === e.id).map((x) => esc(x.name)).join(', ') || '없음'}</span></div><div><button class="ghost" data-evedit="${e.id}" type="button">수정</button> <button class="ghost" data-evnote="${e.id}" type="button">📣 알림</button> <button class="link danger" data-evdel="${e.id}" type="button">삭제</button></div></div>`).join('') || '<p class="muted">행사가 없어요.</p>'}</div>
+        ${evs.map((e) => `<div class="mk-row"><span class="it-pv">${esc(e.emoji)}</span><div class="mk-info"><b>${esc(e.title)}</b> <span class="chip">${evState(e)}</span>${Number(e.py_mult) > 1 ? ` <span class="chip">💎 ×${Number(e.py_mult)}</span>` : ''}${Number(e.disc_pct) > 0 ? ` <span class="chip">🏷️ -${Number(e.disc_pct)}% ${e.disc_scope === 'event' ? '(한정 아이템)' : '(상점 전체)'}</span>` : ''}<br><span class="muted small">${fmt(e.starts_at)} ~ ${fmt(e.ends_at)} · 한정 아이템 ${its.filter((x) => x.event_id === e.id).map((x) => esc(x.name)).join(', ') || '없음'}</span></div><div><button class="ghost" data-evedit="${e.id}" type="button">수정</button> <button class="ghost" data-evnote="${e.id}" type="button">📣 알림</button> <button class="link danger" data-evdel="${e.id}" type="button">삭제</button></div></div>`).join('') || '<p class="muted">행사가 없어요.</p>'}</div>
       <div class="card"><h3>🎁 행사 한정 아이템 붙이기</h3>
         <p class="muted small">고른 아이템의 얻는 조건이 "행사 한정"으로 바뀌어요. 가격 0 = 행사 중 무료 받기, 가격 &gt; 0 = 행사 중 파이포인트로 구입. 행사가 끝나면 새로 못 얻고, 이미 가진 건 계속 써요.</p>
         <div class="ga-grid"><label>행사<select id="eiEv">${evs.map((e) => `<option value="${e.id}">${esc(e.emoji)} ${esc(e.title)}</option>`).join('')}</select></label>
@@ -5969,6 +5973,7 @@ onmessage = (ev) => {
         $('#evId', v).value = e ? e.id : ''; $('#evTitle', v).value = e ? e.title : ''; $('#evEmoji', v).value = e ? e.emoji : '🎃';
         $('#evTone', v).value = e ? e.tone : 'orange'; $('#evFrom', v).value = toLocalInput(e ? e.starts_at : new Date());
         $('#evTo', v).value = toLocalInput(e ? e.ends_at : new Date(Date.now() + 7 * 864e5)); $('#evMult', v).value = e ? e.py_mult : 1;
+        $('#evDisc', v).value = e ? (e.disc_pct || 0) : 0; $('#evDiscScope', v).value = e && e.disc_scope ? e.disc_scope : 'shop';
         $('#evDesc', v).value = e ? e.descr : ''; $('#evOn', v).checked = e ? e.status === 'on' : true;
       };
       v.querySelectorAll('[data-evedit]').forEach((b) => (b.onclick = () => { fill(evs.find((e) => String(e.id) === b.dataset.evedit)); $('#evForm', v).scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
@@ -5976,7 +5981,7 @@ onmessage = (ev) => {
       $('#evForm', v).onsubmit = async (e) => {
         e.preventDefault();
         const p = { id: $('#evId', v).value || null, title: $('#evTitle', v).value.trim(), emoji: $('#evEmoji', v).value.trim() || '🎉', tone: $('#evTone', v).value, descr: $('#evDesc', v).value.trim(),
-          starts_at: new Date($('#evFrom', v).value).toISOString(), ends_at: new Date($('#evTo', v).value).toISOString(), py_mult: Number($('#evMult', v).value) || 1, status: $('#evOn', v).checked ? 'on' : 'off' };
+          starts_at: new Date($('#evFrom', v).value).toISOString(), ends_at: new Date($('#evTo', v).value).toISOString(), py_mult: Number($('#evMult', v).value) || 1, disc_pct: Math.max(0, Math.min(90, Math.round(Number($('#evDisc', v).value) || 0))), disc_scope: $('#evDiscScope', v).value, status: $('#evOn', v).checked ? 'on' : 'off' };
         if (new Date(p.ends_at) <= new Date(p.starts_at)) return toast('끝나는 시각이 시작보다 늦어야 해요', true);
         const { data, error } = await sb.rpc('event_upsert', { p });
         if (error || data !== 'ok') return toast('저장하지 못했어요 (입력값을 확인해주세요)', true);

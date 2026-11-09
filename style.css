@@ -1166,3 +1166,8 @@ body { overflow-x: clip; }
 .lab-cin{font:inherit;color:inherit;background:transparent;border:0;border-bottom:2px solid var(--primary,#3b6cf6);border-radius:0;padding:0 2px;margin:0;width:min(26ch,60vw);min-width:8ch;outline:none;box-shadow:none}
 .lab-cin-go{padding:0 8px;line-height:1.5;border-radius:6px;border:1px solid var(--border,#ccd);background:var(--card,#fff);color:inherit;cursor:pointer}
 .lab-echo{color:var(--primary,#3b6cf6)}
+
+/* v5.2.1 — 행사 할인 표시 */
+.it-was{opacity:.55;text-decoration:line-through;font-weight:400}
+.it-off{color:#dc2626;font-weight:800;font-size:.9em}
+[data-theme="dark"] .it-off{color:#fca5a5}
