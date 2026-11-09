@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.2.0';
+  const APP_VERSION = '5.2.0a';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -6977,6 +6977,8 @@ onmessage = (ev) => {
     document.addEventListener('touchmove', (e) => {
       if (!armed || busy) return;
       const dy = e.touches[0].clientY - sy; const dx = e.touches[0].clientX - sx;
+      if (!pull && (dy < -3 || Math.abs(dx) > 12)) { armed = false; return; } // 위쪽·옆으로 시작하면 일반 스크롤
+      if (!pull && dy < 12) return; // 살짝 떨리는 정도로는 당기기가 시작되지 않아요
       if (dy <= 0 || Math.abs(dx) > dy) { if (pull) { pull = 0; paint(0, true); } if (dy <= 0) armed = pull > 0; return; }
       if ((window.scrollY || document.documentElement.scrollTop) > 0) { armed = false; paint(0, true); return; }
       pull = Math.min(dy * 0.5, 110);
