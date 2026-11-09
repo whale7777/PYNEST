@@ -25,6 +25,9 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (d) => new Date(d).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   // 함께 쓰는 서비스(민혁닷컴·Nestmate) 바로가기. 설정 > 계정·화면에서 끌 수 있고 기본은 켜짐
+  // 문제 화면 배치 (넓은 화면 전용): '' 위아래 · 'l' 문제 왼쪽/코드 오른쪽 · 'r' 문제 오른쪽/코드 왼쪽
+  const proSide = () => { try { const x = localStorage.getItem('pn_probside'); return x === 'l' || x === 'r' ? x : ''; } catch (e) { return ''; } };
+  const applyProSide = () => { const x = proSide(); document.body.classList.toggle('ps-l', x === 'l'); document.body.classList.toggle('ps-r', x === 'r'); };
   const sideOn = () => { try { return localStorage.getItem('pn_side') !== '0'; } catch (e) { return true; } };
   const emailOf = (id) => `${id.toLowerCase()}@pyclass.site`; // ID를 가짜 이메일로 바꿔서 로그인에 사용
   const ID_RE = /^[a-z0-9_]{3,20}$/;
@@ -64,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.1.2g';
+  const APP_VERSION = '5.2.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -487,6 +490,7 @@
     const [a, b, c] = (location.hash.replace(/^#\//, '') || 'home').split('/');
     const key = a === 'settings' ? 'me' : a === 'u' ? 'ranking' : a === 'board' || a === 'write' ? (b === 'problem' ? 'board/problem' : 'board') : a === 'market' ? 'market' : a === 'lecture' ? 'lectures' : a === 'problems' ? 'board/problem' : a === 'set' || a === 'p' ? 'sets' : a;
     document.body.classList.remove('menu-open', 'exam-on');
+    document.body.classList.toggle('pg-p', a === 'p'); applyProSide();
     document.querySelectorAll('#menu a').forEach((l) => l.classList.toggle('on', l.dataset.k === key));
     document.querySelectorAll('#tabbar [data-k]').forEach((l) => l.classList.toggle('on', l.dataset.k === key));
 
@@ -1454,6 +1458,7 @@
     return [`
       <div class="pro-top"><a href="#/set/${set.id}" data-back>← ${esc(set.title)}</a>${pick}</div>
       <article class="pro">
+        <div class="pro-cols"><div class="pro-a">
         <h1 class="pro-title"><span class="pro-no">${dispNo(e)}번</span> ${e.label ? esc(e.label) : esc(shortOf(set))}</h1>
         <div class="pro-meta">
           ${diffTag(e.difficulty)}
@@ -1466,8 +1471,10 @@
         <div class="ex-body pro-body">${renderMarkup(e.body)}</div>
         ${sampleHtml}
         ${e.check_point ? `<div class="ex-check">💡 <b>확인 포인트</b> ${inline(e.check_point)}</div>` : ''}
+        </div><div class="pro-b">
         ${admin ? `<p class="muted small">고유 번호 ${e.id}${tests.length ? ` · 테스트 ${tests.length}개` : ''}${answers.length ? ` · 정답 칸 ${answers.length}개` : ''} · 수정·삭제는 <a href="#/set/${set.id}" data-back>문제집 화면</a>에서 해요.</p>`
           : `<h2 class="pro-h">풀어보기</h2><div class="ex-panel pro-panel" id="panel-${e.id}"></div>`}
+        </div></div>
         ${nav}
       </article>`,
     (v) => {
@@ -6163,10 +6170,17 @@ onmessage = (ev) => {
         <div id="ideOpts"></div>
         <label>써보기<textarea id="ideTry" class="code" rows="6" placeholder="여기서 바로 시험해 보세요. 예) print( 를 치고 Enter, if x: 를 치고 Enter"></textarea></label>
       </div>
+      <div class="card" id="proSideCard"><h3>🪟 문제 화면 배치</h3>
+        <p class="muted small">문제 하나를 크게 볼 때, 넓은 화면(패드·컴퓨터)에서 문제와 코드 입력칸을 나란히 놓을 수 있어요. 좁은 화면(폰)에서는 항상 위아래예요. 이 기기에 저장돼요.</p>
+        <div class="psopts">
+          ${[['', '위아래', '문제 아래에 코드 칸'], ['l', '문제 ⬅ · 코드 ➡', '문제가 왼쪽, 코드·실행이 오른쪽'], ['r', '코드 ⬅ · 문제 ➡', '코드·실행이 왼쪽, 문제가 오른쪽']].map(([k, t, d]) => `<label class="psopt"><input type="radio" name="proSide" value="${k}"${proSide() === k ? ' checked' : ''}><span><b>${t}</b><small class="muted">${d}</small></span></label>`).join('')}
+        </div>
+      </div>
       <div class="card" id="labLibCard"></div>
       </section>`,
     (v) => {
       $('#themeBtn2', v).onclick = toggleTheme;
+      v.querySelectorAll('input[name=proSide]').forEach((r) => (r.onchange = () => { try { localStorage.setItem('pn_probside', r.value); } catch (x) {} applyProSide(); toast('문제 화면 배치를 바꿨어요.'); }));
       if (window.PYLAB) window.PYLAB.bindSettings($('#labLibCard', v), toast); else { const lc = $('#labLibCard', v); if (lc) lc.remove(); }
       $('#sideTg', v).onchange = (e) => { try { localStorage.setItem('pn_side', e.target.checked ? '1' : '0'); } catch (x) {} renderShell(); toast(e.target.checked ? '바로가기를 켰습니다.' : '바로가기를 껐습니다.'); };
       bindMyRecords(v);

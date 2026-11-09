@@ -19,6 +19,9 @@
   const KEY_VIEW = 'pn_lab_view';
   const getMode = () => (lsGet(KEY_VIEW, 'popup') === 'inline' ? 'inline' : 'popup');
   const setMode = (m) => lsSet(KEY_VIEW, m === 'inline' ? 'inline' : 'popup');
+  const KEY_CON = 'pn_lab_con';  // 콘솔 입력 모드 (input() 이 실행 중에 직접 입력을 받아요)
+  const conOn = () => lsGet(KEY_CON, '0') === '1';
+  const setCon = (on) => lsSet(KEY_CON, on ? '1' : '0');
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
@@ -53,18 +56,67 @@
     '        except Exception:',
     '            miss.append(m)',
     '    return json.dumps(miss)',
-    'def lab_setin(inp):',
+    'class _NeedInput(BaseException): pass',
+    '_con = {"q": [], "i": 0, "eof": False}',
+    'class _ConIn:',
+    '    def readline(self, size=-1):',
+    '        c = _con',
+    '        if c["i"] < len(c["q"]):',
+    '            c["i"] += 1',
+    '            return c["q"][c["i"] - 1] + "\\n"',
+    '        if c["eof"]: return ""',
+    '        raise _NeedInput()',
+    '    def read(self, size=-1):',
+    '        c = _con',
+    '        if not c["eof"]: raise _NeedInput()',
+    '        r = "".join(x + "\\n" for x in c["q"][c["i"]:])',
+    '        c["i"] = len(c["q"])',
+    '        return r',
+    '    def readlines(self, hint=-1): return self.read().splitlines(True)',
+    '    def __iter__(self): return self',
+    '    def __next__(self):',
+    '        r = self.readline()',
+    '        if r == "": raise StopIteration',
+    '        return r',
+    '    def isatty(self): return False',
+    'def lab_setin(inp, con=False, seed=0, code="", eof=False, npre=0):',
+    '    import time, random, re',
     '    sys.modules.pop("turtle", None)',
     '    _home.clear()',
     '    if "matplotlib.pyplot" in sys.modules: sys.modules["matplotlib.pyplot"].close("all")',
-    '    sys.stdin = io.StringIO(inp)',
-    '    def _inp(prompt=""):',
-    '        if prompt: sys.stdout.write(str(prompt))',
-    '        s = sys.stdin.readline()',
-    '        if s == "": raise EOFError("EOF when reading a line (아래 \'입력\' 칸이 비어 있어요)")',
-    '        s = s.rstrip("\\n")',
-    '        sys.stdout.write(s + "\\n")',
-    '        return s',
+    '    if not hasattr(time, "_lab_sleep"): time._lab_sleep = time.sleep',
+    '    if con:',
+    '        _con["q"] = [str(x) for x in json.loads(inp)]',
+    '        _con["i"] = 0',
+    '        _con["eof"] = bool(eof)',
+    '        sys.stdin = _ConIn()',
+    '        random.seed(seed)',
+    '        if re.search(r"\\bnumpy\\b", code):',
+    '            try:',
+    '                import numpy',
+    '                numpy.random.seed(seed % 4294967296)',
+    '            except Exception: pass',
+    '        def _sl(t):',
+    '            if _con["i"] < len(_con["q"]): return',
+    '            time._lab_sleep(t)',
+    '        time.sleep = _sl',
+    '        def _inp(prompt=""):',
+    '            if prompt: sys.stdout.write(str(prompt))',
+    '            s = sys.stdin.readline()',
+    '            if s == "": raise EOFError("EOF when reading a line")',
+    '            s = s.rstrip("\\n")',
+    '            if _con["i"] <= npre: sys.stdout.write(s + "\\n")',
+    '            return s',
+    '    else:',
+    '        time.sleep = time._lab_sleep',
+    '        sys.stdin = io.StringIO(inp)',
+    '        def _inp(prompt=""):',
+    '            if prompt: sys.stdout.write(str(prompt))',
+    '            s = sys.stdin.readline()',
+    '            if s == "": raise EOFError("EOF when reading a line (아래 \'입력\' 칸이 비어 있어요)")',
+    '            s = s.rstrip("\\n")',
+    '            sys.stdout.write(s + "\\n")',
+    '            return s',
     '    builtins.input = _inp',
     '_home = {}',
     'def lab_figs(keep=False):',
@@ -743,7 +795,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
       }
       if (d.t !== 'run') return;
       const t0 = Date.now();
-      let err = null, figs = [], turtle = [], files = null, over = 0;
+      let err = null, figs = [], turtle = [], files = null, over = 0, need = false;
       try {
         clearDir(DIR);
         writeFiles(d.files || []);
@@ -764,15 +816,18 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
           const miss = JSON.parse(py.globals.get('lab_missing')(code));
           for (const m of miss) await install(ALIAS[m] || m);
           // 3) 실행
-          py.globals.get('lab_setin')(d.stdin || '');
+          py.globals.get('lab_setin')(d.con ? JSON.stringify(d.queue || []) : (d.stdin || ''), !!d.con, d.seed | 0, code, !!d.eof, d.npre | 0);
           const ns = py.toPy({ __name__: '__main__' });
           try { await py.runPythonAsync(code, { globals: ns }); }
           finally { ns.destroy(); }
         } catch (e) {
           const m = String(e && e.message ? e.message : e);
-          if (!/SystemExit/.test(m)) err = fmtErr(e);
+          if (d.con && /_NeedInput/.test(m)) need = true;
+          else if (!/SystemExit/.test(m)) err = fmtErr(e);
         }
+        try { py.runPython('import sys\nsys.stdout.flush()\nsys.stderr.flush()'); } catch (e) { /* 무시 */ }
       }
+      if (need) { say({ t: 'done', id: d.id, need: true, ms: Date.now() - t0 }); return; }
       try { figs = JSON.parse(py.globals.get('lab_figs')(!!d.inline)); } catch (e) { /* 그림 없음 */ }
       try { turtle = JSON.parse(py.globals.get('lab_turtle')()); } catch (e) { /* 터틀 없음 */ }
       const tr = [];
@@ -1211,10 +1266,10 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
               <button class="primary" id="labRun">▶ 실행 <small class="muted-k">Ctrl+Enter</small></button>
             </div>
             <textarea id="labCode" class="lab-code" rows="14" spellcheck="false">${esc(code0)}</textarea>
-            <details class="lab-stdin"${open0 ? ' open' : ''}><summary>⌨️ 입력 (input() 에 넣을 값, 한 줄에 하나)</summary><textarea id="labIn" rows="3" placeholder="예) 철수">${esc(lsGet(KEY_STDIN, ''))}</textarea></details>
+            <details class="lab-stdin"${open0 ? ' open' : ''}><summary id="labInSum">⌨️ 입력 (input() 에 넣을 값, 한 줄에 하나)</summary><textarea id="labIn" rows="3" placeholder="예) 철수">${esc(lsGet(KEY_STDIN, ''))}</textarea></details>
           </div>
           <div class="card lab-card">
-            <div class="lab-bar"><b>출력</b><span class="grow"></span><span class="muted small" id="labTime"></span><select id="labMode" class="lab-mode" title="그래프·터틀 결과를 보여주는 방식"><option value="popup">🪟 팝업</option><option value="inline">🧩 웹 안 (상호작용)</option></select><button class="link" id="labClear">지우기</button></div>
+            <div class="lab-bar"><b>출력</b><span class="grow"></span><span class="muted small" id="labTime"></span><label class="lab-con" title="input() 이 나오면 실행을 멈추고 그 자리에서 직접 입력받아요"><input type="checkbox" id="labCon"> 💬 콘솔 입력</label><select id="labMode" class="lab-mode" title="그래프·터틀 결과를 보여주는 방식"><option value="popup">🪟 팝업</option><option value="inline">🧩 웹 안 (상호작용)</option></select><button class="link" id="labClear">지우기</button></div>
             <pre class="lab-out" id="labOut"><span class="lab-dim">▶ 실행을 누르면 결과가 여기에 나와요.</span></pre>
             <div class="lab-chips" id="labChips"></div>
           </div>
@@ -1276,6 +1331,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
     const stateEl = $('#labState'), outEl = $('#labOut'), timeEl = $('#labTime'), chipsEl = $('#labChips');
     const runBtn = $('#labRun'), stopBtn = $('#labStop');
     let running = false, runId = 0, outLen = 0, t0 = 0, tick = null, last = { figs: [], turtle: [] }, pre = '';
+    let st = null; // 콘솔 입력 모드 상태 {queue, eof, seed, shown, skip, code}
 
     // 새로고침·닫기 경고
     const bu = (e) => { if (FS.size || [...installed.keys()].some((k) => !getLibs().includes(k))) { e.preventDefault(); e.returnValue = ''; return ''; } return undefined; };
@@ -1391,12 +1447,19 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
 
     const onMsg = (d) => {
       if (!v.isConnected) return;
-      if (d.t === 'out') append(d.s, d.bad ? 'lab-err' : '');
+      if (d.t === 'out') {
+        let s2 = d.s;
+        if (st) { // 입력을 받고 처음부터 다시 달릴 때, 이미 보여준 앞부분은 건너뛰어요
+          if (st.skip > 0) { const k = Math.min(st.skip, s2.length); st.skip -= k; s2 = s2.slice(k); }
+          st.shown += s2.length;
+        }
+        if (s2) append(s2, d.bad ? 'lab-err' : '');
+      }
       else if (d.t === 'log') append(d.s + '\n', d.bad ? 'lab-err' : 'lab-dim');
       else if (d.t === 'pkg') renderInst();
       else if (d.t === 'preload') {
         if (d.done) { if (!running) setState('준비 완료', 'ok'); renderInst(); } else setState(`상시 패키지 설치 중 (${d.i}/${d.n}) ${d.name}`, 'busy');
-      } else if (d.t === 'done' && d.id === runId) finish(d);
+      } else if (d.t === 'done' && d.id === runId) { if (d.need && st) askInput(); else finish(d); }
     };
     listener = onMsg;
 
@@ -1409,14 +1472,56 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
       if (d.over) { append(`\n⚠️ 작업 공간(${fmtSize(Q_TOTAL)})을 넘어서 이번 실행에서 만든 파일은 저장하지 못했어요. (${fmtSize(d.over)})\n`, 'lab-err'); }
       if (outLen === 0) outEl.innerHTML = '<span class="lab-dim">(출력 없음)</span>';
       showResults(d.figs || [], d.turtle || []);
-      timeEl.textContent = ((d.ms || 0) / 1000).toFixed(2) + '초';
+      timeEl.textContent = (st ? (Date.now() - t0) / 1000 : (d.ms || 0) / 1000).toFixed(2) + '초';
+      clearPrompt(); st = null;
+    }
+
+    /* --- 콘솔 입력: 입력이 필요한 곳에서 멈추고, 받은 값으로 처음부터 다시 달려요 --- */
+    function clearPrompt() { const w = outEl.querySelector('.lab-cin-w'); if (w) w.remove(); }
+    function sendRun() {
+      const id = ++seq; runId = id;
+      W.w.postMessage({ t: 'run', id, code: st ? st.code : ta.value, stdin: $('#labIn').value, con: !!st, queue: st ? st.queue : [], eof: st ? st.eof : false, npre: st ? st.npre : 0, seed: st ? st.seed : 0, files: [...FS], inline: getMode() === 'inline' });
+    }
+    function askInput() {
+      clearInterval(tick); setState('입력을 기다려요 ⌨️', 'busy');
+      clearPrompt();
+      if (outLen === 0) outEl.textContent = '';
+      const wrap = document.createElement('span'); wrap.className = 'lab-cin-w';
+      const inp = document.createElement('input'); inp.type = 'text'; inp.className = 'lab-cin'; inp.setAttribute('autocomplete', 'off'); inp.setAttribute('autocapitalize', 'off'); inp.setAttribute('autocorrect', 'off'); inp.spellcheck = false; inp.setAttribute('aria-label', '입력');
+      const go = document.createElement('button'); go.type = 'button'; go.className = 'lab-cin-go'; go.textContent = '↵'; go.setAttribute('aria-label', '입력 보내기');
+      wrap.appendChild(inp); wrap.appendChild(go); outEl.appendChild(wrap);
+      chipsEl.innerHTML = '<button class="ghost" data-eof type="button" title="더 이상 입력이 없다고 알려요 (Ctrl+D)">⏹ 입력 끝 (EOF)</button>';
+      outEl.scrollTop = outEl.scrollHeight;
+      try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+      let sent = false;
+      const submit = (eof) => {
+        if (sent || !st || !running) return; sent = true;
+        if (eof) { st.eof = true; wrap.remove(); append('^D\n', 'lab-dim'); }
+        else { const val = inp.value; st.queue.push(val); wrap.remove(); append(val + '\n', 'lab-echo'); }
+        chipsEl.innerHTML = '';
+        st.skip = st.shown;
+        setState('실행 중…', 'busy');
+        tick = setInterval(() => { timeEl.textContent = ((Date.now() - t0) / 1000).toFixed(0) + '초째…'; }, 500);
+        sendRun();
+      };
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submit(false); }
+        else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); submit(true); }
+      });
+      go.onclick = () => submit(false);
+      const eofB = chipsEl.querySelector('[data-eof]'); if (eofB) eofB.onclick = () => submit(true);
     }
 
     async function run() {
       if (running) return;
       const code = ta.value;
       lsSet(KEY_CODE, code); lsSet(KEY_STDIN, $('#labIn').value);
-      if (/\binput\s*\(/.test(code) && !$('#labIn').value.trim()) $('.lab-stdin').open = true;
+      const con = conOn();
+      if (!con && /\binput\s*\(/.test(code) && !$('#labIn').value.trim()) $('.lab-stdin').open = true;
+      if (con) {
+        let pre0 = $('#labIn').value; if (pre0.endsWith('\n')) pre0 = pre0.slice(0, -1);
+        st = { code, queue: pre0 === '' ? [] : pre0.split('\n'), npre: pre0 === '' ? 0 : pre0.split('\n').length, eof: false, seed: (Date.now() & 0x7fffffff) || 1, shown: 0, skip: 0 };
+      } else st = null;
       outEl.textContent = ''; outLen = 0; chipsEl.innerHTML = ''; timeEl.textContent = '';
       closeAllWins(); clearInline();
       running = true; runBtn.disabled = true; stopBtn.hidden = false; busy(true);
@@ -1425,14 +1530,13 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
       try { await ensureReady(); } catch (e) { running = false; runBtn.disabled = false; stopBtn.hidden = true; busy(false); append(String(e.message || e) + '\n', 'lab-err'); setState('불러오기 실패', 'bad'); return; }
       if (!running) return;
       listener = onMsg;
-      const id = ++seq; runId = id;
       tick = setInterval(() => { timeEl.textContent = ((Date.now() - t0) / 1000).toFixed(0) + '초째…'; }, 500);
       setState('실행 중…', 'busy');
-      W.w.postMessage({ t: 'run', id, code, stdin: $('#labIn').value, files: [...FS], inline: getMode() === 'inline' });
+      sendRun();
     }
     function stop() {
       if (!running) return;
-      killWorker();
+      killWorker(); clearPrompt(); st = null; chipsEl.innerHTML = '';
       running = false; clearInterval(tick); runBtn.disabled = false; stopBtn.hidden = true; busy(false);
       append('\n⏹ 중지했어요. (파이썬이 새로 시작돼요. 이번 실행에서 만든 파일은 저장되지 않았어요)\n', 'lab-err');
       setState('중지됨', 'bad'); timeEl.textContent = '';
@@ -1510,6 +1614,10 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
 
     $('#labMode').value = getMode();
     $('#labMode').onchange = (e) => setMode(e.target.value);
+    const conBox = $('#labCon');
+    const syncCon = () => { $('#labInSum').textContent = conOn() ? '⌨️ 미리 넣을 입력 (선택 · 한 줄에 하나, 모자라면 직접 물어봐요)' : '⌨️ 입력 (input() 에 넣을 값, 한 줄에 하나)'; };
+    conBox.checked = conOn(); syncCon();
+    conBox.onchange = () => { setCon(conBox.checked); syncCon(); };
     renderInst(); renderFiles();
     setState('파이썬 깨우는 중…', 'busy');
     ensureReady().then(() => { if (v.isConnected && !running) setState('준비 완료', 'ok'); }).catch(() => { if (v.isConnected) setState('불러오기 실패', 'bad'); });
@@ -1526,12 +1634,15 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
         <b>그래프·터틀 결과를 보여주는 방식</b>
         <label class="inline ideopt"><input type="radio" name="labView" value="popup" ${mode === 'popup' ? 'checked' : ''}> <span><b>🪟 팝업 창 (기본)</b><br><span class="muted small">따로 뜬 창에 그림만 보여줘요. 끌어서 옮길 수 있어요. 상호작용은 없어요.</span></span></label>
         <label class="inline ideopt"><input type="radio" name="labView" value="inline" ${mode === 'inline' ? 'checked' : ''}> <span><b>🧩 웹 페이지 안 (상호작용)</b><br><span class="muted small">출력 아래에 결과 화면이 생겨요. turtle 은 방향키·글자·클릭·끌기·ontimer 가 움직이고, 그래프는 휠 확대·끌어서 이동·좌표 표시가 돼요.</span></span></label>
+        <b style="display:block;margin-top:14px">input() 입력 방식</b>
+        <label class="inline ideopt"><input type="checkbox" id="labConSet" ${conOn() ? 'checked' : ''}> <span><b>💬 콘솔 입력 모드</b><br><span class="muted small">켜면 <code>input()</code> 에서 멈추고 출력 창에서 바로 입력해요. 입력 칸에 미리 넣은 값이 있으면 먼저 쓰고, 모자라면 물어봐요. (입력을 받을 때마다 코드를 처음부터 다시 달리는 방식이라 시간·난수에 따라 달라지는 코드는 약간 다를 수 있어요)</span></span></label>
         <h3 style="margin-top:18px">📦 상시 설치 패키지</h3>
         <p class="muted small">여기에 넣은 패키지는 연구소(연구 탭)를 열 때마다 자동으로 설치돼요. 새로고침하면 설치한 패키지가 사라지니까, 늘 쓰는 것만 등록해 두세요. (최대 ${LIB_MAX}개 · 이 기기에 저장 · 많을수록 시작이 느려져요)</p>
         <div class="lab-sbox"><input type="text" id="labLibIn" placeholder="패키지 이름 (예: rich, sympy, python-dateutil)" autocomplete="off"><button class="primary" id="labLibAdd" type="button">추가</button></div>
         <p class="small muted" id="labLibMsg" style="margin:6px 0 0"></p>
         <div class="lab-libs">${libs.length ? libs.map((n) => `<span class="lab-chip">${esc(n)} <button class="link danger" type="button" data-rm="${esc(n)}" aria-label="${esc(n)} 빼기">✕</button></span>`).join('') : '<span class="muted small">아직 없어요.</span>'}</div>`;
       el.querySelectorAll('[name=labView]').forEach((r) => { r.onchange = () => { if (r.checked) { setMode(r.value); say(r.value === 'inline' ? '웹 안에 보여줄게요' : '팝업으로 보여줄게요'); } }; });
+      el.querySelector('#labConSet').onchange = (e) => { setCon(e.target.checked); say(e.target.checked ? '콘솔 입력 모드를 켰어요' : '콘솔 입력 모드를 껐어요'); };
       const msg = el.querySelector('#labLibMsg');
       el.querySelector('#labLibAdd').onclick = async () => {
         const name = el.querySelector('#labLibIn').value.trim().replace(/^pip\s+install\s+/i, '');
