@@ -89,6 +89,9 @@ ul,ol{padding:0;list-style:none}
 .cta{margin-top:34px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .cta-note{margin-top:14px;font-size:14px;color:var(--muted)}
 .rise{opacity:0;transform:translateY(18px);animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards}
+.rise-done .rise{animation:none;opacity:1;transform:none}
+/* 태블릿·폰(터치 화면): 사파리에서 흐림 효과와 끝없는 움직임이 겹치면 화면이 깜박여 새로고침처럼 보여서 끕니다 */
+@media (hover:none) and (pointer:coarse){.hd{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(246,248,253,.97)}.phone,.chip,.final::before{animation:none!important}.pill::before,.caret{animation:none}}
 .d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.27s}.d4{animation-delay:.4s}.d5{animation-delay:.55s}
 @keyframes rise{to{opacity:1;transform:none}}
 
@@ -523,6 +526,7 @@ footer a:hover{color:var(--blue)}
 <script src="../ptr.js?v=520b"></script>
 <script>
 (function(){
+  setTimeout(function(){document.documentElement.classList.add('rise-done')},1600);
   var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
   var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
