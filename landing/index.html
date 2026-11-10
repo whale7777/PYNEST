@@ -31,6 +31,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script>
+/* 무한 새로고침 자동 복구: 15초 안에 이 사이트가 6번 넘게 다시 열리면 남아 있는 로그인 기록·서비스 워커·캐시를 지워요 */
+(function(){try{
+  var now=Date.now(),a=JSON.parse(localStorage.getItem('pn_ld')||'[]').filter(function(t){return now-t<15000});
+  a.push(now);localStorage.setItem('pn_ld',JSON.stringify(a));
+  if(a.length<6)return;
+  localStorage.setItem('pn_ld','[]');
+  Object.keys(localStorage).filter(function(k){return /^sb-.*-auth-token/.test(k)||k==='pn_app'}).forEach(function(k){localStorage.removeItem(k)});
+  try{sessionStorage.setItem('pn_bounce',String(now))}catch(e){}
+  if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})});
+  if(window.caches&&caches.keys)caches.keys().then(function(k){k.forEach(function(x){caches.delete(x)})});
+}catch(e){}})();
+</script>
 <script>document.documentElement.classList.add('js')</script>
 <style>
 :root{

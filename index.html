@@ -4,6 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PyNest · 파이썬 교육 플랫폼</title>
+<script>
+/* 무한 새로고침 자동 복구: 15초 안에 이 사이트가 6번 넘게 다시 열리면 남아 있는 로그인 기록·서비스 워커·캐시를 지워요 */
+(function(){try{
+  var now=Date.now(),a=JSON.parse(localStorage.getItem('pn_ld')||'[]').filter(function(t){return now-t<15000});
+  a.push(now);localStorage.setItem('pn_ld',JSON.stringify(a));
+  if(a.length<6)return;
+  localStorage.setItem('pn_ld','[]');
+  Object.keys(localStorage).filter(function(k){return /^sb-.*-auth-token/.test(k)||k==='pn_app'}).forEach(function(k){localStorage.removeItem(k)});
+  try{sessionStorage.setItem('pn_bounce',String(now))}catch(e){}
+  if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})});
+  if(window.caches&&caches.keys)caches.keys().then(function(k){k.forEach(function(x){caches.delete(x)})});
+}catch(e){}})();
+</script>
   <script>
     // 로그인 기록이 없으면 소개 페이지의 로그인 창으로 보냅니다.
     (function () {
