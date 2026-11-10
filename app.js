@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.4.1';
+  const APP_VERSION = '5.4.2';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -338,6 +338,8 @@
 
   /* ---------- 로그인 / 가입 신청 ---------- */
   function renderAuth(tab = 'login') {
+    // 앱이 로그인 기록을 못 쓰는 상태(만료 등)로 소개 페이지에 보내는 거예요. 소개 페이지가 다시 앱으로 돌려보내는 무한 반복을 막으려고 표시를 남겨요.
+    try { sessionStorage.setItem('pn_bounce', String(Date.now())); } catch (e) { /* 저장 못 해도 이동은 해요 */ }
     location.replace('landing/?' + (tab === 'signup' ? 'signup' : 'login')); // 옛 로그인 화면 대신 소개 페이지의 로그인 창
     return;
     document.body.classList.remove('shell', 'menu-open');
