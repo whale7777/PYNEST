@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.4.0';
+  const APP_VERSION = '5.4.1';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -238,13 +238,18 @@
 
   // 글 내용 표시: ``` 로 감싼 부분은 코드 블록으로
   // 공지용 마크다운: # 제목 · **굵게** · *기울임* · ~~취소선~~ · `코드` · [링크](주소) · - 목록 · 1. 번호 · > 인용 · --- 구분선 · | 표 |
+  // `코드` 안쪽은 마크다운을 적용하지 않도록 먼저 빼 두었다가 마지막에 되돌린다 (예: `2 ** 3 ** 2`)
+  function withCode(escaped, fn) {
+    const keep = [];
+    const t = escaped.replace(/`([^`\n]+)`/g, (_, c) => { keep.push(c); return '\u0001' + (keep.length - 1) + '\u0002'; });
+    return fn(t).replace(/\u0001(\d+)\u0002/g, (_, i) => '<code class="ic">' + keep[+i] + '</code>');
+  }
   function mdInline(raw) {
-    return esc(raw)
-      .replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>')
+    return withCode(esc(raw), (t) => t
       .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
       .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<i>$2</i>')
       .replace(/~~([^~\n]+)~~/g, '<s>$1</s>')
-      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'));
   }
   function mdBlock(text) {
     const L = String(text).replace(/\r/g, '').split('\n');
@@ -1038,9 +1043,7 @@
     return out;
   }
 
-  const inline = (s) => esc(s)
-    .replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  const inline = (s) => withCode(esc(s), (t) => t.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>'));
 
   function parseBlocks(text) {
     const lines = String(text ?? '').replace(/\r/g, '').split('\n');
