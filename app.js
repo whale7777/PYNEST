@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.6.0';
+  const APP_VERSION = '5.6.0a';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -5153,6 +5153,7 @@ onmessage = (ev) => {
         $('#exRoom', box).classList.toggle('essay', isEs(p));
         const sh = isForm(p) || isLk(p);
         $('#exRoom', box).classList.toggle('short', sh);
+        $('#exRoom', box).classList.toggle('lk', isLk(p));
         const pe = $('#exParts', box); pe.hidden = !(isForm(p) && !isLk(p)); (ta.closest('.ide') || ta).hidden = sh;
         if (isMc(p) && !isLk(p)) {
           const t0 = (p.tests || [])[0] || {}; const multi = !!t0.multi || (t0.answer || []).length > 1;
@@ -5171,7 +5172,7 @@ onmessage = (ev) => {
         { const ro = runOk(); ['#exRun', '#bRun'].forEach((s) => { const b = $(s, box); if (b) b.hidden = !ro; }); const dt = box.querySelector('details.ex-in'); if (dt) dt.hidden = !ro; }
         if (hasParts) { const pn = $('#exPart', box); if (pn) pn.textContent = `구간 ${E.cur_part}/${PT.length} · ${partOf(E.cur_part).name || ''}${runOk() ? '' : ' · ▶ 실행 없음'}`; }
         if (isLk(p)) { $('#exProb', box).innerHTML = `<h3>${idx + 1}. 🔒 아직 열리지 않았어요</h3><p class="muted">앞 구간을 마감하면 이 문제가 열려요. (구간 ${p.part}${partOf(p.part).name ? ' · ' + esc(partOf(p.part).name) : ''})</p>`; ta.value = ''; out.hidden = true; drawTabs(); drawScore(); return; }
-        $('#exProb', box).innerHTML = `<h3>${idx + 1}. ${isCl(p) ? '✔ ' : ''}${esc(p.title || '문제')} <span class="chip">${p.points}점</span></h3><div class="ex-body">${renderContent(p.body || '', true)}</div><p class="muted small">${isEs(p) ? '✍️ 서술형 · 선생님이 채점해요' + (sentCode[p.id] ? ' · 제출함' : '') : `${sh ? '📝 단답형 · 자동 채점 · ' : ''}내 점수: ${sc(p)} / ${p.points}`}</p>`;
+        $('#exProb', box).innerHTML = `<h3>${idx + 1}. ${isCl(p) ? '✔ ' : ''}${esc(p.title || '문제')} <span class="chip">${p.points}점</span></h3><div class="ex-body">${renderContent(p.body || '', true)}</div><p class="muted small">${isEs(p) ? '✍️ 서술형 · 선생님이 채점해요' + (sentCode[p.id] ? ' · 제출함' : '') : `${{ short: '📝 단답형 · 자동 채점 · ', mc: '🔘 객관식 · 자동 채점 · ', fix: '🛠 오류 고치기 · ' }[p.kind] || ''}${hideRes ? (isSent(p) ? '✔ 제출함 (고쳐서 다시 낼 수 있어요)' : '아직 제출하지 않았어요') : `내 점수: ${sc(p)} / ${p.points}`}`}</p>`;
         ta.value = sh ? '' : (code[p.id] || (p.kind === 'fix' ? (p.starter || '') : ''));
         out.hidden = true; drawTabs(); drawScore();
       };
@@ -6773,8 +6774,9 @@ onmessage = (ev) => {
   }
 
   async function pageRanking() {
-    const { data, error } = await sb.rpc('rank_board', { p_period: rankTab });
+    const { data: rk0, error } = await sb.rpc('rank_board', { p_period: rankTab });
     if (error) return sqlHint('랭킹을 불러올 수 없어요.');
+    const data = rk0 || [];
     const unit = rankTab === 'week' ? '이번 주' : '이번 달';
     const medal = ['🥇', '🥈', '🥉'];
     await loadExt(data.map((r) => r.user_id));

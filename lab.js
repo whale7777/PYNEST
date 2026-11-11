@@ -1418,7 +1418,7 @@ for _n in ("bgcolor title setup screensize window_width window_height tracer upd
 
     /* --- 결과 창 --- */
     let inlineDisp = [];
-    const clearInline = () => { inlineDisp.forEach((f) => f()); inlineDisp = []; $('#labViewBody').innerHTML = ''; $('#labViewCard').hidden = true; };
+    const clearInline = () => { inlineDisp.forEach((f) => f()); inlineDisp = []; const vb = $('#labViewBody'); const vc = $('#labViewCard'); if (vb) vb.innerHTML = ''; if (vc) vc.hidden = true; };
     const onTurtleErr = (m) => append('\n' + m + '\n', 'lab-err');
     const showResults = (figs, turtle) => {
       last = { figs, turtle };
