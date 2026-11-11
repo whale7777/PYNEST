@@ -1204,3 +1204,13 @@ details.fold > .sets { margin: 12px 0 4px; }
 .pe-part { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pe-part input[type=text] { flex: 1 1 140px; min-width: 0; }
 .ex-pehead select[data-f=part] { width: auto; }
+
+/* 5.6.0 본문을 눌러 바로 고치기 (선생님) */
+.editable{cursor:text;border-radius:8px;transition:box-shadow .15s}
+.editable:hover,.ex-room.pv #exProb .ex-body:hover{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary,#4f7cff) 45%,transparent);background:color-mix(in srgb,var(--primary,#4f7cff) 5%,transparent)}
+.ex-room.pv #exProb .ex-body{cursor:text;border-radius:8px}
+.editing{box-shadow:none!important}
+.pv-chip{background:color-mix(in srgb,#f5a524 25%,transparent)!important}
+.step-pen{float:right;margin:0 0 6px 8px}
+#lrStep.stf .lr-slot>.lr-md,#lrStep.stf .lr-slot>.lr-q{cursor:text;border-radius:8px}
+#lrStep.stf .lr-slot>.lr-md:hover,#lrStep.stf .lr-slot>.lr-q:hover{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary,#4f7cff) 45%,transparent);background:color-mix(in srgb,var(--primary,#4f7cff) 5%,transparent)}

@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.5.1';
+  const APP_VERSION = '5.6.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -517,7 +517,7 @@
       review: () => pageReview(b, c),
       board: () => (b === 'problem' ? pageBoard('problem') : pageBoardAll(b)),
       market: () => pageMarket(b),
-      exam: () => pageExam(b),
+      exam: () => pageExam(b, c),
       lab: () => (window.PYLAB ? window.PYLAB.page() : notFound()),
       post: () => pagePost(b),
       write: () => (BOARDS[b] ? pageWrite(b) : notFound()),
@@ -1024,6 +1024,50 @@
   let NOTES_OK = null;
   const ADM_KEY = 'pn_adm';
   const admOpt = (k) => { try { return (JSON.parse(localStorage.getItem(ADM_KEY) || '{}') || {})[k] !== false; } catch (e) { return true; } };
+  /* ✏️ 본문을 눌러서 그 자리에서 글(마크다운)로 고치기 — 선생님 전용 공용 도우미 (문제집 · 시험 · 학습 모두 같은 방식)
+     cfg: { raw: 지금 글, render: (글)=>html, save: async(글)=>에러 문장(없으면 null), rows } */
+  function inlineEdit(body, cfg) {
+    if (!body || body.querySelector('textarea.inline-edit')) return;
+    const keep = body.innerHTML;
+    body.classList.add('editing');
+    body.innerHTML = `<textarea class="inline-edit code" spellcheck="false"></textarea>
+      <div class="form-actions"><button class="primary" type="button" data-ie-save>저장</button><button class="ghost" type="button" data-ie-cancel>취소</button><span class="muted small">Ctrl+Enter 저장 · Esc 취소</span></div>`;
+    const ta = body.querySelector('textarea');
+    ta.value = cfg.raw;
+    ta.rows = cfg.rows || Math.min(30, Math.max(4, String(cfg.raw).split('\n').length + 2));
+    ta.focus();
+    const done = (html) => { body.classList.remove('editing'); body.innerHTML = html; };
+    const cancel = () => done(keep);
+    const save = async () => {
+      const val = ta.value.replace(/\s+$/, '');
+      if (!val.trim() && !cfg.allowEmpty) return toast('내용이 비어 있어요', true);
+      if (val === String(cfg.raw).replace(/\s+$/, '')) return cancel();
+      ta.disabled = true;
+      const err = await cfg.save(val);
+      if (err) { ta.disabled = false; return toast('저장하지 못했어요: ' + err, true); }
+      done(cfg.render(val));
+      toast('저장했어요');
+    };
+    body.querySelector('[data-ie-save]').onclick = save;
+    body.querySelector('[data-ie-cancel]').onclick = cancel;
+    ta.onkeydown = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cancel(); } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+    };
+  }
+  // root 안에서 sel 에 맞는 글을 누르면(글자를 드래그해서 고르는 중이면 빼고) 고치기 창으로 바꿔줘요. getCfg(el) 이 null 이면 아무것도 안 해요.
+  function bindInline(root, sel, getCfg) {
+    if (!root) return;
+    root.addEventListener('click', (ev) => {
+      const el = ev.target.closest(sel);
+      if (!el || !root.contains(el) || el.classList.contains('editing')) return;
+      if (ev.target.closest('a,button,textarea,input,summary,select,label,.lr-codebox,.ide,details')) return;
+      const sl = window.getSelection && window.getSelection();
+      if (sl && String(sl).length) return; // 글자를 고르는(복사하는) 중이에요
+      const cfg = getCfg(el);
+      if (cfg) inlineEdit(el, cfg);
+    });
+    root.querySelectorAll(sel).forEach((el) => { el.classList.add('editable'); el.title = '눌러서 바로 고쳐요 (✏️ 는 자세히 고치기)'; });
+  }
   const admSet = (k, v) => {
     let o = {};
     try { o = JSON.parse(localStorage.getItem(ADM_KEY) || '{}') || {}; } catch (e) { o = {}; }
@@ -1513,7 +1557,7 @@
       <div class="pro-top"><a href="#/set/${set.id}" data-back>← ${esc(set.title)}</a>${pick}</div>
       <article class="pro">
         <div class="pro-cols"><div class="pro-a">
-        <h1 class="pro-title"><span class="pro-no">${dispNo(e)}번</span> ${e.label ? esc(e.label) : esc(shortOf(set))}</h1>
+        <h1 class="pro-title"><span class="pro-no">${dispNo(e)}번</span> ${e.label ? esc(e.label) : esc(shortOf(set))}${admin ? ' <button class="icon" type="button" id="proPen" title="자세히 고치기">✏️</button>' : ''}</h1>
         <div class="pro-meta">
           ${diffTag(e.difficulty)}
           ${admin ? pubChip(e.is_public) : ''}
@@ -1534,6 +1578,12 @@
     (v) => {
       v.querySelectorAll('[data-back]').forEach((a) => a.addEventListener('click', () => { scrollToEx = 'ex-' + eid; }));
       v.querySelectorAll('[data-pick]').forEach((sel) => (sel.onchange = () => { location.hash = '#/p/' + sel.value; }));
+      if (admin) {
+        const pen = $('#proPen', v);
+        if (pen) pen.onclick = () => openExEditor(set, all, e, null);
+        if (admOpt('dbl')) bindInline($('.pro-body', v), '.pro-body', () => ({ raw: e.body || '', render: renderMarkup,
+          save: async (val) => { const { error } = await sb.from('exercises').update({ body: val }).eq('id', eid); if (error) return error.message; e.body = val; return null; } }));
+      }
       v.querySelectorAll('[data-cp]').forEach((b) => (b.onclick = async () => {
         const m = /^(in|out)(\d+)$/.exec(b.dataset.cp);
         const t = samples[Number(m[2])];
@@ -1776,7 +1826,7 @@
 
     /* 설명 글 카드 */
     const gripBtn = admin && admOpt('drag') ? '<button class="icon drag-grip" type="button" title="끌어서 순서 바꾸기">⠿</button>' : '';
-    const dblTip = admin && admOpt('dbl') ? ' title="더블클릭하면 바로 고칠 수 있어요"' : '';
+    const dblTip = admin && admOpt('dbl') ? ' title="눌러서 바로 고쳐요 (✏️ 는 자세히 고치기)"' : '';
     const noteCard = (n) => `<article class="ex note${n.is_public === false ? ' note-priv' : ''}" id="note-${n.id}" data-kind="note" data-id="${n.id}" data-zone="${n.area === 'elite' ? 'elite' : 'normal'}">
       ${admin ? `<header class="ex-head"><span class="chip">📝 설명 글</span>${pubChip(n.is_public)}<span class="spacer"></span>
         <span class="tools">${gripBtn}<button class="icon" data-nedit="${n.id}" title="수정">✏️</button><button class="icon" data-nadd="note:${n.id}" title="이 글 아래에 설명 글 추가">📝</button><button class="icon" data-addnote="${n.id}" title="이 글 아래에 문제 추가">＋</button><button class="icon" data-ndel="${n.id}" title="삭제">🗑</button></span></header>` : ''}
@@ -2858,8 +2908,9 @@ onmessage = (ev) => {
 
     /* 글을 더블클릭해서 그 자리에서 수정 */
     if (admOpt('dbl')) {
-      list.addEventListener('dblclick', (ev) => {
+      list.addEventListener('click', (ev) => {
         const body = ev.target.closest('.ex-body');
+        { const sl = window.getSelection && window.getSelection(); if (sl && String(sl).length) return; } // 글자를 고르는 중이면 그대로 둬요
         if (!body || !list.contains(body) || body.querySelector('textarea.inline-edit')) return;
         if (ev.target.closest('a,button,textarea,input,summary,select')) return;
         const card = body.closest('.ex');
@@ -4095,6 +4146,74 @@ onmessage = (ev) => {
       if (course) route(true); else location.hash = '#/learn/c/' + cid;
     };
   }
+  // ✏️ 학습 단계 하나를 자세히 고치는 창 (JSON 이 아니라 칸에 글로 써요)
+  function openStepEditor(st, onSave) {
+    const S = {
+      type: st.type, kind: st.kind || 'choice', title: st.title || '', body: st.body || '', code: st.code || '', run: st.run !== false,
+      question: st.question || '', explanation: st.explanation || '', oxans: st.answer === false ? '0' : '1',
+      opts: (st.options || []).join('\n'), ans: Array.isArray(st.answer) ? st.answer.join(',') : '',
+      sans: typeof st.answer === 'string' ? st.answer : '', alts: (st.alts || []).join('\n'),
+      fcode: st.kind === 'fill' ? st.code || '' : '', fans: (st.answers || []).map((a) => a.join(' | ')).join('\n'),
+      starter: st.starter || '', tests: JSON.stringify(st.tests || [], null, 1), hints: (st.hints || []).join('\n'), solution: st.solution || '', stdin: st.stdin || '',
+    };
+    const KO = { explain: '📖 개념', quiz: '❓ 확인 문제', practice: '💻 실습' };
+    const m = modal(`<h3>✏️ ${KO[st.type]} 수정</h3>
+      <label>제목 <span class="muted small">(비워도 돼요)</span><input type="text" id="seTitle"></label>
+      <div id="seLow"></div><p class="muted small" id="seInfo"></p>
+      <div class="form-actions"><button class="primary" id="seSave" type="button">저장</button><button class="ghost" id="seCancel" type="button">취소</button></div>`);
+    const q = (x) => $(x, m.el);
+    const area = (id, label, key, rows, mono) => `<label>${label}<textarea id="${id}" rows="${rows}" ${mono ? 'class="code"' : ''} spellcheck="false"></textarea></label>`;
+    q('#seTitle').value = S.title;
+    const low = () => {
+      const b = q('#seLow');
+      if (S.type === 'explain') b.innerHTML = `${area('seBody', '설명 <span class="muted small">(마크다운)</span>', 'body', 8)}${area('seCode', '예시 코드 <span class="muted small">(선택)</span>', 'code', 5, 1)}<label class="inline"><input type="checkbox" id="seRun"> 학생이 ▶ 실행해 볼 수 있어요</label>`;
+      else if (S.type === 'practice') b.innerHTML = `${area('seBody', '문제 <span class="muted small">(마크다운)</span>', 'body', 6)}${area('seStarter', '처음 코드', 'starter', 4, 1)}${area('seTests', '채점 테스트 <span class="muted small">(JSON 모양 · 비우면 채점 없이 통과)</span>', 'tests', 6, 1)}${area('seHints', '힌트 <span class="muted small">(줄마다 하나)</span>', 'hints', 3)}${area('seSol', '정답 코드', 'solution', 4, 1)}${area('seExp', '해설 <span class="muted small">(마크다운)</span>', 'explanation', 3)}${area('seStdin', '입력 예시', 'stdin', 2, 1)}`;
+      else {
+        const k = S.kind;
+        b.innerHTML = `<label>문제 종류<select id="seKind">${[['ox', '⭕ O/X'], ['choice', '🔘 객관식'], ['short', '✏️ 단답'], ['fill', '🧩 빈칸 채우기']].map(([x, t]) => `<option value="${x}" ${k === x ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`
+          + (k === 'fill' ? area('seFcode', '코드 <span class="muted small">(빈칸은 ___ 로)</span>', 'fcode', 5, 1) : area('seQ', '질문 <span class="muted small">(마크다운)</span>', 'question', 4))
+          + (k === 'ox' ? `<label>정답<select id="seOx"><option value="1" ${S.oxans === '1' ? 'selected' : ''}>⭕ 맞아요</option><option value="0" ${S.oxans === '0' ? 'selected' : ''}>❌ 틀려요</option></select></label>`
+            : k === 'choice' ? `${area('seOpts', '보기 <span class="muted small">(한 줄에 하나)</span>', 'opts', 4)}<label>정답 번호 <span class="muted small">(1부터 · 여러 개면 1,3)</span><input type="text" id="seAns" style="max-width:220px"></label>`
+              : k === 'short' ? `<label>정답<input type="text" id="seSans"></label>${area('seAlts', '인정할 다른 답 <span class="muted small">(줄마다 하나)</span>', 'alts', 2)}`
+                : area('seFans', '빈칸 정답 <span class="muted small">(빈칸마다 한 줄 · 다른 정답은 | 로 나눠요)</span>', 'fans', 3, 1))
+          + area('seExp', '해설 <span class="muted small">(마크다운)</span>', 'explanation', 3);
+      }
+      const set = (id, v) => { const e = q('#' + id); if (e) e.value = v; };
+      set('seBody', S.body); set('seCode', S.code); set('seStarter', S.starter); set('seTests', S.tests); set('seHints', S.hints); set('seSol', S.solution); set('seExp', S.explanation); set('seStdin', S.stdin);
+      set('seFcode', S.fcode); set('seQ', S.question); set('seOpts', S.opts); set('seAns', S.ans); set('seSans', S.sans); set('seAlts', S.alts); set('seFans', S.fans);
+      if (q('#seRun')) q('#seRun').checked = S.run;
+    };
+    const grab = () => {
+      const g = (id, key) => { const e = q('#' + id); if (e) S[key] = e.value; };
+      S.title = q('#seTitle').value;
+      g('seBody', 'body'); g('seCode', 'code'); g('seStarter', 'starter'); g('seTests', 'tests'); g('seHints', 'hints'); g('seSol', 'solution'); g('seExp', 'explanation'); g('seStdin', 'stdin');
+      g('seFcode', 'fcode'); g('seQ', 'question'); g('seOpts', 'opts'); g('seAns', 'ans'); g('seSans', 'sans'); g('seAlts', 'alts'); g('seFans', 'fans'); g('seOx', 'oxans');
+      if (q('#seRun')) S.run = q('#seRun').checked;
+      if (q('#seKind')) S.kind = q('#seKind').value;
+    };
+    low();
+    m.el.addEventListener('change', (e) => { if (e.target.id === 'seKind') { grab(); low(); } });
+    q('#seCancel').onclick = m.close;
+    q('#seSave').onclick = () => {
+      grab();
+      const lines = (t) => String(t || '').split('\n').map((x) => x.trim()).filter(Boolean);
+      let raw;
+      try {
+        if (S.type === 'explain') raw = { type: 'explain', title: S.title, body: S.body, code: S.code, run: S.run };
+        else if (S.type === 'practice') raw = { type: 'practice', title: S.title, body: S.body, starter: S.starter, tests: S.tests.trim() ? JSON.parse(S.tests) : [], hints: lines(S.hints), solution: S.solution, explanation: S.explanation, stdin: S.stdin };
+        else {
+          raw = { type: 'quiz', kind: S.kind, title: S.title, question: S.kind === 'fill' ? '' : S.question, explanation: S.explanation };
+          if (S.kind === 'ox') raw.answer = S.oxans === '1';
+          else if (S.kind === 'choice') { raw.options = lines(S.opts); raw.answer = S.ans.split(/[,\s]+/).filter(Boolean).map(Number); }
+          else if (S.kind === 'short') { raw.answer = S.sans; raw.alts = lines(S.alts); }
+          else { raw.code = S.fcode; raw.question = ''; raw.answers = lines(S.fans).map((l) => l.split('|').map((x) => x.trim()).filter(Boolean)); }
+        }
+        const ns = normLearnStep(raw, '이 단계');
+        onSave(ns, m.close);
+      } catch (e) { q('#seInfo').textContent = '⚠️ ' + (e instanceof SyntaxError ? '채점 테스트 모양(JSON)이 틀렸어요' : e.message); }
+    };
+  }
+
   function openLessonEdit(lesson) {
     const cur = { title: lesson.title, minutes: lesson.minutes || undefined, rank_points: lesson.rank_points == null ? undefined : lesson.rank_points, summary: lesson.summary || '', steps: lesson.steps };
     const m = modal(`<h3>✏️ 레슨 수정 (JSON)</h3>
@@ -4227,7 +4346,7 @@ onmessage = (ev) => {
         const st = steps[cur];
         const done = P.done[cur];
         const label = { explain: '📖 개념', quiz: '❓ 확인 문제', practice: '💻 실습' }[st.type];
-        box.innerHTML = `<div class="lr-kind">${label} <span class="muted small">${cur + 1} / ${n}</span></div>${st.title ? `<h3 class="lr-title">${esc(st.title)}</h3>` : ''}<div class="lr-slot"></div>`;
+        box.innerHTML = `<div class="lr-kind">${label} <span class="muted small">${cur + 1} / ${n}</span>${staff ? '<button class="icon step-pen" type="button" data-steppen title="이 단계 자세히 고치기">✏️</button>' : ''}</div>${st.title ? `<h3 class="lr-title">${esc(st.title)}</h3>` : ''}<div class="lr-slot"></div>`;
         const slot = $('.lr-slot', box);
         if (st.type === 'explain') {
           slot.innerHTML = `${st.body ? `<div class="lr-md">${lrMd(st.body)}</div>` : ''}${st.code ? (st.run ? `<div class="lr-codebox">${lrCodeBoxHtml(Math.min(14, Math.max(3, st.code.split('\n').length + 1)))}</div>` : `<pre><code>${esc(st.code)}</code></pre>`) : ''}`;
@@ -4314,6 +4433,25 @@ onmessage = (ev) => {
         if (cur >= n - 1) return finish();
         show(cur + 1);
       };
+      if (staff) { // 선생님: 설명·질문·문제 글을 누르면 그 자리에서 고쳐요 / ✏️ 는 이 단계를 자세히 고쳐요
+        box.classList.add('stf');
+        const saveSteps = async () => { const { error } = await sb.from('learn_lessons').update({ steps }).eq('id', id); return error ? error.message : null; };
+        bindInline(box, '.lr-slot > .lr-md, .lr-slot > .lr-q', (el) => {
+          const key = el.classList.contains('lr-q') ? 'question' : 'body';
+          const stp = steps[cur];
+          return { raw: stp[key] || '', render: lrMd, allowEmpty: key === 'question' && stp.kind === 'fill',
+            save: async (val) => { const old = stp[key]; stp[key] = val; const err = await saveSteps(); if (err) stp[key] = old; return err; } };
+        });
+        box.addEventListener('click', (ev) => {
+          if (!ev.target.closest('[data-steppen]')) return;
+          openStepEditor(steps[cur], async (ns, close) => {
+            const old = steps[cur]; steps[cur] = ns;
+            const err = await saveSteps();
+            if (err) { steps[cur] = old; return toast('저장하지 못했어요: ' + err, true); }
+            close(); toast('저장했어요'); show(cur);
+          });
+        });
+      }
       // 처음 열 때: 끝낸 레슨은 처음부터, 하던 레슨은 하던 곳(아직 못 푼 첫 단계까지만)에서
       if (P.completed) { P.cur = 0; show(0); } else show(Math.min(P.cur, reach()));
     }];
@@ -4805,8 +4943,9 @@ onmessage = (ev) => {
     return `${pts || '순위 보상 없음'}${r.pt_join ? ` · 참가 💎${r.pt_join}` : ''}${r.item_first || r.item_top3 || r.item_join ? ' · 🎈 풍선 장식' : ''}`;
   };
 
-  async function pageExam(id) {
+  async function pageExam(id, sub) {
     await exSync();
+    if (id && sub === 'preview' && can('content')) return pageExamPreview(Number(id));
     if (id) return pageExamRoom(Number(id));
     const { data, error } = await sb.rpc('exam_list');
     if (error || !data) return ['<div class="page-head"><h2>📝 시험</h2></div><div class="card pad muted">시험은 아직 준비되지 않았어요. 선생님이 v454_exam.sql 을 실행하면 열려요.</div>'];
@@ -4824,19 +4963,98 @@ onmessage = (ev) => {
       ${list.length ? list.map(card).join('') : '<div class="card pad center muted">예정된 시험이 없어요.</div>'}`];
   }
 
+  // 👀 선생님 시험 미리보기: 학생이 보는 화면 그대로 (구간 잠금 · 실행 · 채점까지 진짜로 돌아가요). 제출은 저장되지 않아요.
+  async function pageExamPreview(id) {
+    const { data: A, error } = await sb.rpc('exam_admin_get', { p_id: id });
+    if (error || !A) return [`<p><a href="#/exam">← 시험 목록</a></p><div class="card pad center muted">시험을 찾을 수 없어요.</div>`];
+    const parts = (Array.isArray(A.parts) ? A.parts : []).map((x, i) => ({ n: Number(x.n) || i + 1, name: x.name || '', run: x.run !== false }));
+    const E0 = {
+      id: A.id, title: A.title, descr: A.descr, start_at: A.start_at, end_at: new Date(Date.now() + A.duration_min * 60000).toISOString(), duration_min: A.duration_min, entry_min: A.entry_min,
+      status: A.status, entered: true, staff: true, parts, cur_part: parts.length ? 1 : null, n_problems: (A.problems || []).length, n_entries: A.n_entries || 0, mine: {}, rev: 0, reward: A.reward || {},
+      problems: (A.problems || []).map((p, i) => ({ ...p, position: i + 1, part: p.part || 1 })),
+    };
+    return [`<p id="exBack"><a href="#/exam">← 시험 목록</a> · <a href="#/admin/exam">시험 관리</a></p><div id="exBox"></div>`, (v) => bindExam(v, E0, { preview: true })];
+  }
+
+  // ✏️ 시험 문제 하나를 자세히 고치는 창 (JSON 이 아니라 칸에 글로 써요)
+  function openExamProblemEditor(p, parts, onSaved) {
+    const t0 = (p.tests && p.tests[0]) || {};
+    const S = {
+      kind: p.kind || 'code', part: p.part || 1, points: p.points || 100, title: p.title || '', body: p.body || '', starter: p.starter || '', rubric: p.rubric || '',
+      opts: (t0.options || []).join('\n'), ans: (t0.answer || []).map((x) => Number(x) + 1).join(','),
+      tests: p.kind === 'mc' || p.kind === 'essay' ? '[]' : JSON.stringify(p.tests || [], null, 1),
+    };
+    const KINDS = [['code', '💻 코드'], ['fix', '🛠 오류 고치기'], ['short', '📝 단답(자동 채점)'], ['mc', '🔘 객관식'], ['essay', '✍️ 서술형']];
+    const m = modal(`<h3>✏️ 문제 수정 <span class="muted small">(#${p.id})</span></h3>
+      <div class="grid2"><label>종류<select id="xpKind">${KINDS.map(([k, t]) => `<option value="${k}" ${S.kind === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label>배점<input type="number" id="xpPts" min="1" max="1000" value="${S.points}"></label></div>
+      ${parts.length ? `<label>구간<select id="xpPart">${parts.map((x) => `<option value="${x.n}" ${Number(S.part) === Number(x.n) ? 'selected' : ''}>구간 ${x.n}${x.name ? ' · ' + esc(x.name) : ''}</option>`).join('')}</select></label>` : ''}
+      <label>제목<input type="text" id="xpTitle" maxlength="100" value="${esc(S.title)}"></label>
+      <label>본문 <span class="muted small">(마크다운)</span><textarea id="xpBody" rows="8" spellcheck="false"></textarea></label>
+      <div id="xpLow"></div><p class="muted small" id="xpInfo"></p>
+      <div class="form-actions"><button class="primary" id="xpSave" type="button">저장</button><button class="ghost" id="xpCancel" type="button">취소</button></div>`);
+    const q = (x) => $(x, m.el);
+    q('#xpBody').value = S.body;
+    const low = () => {
+      const k = S.kind; const box = q('#xpLow');
+      if (k === 'mc') box.innerHTML = `<label>보기 <span class="muted small">(한 줄에 하나)</span><textarea id="xpOpts" rows="5" spellcheck="false"></textarea></label><label>정답 번호 <span class="muted small">(1부터 · 여러 개면 1,3)</span><input type="text" id="xpAns" style="max-width:220px"></label>`;
+      else if (k === 'essay') box.innerHTML = `<label>채점 기준 · 모범 답안 <span class="muted small">(선생님만 봐요)</span><textarea id="xpRub" rows="4" spellcheck="false"></textarea></label>`;
+      else box.innerHTML = `${k === 'fix' ? '<label>고쳐야 할 코드 <span class="muted small">(처음에 칸에 들어 있어요)</span><textarea id="xpStart" rows="6" class="code" spellcheck="false"></textarea></label>' : ''}<label>${k === 'short' ? '정답 칸 (글) — 줄마다 하나, 예) (1) 30  ·  ( )안에 [대체 정답]도 가능' : '채점 테스트 (글)'}<textarea id="xpTests" rows="7" class="code" spellcheck="false"></textarea></label>`;
+      if (q('#xpOpts')) { q('#xpOpts').value = S.opts; q('#xpAns').value = S.ans; }
+      if (q('#xpRub')) q('#xpRub').value = S.rubric;
+      if (q('#xpStart')) q('#xpStart').value = S.starter;
+      if (q('#xpTests')) q('#xpTests').value = S.tests;
+      q('#xpInfo').textContent = k === 'short' ? '정답은 JSON 모양이에요: [{"label":"(1)","type":"t","value":"30","alts":[]}] · type: t 글자 그대로 / c 번호 / x 식·코드 / k 키워드' : k === 'code' || k === 'fix' ? '테스트는 JSON 모양이에요: [{"input":"1 2\\n","output":"3"}] · "hidden":true 면 학생에게 안 보여요' : '';
+    };
+    const grab = () => {
+      S.kind = q('#xpKind').value; S.points = q('#xpPts').value; S.title = q('#xpTitle').value; S.body = q('#xpBody').value;
+      if (q('#xpPart')) S.part = q('#xpPart').value;
+      if (q('#xpOpts')) { S.opts = q('#xpOpts').value; S.ans = q('#xpAns').value; }
+      if (q('#xpRub')) S.rubric = q('#xpRub').value;
+      if (q('#xpStart')) S.starter = q('#xpStart').value;
+      if (q('#xpTests')) S.tests = q('#xpTests').value;
+    };
+    q('#xpKind').onchange = () => { grab(); low(); };
+    low();
+    q('#xpCancel').onclick = m.close;
+    q('#xpSave').onclick = async () => {
+      grab();
+      const out = { kind: S.kind, title: S.title.trim(), body: S.body, points: Math.max(1, Math.min(1000, parseInt(S.points, 10) || 100)), part: parts.length ? Number(S.part) || 1 : 1, starter: '', rubric: '' };
+      try {
+        if (S.kind === 'mc') {
+          const opts = S.opts.split('\n').map((x) => x.trim()).filter(Boolean);
+          const an = [...new Set(S.ans.split(/[,\s]+/).filter(Boolean).map(Number))];
+          if (opts.length < 2 || opts.length > 8) throw new Error('보기는 2~8개예요');
+          if (!an.length || an.some((x) => !Number.isInteger(x) || x < 1 || x > opts.length)) throw new Error(`정답 번호는 1~${opts.length} 이에요`);
+          out.tests = [{ options: opts, answer: an.map((x) => x - 1).sort((a, b) => a - b), multi: an.length > 1 }];
+        } else if (S.kind === 'essay') { out.tests = []; out.rubric = S.rubric; } else {
+          out.tests = JSON.parse(S.tests || '[]');
+          if (!Array.isArray(out.tests)) throw new Error('테스트는 [ ] 목록이어야 해요');
+          if (S.kind === 'fix') out.starter = S.starter;
+        }
+      } catch (e) { q('#xpInfo').textContent = '⚠️ ' + (e instanceof SyntaxError ? '테스트 글(JSON) 모양이 틀렸어요. 쉼표·따옴표를 확인해 보세요' : e.message); return; }
+      const { data, error } = await sb.rpc('exam_problem_edit', { p_id: p.id, p: out });
+      if (error || !data || data.status !== 'ok') return toast({ settled: '정산이 끝난 시험은 고칠 수 없어요' }[data && data.status] || '저장하지 못했어요' + (data && data.msg ? ': ' + data.msg : ''), true);
+      m.close(); toast('저장했어요'); onSaved(out);
+    };
+  }
+
   async function pageExamRoom(id) {
     const { data: E0, error } = await sb.rpc('exam_get', { p_id: id });
     if (error || !E0) return [`<p><a href="#/exam">← 시험 목록</a></p><div class="card pad center muted">시험을 찾을 수 없어요.</div>`];
-    return [`<p id="exBack"><a href="#/exam">← 시험 목록</a></p><div id="exBox"></div>`, (v) => bindExam(v, E0)];
+    return [`<p id="exBack"><a href="#/exam">← 시험 목록</a>${can('content') ? ` · <a href="#/exam/${id}/preview">👀 미리보기</a>` : ''}</p><div id="exBox"></div>`, (v) => bindExam(v, E0)];
   }
 
-  function bindExam(v, E0) {
+  function bindExam(v, E0, opts) {
+    const PV = !!(opts && opts.preview); // 👀 선생님 미리보기 (제출·마감은 저장하지 않아요)
     let E = E0;
     const box = $('#exBox', v);
     let cur = null; let timer = 0; let roomApi = null; let ending = false;
     const alive = () => document.body.contains(box);
     const stop = () => { clearInterval(timer); document.body.classList.remove('exam-on'); };
-    const adm = can('content');
+    const staffView = can('content');
+    const adm = staffView && !PV; // 미리보기에서는 학생처럼 구간이 잠겨요
+    const xRpc = (n, a) => (PV ? Promise.resolve({ data: n === 'exam_part_close' ? 'ok' : { status: 'ok' } }) : sb.rpc(n, a));
     let keepIdx = 0; let lastRev = Date.now();
 
     const head = () => `<div class="card"><h2 style="margin:0 0 4px">${esc(E.title)}</h2><div class="muted small">🗓️ ${fmt(E.start_at)} ~ ${hhmm(E.end_at)} (${E.duration_min}분) · 문제 ${E.n_problems}개 · 응시 ${E.n_entries}명</div>${E.descr ? `<div style="margin-top:8px">${renderContent(E.descr, true)}</div>` : ''}<div class="muted small" style="margin-top:6px">🎁 ${esc(exRewardText(E.reward))}</div></div>`;
@@ -4874,6 +5092,8 @@ onmessage = (ev) => {
         bindEnter(); return;
       }
       const P = E.problems || [];
+      if (PV && !P.length) { box.innerHTML = `${head()}<div class="card center ex-wait"><div class="muted">아직 문제가 없어요. 시험 수정에서 문제를 추가해 보세요.</div></div>`; return; }
+      if (PV && (E.parts || []).length) P.forEach((p) => { p.locked = Number(p.part) > E.cur_part; p.closed = Number(p.part) < E.cur_part; });
       if (!P.length) { box.innerHTML = `${head()}<div class="card center ex-wait"><div class="muted">문제를 불러오는 중…</div></div>`; setTimeout(async () => { if (alive()) { await refetch(); cur = null; tick(true); } }, 1200); return; }
       document.body.classList.add('exam-on');
       const sentCode = {}; const best = {};
@@ -4887,9 +5107,8 @@ onmessage = (ev) => {
       });
       let kIdx = keepIdx; if (!kIdx) { try { kIdx = Number(localStorage.getItem(`pn_exi_${E.id}`)) || 0; } catch (e) { kIdx = 0; } }
       let idx = Math.max(0, Math.min(kIdx, P.length - 1)); let busy = false; let view = 'prob';
-      if (hasParts && P[idx] && P[idx].part !== E.cur_part) { const f0 = P.findIndex((x) => x.part === E.cur_part); if (f0 >= 0) idx = f0; }
       const isEs = (p) => p.kind === 'essay';
-      const hideRes = !adm; // 시험 중에는 학생에게 채점 결과(맞았는지·점수)를 보여주지 않아요. 결과는 시험이 끝난 뒤에 공개돼요.
+      const hideRes = !staffView; // 시험 중에는 학생에게 채점 결과(맞았는지·점수)를 보여주지 않아요. 결과는 시험이 끝난 뒤에 공개돼요.
       const isSent = (p) => !!sentCode[p.id];
       const isSh = (p) => p.kind === 'short'; // 단답형: 칸마다 자동 채점
       const isMc = (p) => p.kind === 'mc'; // 객관식: 보기를 골라요 (모두 맞아야 정답)
@@ -4898,6 +5117,7 @@ onmessage = (ev) => {
       const hasParts = !adm && PT.length > 0; // 구간: 마감해야 다음 구간이 열리고, 마감한 구간으로는 돌아갈 수 없어요
       const partOf = (n) => PT.find((x) => Number(x.n) === Number(n)) || {};
       const lastPart = PT.reduce((m, x) => Math.max(m, Number(x.n) || 0), 0);
+      if (hasParts && P[idx] && P[idx].part !== E.cur_part) { const f0 = P.findIndex((x) => x.part === E.cur_part); if (f0 >= 0) idx = f0; }
       const runOk = () => adm || !hasParts || partOf(E.cur_part).run !== false; // ▶ 실행은 허용된 구간에서만
       const isLk = (p) => !!p.locked; const isCl = (p) => !!p.closed;
       const readMc = () => [...box.querySelectorAll('#exParts .mcopt:checked')].map((x) => Number(x.dataset.k));
@@ -4908,8 +5128,8 @@ onmessage = (ev) => {
       const totalSc = () => P.reduce((s, p) => s + sc(p), 0);
       const maxSc = P.filter((p) => !isEs(p)).reduce((s, p) => s + p.points, 0);
       const esPts = P.filter(isEs).reduce((s, p) => s + p.points, 0);
-      box.innerHTML = `<div class="ex-top"><b>${esc(E.title)}</b><span class="ex-timer" data-cd="end">--</span><span class="chip" id="exScore"></span>${hasParts ? '<span class="chip" id="exPart"></span>' : ''}${hasParts && E.cur_part < lastPart ? '<button class="primary" type="button" id="exClose">구간 마감 ▶</button>' : ''}<button class="ghost" type="button" id="exList">📋 문제 목록</button></div>
-        <div class="ex-room${adm ? '' : ' nocopy'}" data-view="prob" id="exRoom">
+      box.innerHTML = `<div class="ex-top"><b>${esc(E.title)}</b><span class="ex-timer" data-cd="end">--</span><span class="chip" id="exScore"></span>${hasParts ? '<span class="chip" id="exPart"></span>' : ''}${hasParts && E.cur_part < lastPart ? '<button class="primary" type="button" id="exClose">구간 마감 ▶</button>' : ''}${PV ? '<span class="chip pv-chip" title="제출·구간 마감은 저장되지 않아요">👀 미리보기</span><button class="ghost" type="button" id="exPen" title="이 문제 자세히 고치기">✏️ 이 문제 수정</button>' + (hasParts ? '<button class="ghost" type="button" id="exReset" title="구간을 처음으로">↺ 처음 구간</button>' : '') : ''}<button class="ghost" type="button" id="exList">📋 문제 목록</button></div>
+        <div class="ex-room${adm || PV ? '' : ' nocopy'}${PV ? ' pv' : ''}" data-view="prob" id="exRoom">
           <div class="ex-left"><div class="ex-ptabs" id="exTabs"></div><div id="exProb"></div></div>
           <div class="ex-right"><div id="exParts" class="ex-parts" hidden></div><textarea class="code" id="exCode" spellcheck="false" placeholder="여기에 파이썬 코드를 작성하세요"></textarea>
             <details class="ex-in"><summary>직접 실행해 보기 (입력값)</summary><textarea id="exIn" rows="3" placeholder="input() 으로 읽을 값을 줄마다 적어요"></textarea></details>
@@ -4971,7 +5191,7 @@ onmessage = (ev) => {
           const c4 = JSON.stringify(sel); const t4 = (p.tests || [])[0] || {};
           const want = JSON.stringify((t4.answer || []).map(Number).sort((x, y) => x - y)); const got = JSON.stringify(sel.map(Number).sort((x, y) => x - y));
           const ok4 = want === got ? 1 : 0;
-          const { data: d4 } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c4, p_passed: ok4, p_total: 1 });
+          const { data: d4 } = await xRpc('exam_submit', { p_problem: p.id, p_code: c4, p_passed: ok4, p_total: 1 });
           const st4 = d4 && d4.status;
           if (st4 === 'ok') { sentCode[p.id] = c4; const b4 = best[p.id]; if (!b4 || ok4 >= b4.passed) best[p.id] = { passed: ok4, total: 1 }; drawTabs(); drawScore(); }
           return { res: { status: ok4 ? 'AC' : 'WA', passed: ok4, total: 1, mc: true }, st: st4 };
@@ -4980,7 +5200,7 @@ onmessage = (ev) => {
         if (sh ? !parseVals(c).some((x) => x.trim()) : !c.trim()) { if (!silent) toast(sh || isEs(p) ? '답을 입력하세요' : '코드를 입력하세요', true); return null; }
         if (sh) {
           const g = gradeParts(partsOf(p), parseVals(c));
-          const { data: d3 } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: g.passed, p_total: g.total });
+          const { data: d3 } = await xRpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: g.passed, p_total: g.total });
           const st3 = d3 && d3.status;
           if (st3 === 'ok') {
             sentCode[p.id] = c; const b3 = best[p.id];
@@ -4991,13 +5211,13 @@ onmessage = (ev) => {
         }
         const tests = p.tests || [];
         if (isEs(p)) {
-          const { data: d2 } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: 0, p_total: 0 });
+          const { data: d2 } = await xRpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: 0, p_total: 0 });
           if (d2 && d2.status === 'ok') { sentCode[p.id] = c; best[p.id] = { passed: 0, total: 0 }; drawTabs(); drawScore(); }
           return { res: { status: 'ES', passed: 0, total: 0 }, st: d2 && d2.status };
         }
         if (!silent) showOut('<span class="muted">⏳ 채점 중… (처음 한 번은 파이썬 준비로 몇 초 걸려요)</span>');
         const res = await gradeAll(c, tests, (k, n) => { if (!silent) showOut(`<span class="muted">⏳ 채점 중… ${k + 1} / ${n}</span>`); });
-        const { data } = await sb.rpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: res.passed, p_total: res.total });
+        const { data } = await xRpc('exam_submit', { p_problem: p.id, p_code: c, p_passed: res.passed, p_total: res.total });
         const st = data && data.status;
         if (st === 'ok') {
           sentCode[p.id] = c;
@@ -5042,14 +5262,15 @@ onmessage = (ev) => {
         try {
           saveCur();
           for (let i = 0; i < P.length; i += 1) { const q = P[i]; if (q.part === E.cur_part && !isLk(q) && !isCl(q) && (code[q.id] || '').trim() && code[q.id] !== sentCode[q.id]) { try { await doSubmit(i, true); } catch (e) { /* 다음 문제 */ } } }
-          const { data } = await sb.rpc('exam_part_close', { p_id: E.id, p_part: E.cur_part });
+          const { data } = await xRpc('exam_part_close', { p_id: E.id, p_part: E.cur_part });
           if (data !== 'ok') { lock(false); return toast({ order: '이미 바뀐 구간이에요. 화면을 새로 고칠게요', last: '마지막 구간이에요', closed: '시험이 끝났어요' }[data] || '마감하지 못했어요', true); }
         } catch (e) { lock(false); return toast('마감하지 못했어요: ' + (e.message || e), true); }
         lock(false); keepIdx = 0; try { localStorage.removeItem(`pn_exi_${E.id}`); } catch (e) { /* 무시 */ }
         toast('구간을 마감했어요. 다음 구간이 열렸어요!');
+        if (PV) { E.cur_part += 1; return drawLive(); }
         await refetch(); cur = null; tick(true);
       };
-      if (!adm) { // 학생: 문제 글(특히 코드)을 복사해서 실행해 보는 것을 막아요 (입력창 안의 복사는 그대로 돼요)
+      if (!adm && !PV) { // 학생: 문제 글(특히 코드)을 복사해서 실행해 보는 것을 막아요 (입력창 안의 복사는 그대로 돼요)
         const pr = $('#exProb', box); ['copy', 'cut', 'contextmenu', 'dragstart', 'selectstart'].forEach((ev) => pr.addEventListener(ev, (e) => e.preventDefault()));
       }
       $('#exRun', box).onclick = runBtn; $('#bRun', box).onclick = runBtn;
@@ -5059,6 +5280,19 @@ onmessage = (ev) => {
       };
       $('#exList', box).onclick = openList; $('#bList', box).onclick = openList;
       pick(idx);
+      if (PV) {
+        const pen = $('#exPen', box);
+        if (pen) pen.onclick = () => { saveCur(); openExamProblemEditor(P[idx], PT, (o) => { Object.assign(P[idx], o); firstPick = true; pick(idx); }); };
+        const rs = $('#exReset', box);
+        if (rs) rs.onclick = () => { if (confirm('구간을 처음(구간 1)으로 되돌릴까요?')) { E.cur_part = 1; keepIdx = 0; drawLive(); } };
+        box.querySelectorAll('[data-cd]').forEach((el) => { el.textContent = `${E.duration_min}분`; });
+        // 본문을 누르면 그 자리에서 글로 고쳐요
+        bindInline($('#exProb', box), '.ex-body', () => {
+          const p = P[idx]; if (!p || isLk(p)) return null;
+          return { raw: p.body || '', render: (t) => renderContent(t, true), allowEmpty: true,
+            save: async (val) => { const { data, error } = await sb.rpc('exam_problem_edit', { p_id: p.id, p: { body: val } }); if (error || !data || data.status !== 'ok') return (data && data.msg) || (data && data.status) || (error && error.message) || '오류'; p.body = val; return null; } };
+        });
+      }
       roomApi = {
         save: () => saveCur(),
         // 시간이 다 되면 아직 안 낸 코드를 채점해서 내요
@@ -5139,6 +5373,7 @@ onmessage = (ev) => {
         if (k === 'end') el.classList.toggle('warn', target - t < 300000);
       });
     };
+    if (PV) { drawLive(); return; }
     tick(true);
     timer = setInterval(() => { if (!alive()) { stop(); return; } tick(false); }, 500);
   }
@@ -5745,7 +5980,7 @@ onmessage = (ev) => {
     const R = (cur && cur.reward) || { pt_rank: [300, 200, 100], pt_join: 50, item_first: 'exam_balloon_gold', item_top3: 'exam_balloon_silver', item_join: 'exam_balloon_blue' };
     const loc = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
     const defStart = loc(new Date(Date.now() + 36e5 * 24).toISOString());
-    const rows = (L.exams || []).map((e) => { const ph = exPhase(e); return `<div class="row"><div class="row-main"><b>${esc(e.title)}</b> <span class="badge ${EX_PH[ph][1]}">${EX_PH[ph][0]}</span> <span class="chip">${e.status === 'open' ? '공개' : '비공개'}</span><br><span class="muted small">${fmt(e.start_at)} · ${e.duration_min}분 · 문제 ${e.n_problems} · 응시 ${e.n_entries}${e.n_essay ? ` · 서술형 ${e.n_essay}` : ''}${e.settled ? ' · 정산 완료' : ''}</span></div><div><a class="ghost btn" href="#/exam/${e.id}">보기</a> <button class="ghost" data-exnote="${e.id}" type="button">📣 알림</button>${e.n_essay ? ` <button class="ghost" data-exgrade="${e.id}" type="button">✍️ 채점${e.settled ? ' 보기' : ''}</button>` : ''} <button class="ghost" data-exedit="${e.id}" type="button">수정</button> <button class="ghost danger" data-exdel="${e.id}" type="button">삭제</button></div></div>`; }).join('') || '<p class="muted center pad">아직 시험이 없어요.</p>';
+    const rows = (L.exams || []).map((e) => { const ph = exPhase(e); return `<div class="row"><div class="row-main"><b>${esc(e.title)}</b> <span class="badge ${EX_PH[ph][1]}">${EX_PH[ph][0]}</span> <span class="chip">${e.status === 'open' ? '공개' : '비공개'}</span><br><span class="muted small">${fmt(e.start_at)} · ${e.duration_min}분 · 문제 ${e.n_problems} · 응시 ${e.n_entries}${e.n_essay ? ` · 서술형 ${e.n_essay}` : ''}${e.settled ? ' · 정산 완료' : ''}</span></div><div><a class="ghost btn" href="#/exam/${e.id}/preview">👀 미리보기</a> <a class="ghost btn" href="#/exam/${e.id}">보기</a> <button class="ghost" data-exnote="${e.id}" type="button">📣 알림</button>${e.n_essay ? ` <button class="ghost" data-exgrade="${e.id}" type="button">✍️ 채점${e.settled ? ' 보기' : ''}</button>` : ''} <button class="ghost" data-exedit="${e.id}" type="button">수정</button> <button class="ghost danger" data-exdel="${e.id}" type="button">삭제</button></div></div>`; }).join('') || '<p class="muted center pad">아직 시험이 없어요.</p>';
     return [`
       <div class="card list"><h3 style="padding:14px 18px 0;margin:0">📝 시험 목록</h3>${rows}</div>
       <div class="card"><h3>${cur ? `✏️ 시험 수정 · #${cur.id}` : '➕ 새 시험 만들기'}</h3>
@@ -6743,7 +6978,7 @@ onmessage = (ev) => {
   async function adminEdit() {
     const OPTS = [
       ['drag', '↕️ 끌어서 순서 바꾸기', '문제·설명 글 카드 오른쪽 위 ⠿ 를 잡고 끌어요. 문제는 일반/ELITE 구역 안에서, 설명 글은 어디로든 옮길 수 있어요. 마우스·터치 둘 다 돼요.'],
-      ['dbl', '🖱️ 더블클릭으로 바로 수정', '문제·설명 글의 본문을 더블클릭하면 그 자리에서 고쳐요. Ctrl+Enter 저장, Esc 취소. (✏️ 버튼은 그대로 써도 돼요)'],
+      ['dbl', '🖱️ 눌러서 바로 수정', '문제·설명 글의 본문을 누르면 그 자리에서 글로 고쳐요 (글자를 드래그해서 복사할 땐 안 열려요). Ctrl+Enter 저장, Esc 취소. ✏️ 는 자세히 고치기예요. 시험 미리보기·학습 레슨도 같아요.'],
     ];
     return [`<div class="card pad"><h3>✏️ 문제집 편집 기능</h3>
       <p class="muted small">문제집 화면에서 쓰는 편집 도우미를 켜고 꺼요. 이 브라우저에만 저장되고, 바꾸면 문제집 화면을 다시 열 때부터 적용돼요. 학생 화면에는 영향이 없어요.</p>
