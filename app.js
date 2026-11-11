@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.4.6';
+  const APP_VERSION = '5.5.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -4888,6 +4888,8 @@ onmessage = (ev) => {
       let kIdx = keepIdx; if (!kIdx) { try { kIdx = Number(localStorage.getItem(`pn_exi_${E.id}`)) || 0; } catch (e) { kIdx = 0; } }
       let idx = Math.max(0, Math.min(kIdx, P.length - 1)); let busy = false; let view = 'prob';
       const isEs = (p) => p.kind === 'essay';
+      const hideRes = !adm; // 시험 중에는 학생에게 채점 결과(맞았는지·점수)를 보여주지 않아요. 결과는 시험이 끝난 뒤에 공개돼요.
+      const isSent = (p) => !!sentCode[p.id];
       const isSh = (p) => p.kind === 'short'; // 단답형: 칸마다 자동 채점
       const partsOf = (p) => normAnswers(p.tests).filter((a) => a.type !== 'm');
       const readVals = () => [...box.querySelectorAll('#exParts .pans')].map((t) => t.value);
@@ -4908,9 +4910,9 @@ onmessage = (ev) => {
       if (window.PYIDE) window.PYIDE.attach(ta);
       const out = $('#exOut', box);
       const showOut = (h) => { out.hidden = false; out.innerHTML = h; };
-      const drawScore = () => { $('#exScore', box).textContent = `내 점수 ${totalSc()} / ${maxSc}${esPts ? ` (+서술형 ${esPts}점)` : ''}`; };
+      const drawScore = () => { if (hideRes) { $('#exScore', box).textContent = `제출 ${P.filter(isSent).length} / ${P.length}문제`; return; } $('#exScore', box).textContent = `내 점수 ${totalSc()} / ${maxSc}${esPts ? ` (+서술형 ${esPts}점)` : ''}`; };
       const drawTabs = () => {
-        $('#exTabs', box).innerHTML = P.map((p, i) => { const b = best[p.id]; const full = b && b.total && b.passed === b.total; const mark = isEs(p) ? (sentCode[p.id] ? ' ✍️✅' : ' ✍️') : full ? ' ✅' : b ? ' ◐' : ''; return `<button type="button" data-i="${i}" class="${i === idx ? 'on' : ''}">${i + 1}${mark}</button>`; }).join('');
+        $('#exTabs', box).innerHTML = P.map((p, i) => { const b = best[p.id]; const full = b && b.total && b.passed === b.total; const mark = hideRes ? (isSent(p) ? ' ✔' : '') : isEs(p) ? (sentCode[p.id] ? ' ✍️✅' : ' ✍️') : full ? ' ✅' : b ? ' ◐' : ''; return `<button type="button" data-i="${i}" class="${i === idx ? 'on' : ''}">${i + 1}${mark}</button>`; }).join('');
         box.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => pick(Number(b.dataset.i))));
       };
       const saveCur = () => { const sv = isSh(P[idx]) ? JSON.stringify(readVals()) : ta.value; code[P[idx].id] = sv; try { localStorage.setItem(key(P[idx].id), sv); } catch (e) { /* 무시 */ } };
@@ -4980,6 +4982,7 @@ onmessage = (ev) => {
             const M = { closed: '시험이 끝났어요', early: '아직 시작 전이에요', nouser: adm ? '관리자는 제출이 기록되지 않아요 (채점 결과만 보여요)' : '제출하지 못했어요', limit: '제출 횟수 한도를 넘었어요' };
             const p = P[idx];
             if (r.res.status === 'ES') { showOut(`<div class="jsum ${r.st === 'ok' ? 'ok' : 'bad'}"><b>${r.st === 'ok' ? '✅ 답안을 제출했어요' : '⚠️ ' + (M[r.st] || '제출하지 못했어요')}</b> · 고쳐 쓰고 다시 내면 마지막 답이 채점돼요</div>`); pick(idx); }
+            else if (hideRes) { const hh = `<div class="jsum ${r.st === 'ok' ? 'ok' : 'bad'}"><b>${r.st === 'ok' ? '✅ 제출했어요' : '⚠️ ' + (M[r.st] || '제출하지 못했어요')}</b> · 채점 결과는 시험이 끝난 뒤에 공개돼요. 고쳐서 다시 낼 수 있어요.</div>`; pick(idx); showOut(hh); }
             else {
             showOut(`<div class="jsum ${r.res.status === 'AC' ? 'ok' : 'bad'}"><b>${r.res.short ? (r.res.status === 'AC' ? '✅ 모두 정답!' : `📝 ${r.res.passed} / ${r.res.total}칸 정답`) : (r.res.status === 'AC' ? '✅ 모두 통과!' : `❌ ${r.res.passed} / ${r.res.total} 통과`)}</b> · 이 문제 ${sc(p)} / ${p.points}점${r.st && r.st !== 'ok' ? ` · ⚠️ ${M[r.st] || '기록 실패'}` : ' · 제출 완료'}</div>${r.res.short ? '' : casesHtml(r.res)}`);
             pick(idx);
@@ -5000,7 +5003,7 @@ onmessage = (ev) => {
       $('#exSend', box).onclick = sendBtn; $('#bSend', box).onclick = sendBtn;
       $('#exRun', box).onclick = runBtn; $('#bRun', box).onclick = runBtn;
       const openList = () => {
-        const m = modal(`<h3>📋 문제 목록</h3><div class="list">${P.map((p, i) => `<button type="button" class="row ex-lrow" data-go="${i}"><div class="row-main"><b>${i + 1}. ${esc(p.title || '문제')}</b></div><div class="muted small">${isEs(p) ? (sentCode[p.id] ? '✍️ 제출함' : '✍️ 서술형') : `${sc(p)} / ${p.points}점`}</div></button>`).join('')}</div><p><b>합계 ${totalSc()} / ${maxSc}점</b>${esPts ? ` <span class="muted small">(+서술형 ${esPts}점)</span>` : ''}</p>`);
+        const m = modal(`<h3>📋 문제 목록</h3><div class="list">${P.map((p, i) => `<button type="button" class="row ex-lrow" data-go="${i}"><div class="row-main"><b>${i + 1}. ${esc(p.title || '문제')}</b></div><div class="muted small">${hideRes ? (isSent(p) ? '✔ 제출함' : '아직 안 냈어요') : isEs(p) ? (sentCode[p.id] ? '✍️ 제출함' : '✍️ 서술형') : `${sc(p)} / ${p.points}점`}</div></button>`).join('')}</div><p><b>${hideRes ? `제출 ${P.filter(isSent).length} / ${P.length}문제` : `합계 ${totalSc()} / ${maxSc}점`}</b>${!hideRes && esPts ? ` <span class="muted small">(+서술형 ${esPts}점)</span>` : ''}</p>`);
         m.el.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { m.close(); pick(Number(b.dataset.go)); setView('prob'); }));
       };
       $('#exList', box).onclick = openList; $('#bList', box).onclick = openList;
