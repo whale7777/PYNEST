@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.6.0a';
+  const APP_VERSION = '5.7.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -639,7 +639,7 @@
     const isStaff = !!staffRole();
     const nbShut = nbClosed();
     if (exl && exl.now) EX_OFF = Date.parse(exl.now) - Date.now();
-    const exHtml = ((exl && exl.exams) || []).filter((x) => x.status === 'open' && ['lobby', 'live'].includes(exPhase(x)) && !(exPhase(x) === 'live' && !x.entered && false)).slice(0, 2).map((x) => `<a class="nban exban" href="#/exam/${x.id}"><span class="nb-main"><span class="nb-ico">📝</span><span class="nb-txt">${esc(x.title)} — ${exPhase(x) === 'live' ? '🔴 지금 진행 중! 들어가기' : '🚪 입장할 수 있어요 (' + hhmm(x.start_at) + ' 시작)'}</span></span></a>`).join('');
+    const exHtml = ((exl && exl.exams) || []).filter((x) => x.status === 'open' && ['lobby', 'live'].includes(exPhase(x)) && !(exPhase(x) === 'live' && !x.entered && false)).slice(0, 2).map((x) => `<a class="nban exban" href="#/exam/${x.id}"><span class="nb-main"><span class="nb-ico">📝</span><span class="nb-txt">${esc(x.title)} — ${exPhase(x) === 'live' ? (exFree(x) ? '⏱ 응시 중! 이어서 풀기' : '🔴 지금 진행 중! 들어가기') : exFree(x) ? '🟢 응시할 수 있어요 (~ ' + fmt(x.close_at) + ' 까지)' : '🚪 입장할 수 있어요 (' + hhmm(x.start_at) + ' 시작)'}</span></span></a>`).join('');
     const nbHtml = exHtml + allN.filter((x) => x.banner && !nbShut.includes(x.id)).slice(0, 3).map((x) => `<div class="nban" data-nb="${x.id}"><a class="nb-main" href="#/post/${x.id}"><span class="nb-ico">📣</span><span class="nb-txt">${esc(x.title)}</span></a><button type="button" class="nb-x" data-nbx="${x.id}" aria-label="닫기" title="닫기">✕</button></div>`).join('');
     const plist = (arr, empty) => (arr && arr.length ? arr.map((x) => `<a class="row hp" href="#/set/${x.set_id}" data-ex="${x.id}"><div class="row-main"><span class="hp-d">${esc(x.difficulty || '')}</span> ${esc(x.title || '(제목 없음)')}</div><div class="muted small">${esc(x.set_name || '')}</div></a>`).join('') : `<p class="muted center pad">${empty}</p>`);
     let probHtml = '';
@@ -4932,11 +4932,25 @@ onmessage = (ev) => {
     if (data) EX_OFF = new Date(data).getTime() - (t0 + Date.now()) / 2;
   }
   const exCd = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h ? h + ':' : ''}${String(m).padStart(h ? 2 : 1, '0')}:${String(s % 60).padStart(2, '0')}`; };
+  // 시험 유형: regular(정기: 정해진 시각에 모두 같이 시작·종료) / free(자유 응시: 기간 안에 아무 때나 입장하면 그때부터 개인 타이머)
+  const exFree = (e) => e.kind === 'free';
+  const exEndMs = (e) => (exFree(e) && e.my_end ? Date.parse(e.my_end) : Date.parse(e.end_at)); // 이 사람의 끝나는 시각
   const exPhase = (e) => {
-    const t = exNow(); const s = Date.parse(e.start_at); const en = Date.parse(e.end_at);
+    const t = exNow();
+    if (exFree(e)) {
+      const s = Date.parse(e.start_at); const cl = Date.parse(e.close_at || e.start_at); const all = Date.parse(e.end_at);
+      if (e.entered && e.my_end) { const me = Date.parse(e.my_end); return t < me ? 'live' : t < all ? 'wait' : 'over'; }
+      return t < s ? 'soon' : t < cl ? 'lobby' : 'over';
+    }
+    const s = Date.parse(e.start_at); const en = Date.parse(e.end_at);
     return t < s - e.entry_min * 60000 ? 'soon' : t < s ? 'lobby' : t < en ? 'live' : 'over';
   };
-  const EX_PH = { soon: ['🕒 예정', ''], lobby: ['🚪 입장 가능', 'ok'], live: ['🔴 진행 중', 'bad'], over: ['🏁 종료', ''] };
+  const EX_PH = { soon: ['🕒 예정', ''], lobby: ['🚪 입장 가능', 'ok'], live: ['🔴 진행 중', 'bad'], wait: ['✅ 응시 완료', 'ok'], over: ['🏁 종료', ''] };
+  const exBadge = (e, ph) => (exFree(e) ? { soon: ['🕒 예정', ''], lobby: ['🟢 응시 가능', 'ok'], live: ['🔴 응시 중', 'bad'], wait: ['✅ 응시 완료', 'ok'], over: ['🏁 종료', ''] }[ph] : EX_PH[ph]);
+  const exKindName = (e) => (exFree(e) ? '🗓 자유 응시' : '⏰ 정기 시험');
+  const exWhen = (e) => (exFree(e)
+    ? `🗓 ${fmt(e.start_at)} ~ ${fmt(e.close_at)} 사이 아무 때나 · ⏱ 시작하면 ${e.duration_min}분`
+    : `🗓️ ${fmt(e.start_at)} 시작 · ⏱ ${e.duration_min}분`);
   const exRewardText = (r) => {
     r = r || {};
     const pts = (r.pt_rank || []).map((x, i) => `${i + 1}위 💎${x}`).join(' · ');
@@ -4951,15 +4965,15 @@ onmessage = (ev) => {
     if (error || !data) return ['<div class="page-head"><h2>📝 시험</h2></div><div class="card pad muted">시험은 아직 준비되지 않았어요. 선생님이 v454_exam.sql 을 실행하면 열려요.</div>'];
     const list = data.exams || [];
     const card = (e) => {
-      const ph = exPhase(e); const [t, cls] = EX_PH[ph];
+      const ph = exPhase(e); const [t, cls] = exBadge(e, ph);
       return `<a class="card ex-card" href="#/exam/${e.id}"><div class="ex-chead"><b>${esc(e.title)}</b><span class="badge ${cls}">${t}${e.status === 'draft' ? ' · 비공개' : ''}</span></div>
-        <div class="muted small">🗓️ ${fmt(e.start_at)} 시작 · ⏱ ${e.duration_min}분 · 문제 ${e.n_problems}개 · 응시 ${e.n_entries}명</div>
+        <div class="muted small">${exKindName(e)} · ${exWhen(e)} · 문제 ${e.n_problems}개 · 응시 ${e.n_entries}명</div>
         <div class="muted small">🎁 ${esc(exRewardText(e.reward))}</div>
-        ${e.entered && ph !== 'over' ? '<div class="small" style="color:var(--primary)">✅ 입장했어요</div>' : ''}
+        ${e.entered && ph !== 'over' ? `<div class="small" style="color:var(--primary)">${ph === 'live' && exFree(e) ? `⏱ 응시 중 · ${hhmm(e.my_end)} 까지` : ph === 'wait' ? '✅ 응시를 마쳤어요' : '✅ 입장했어요'}</div>` : ''}
         ${e.my_rank ? `<div class="small"><b>내 결과: ${e.my_rank}위 · ${e.my_score}점</b></div>` : ''}</a>`;
     };
     return [`<div class="page-head"><h2>📝 시험</h2></div>
-      <p class="muted small">시작 시각에 모두 같이 시작해요. 입장은 시작 전부터 할 수 있어요. 채점은 자동이고, 순위에 따라 💎 와 🎈 풍선 장식을 받아요.</p>
+      <p class="muted small">⏰ 정기 시험은 정해진 시각에 모두 같이 시작하고, 🗓 자유 응시는 정해진 기간 안에 아무 때나 시작해서 제한 시간만큼 풀어요. 채점은 자동이고, 순위에 따라 💎 와 🎈 풍선 장식을 받아요.</p>
       ${list.length ? list.map(card).join('') : '<div class="card pad center muted">예정된 시험이 없어요.</div>'}`];
   }
 
@@ -5057,11 +5071,12 @@ onmessage = (ev) => {
     const xRpc = (n, a) => (PV ? Promise.resolve({ data: n === 'exam_part_close' ? 'ok' : { status: 'ok' } }) : sb.rpc(n, a));
     let keepIdx = 0; let lastRev = Date.now();
 
-    const head = () => `<div class="card"><h2 style="margin:0 0 4px">${esc(E.title)}</h2><div class="muted small">🗓️ ${fmt(E.start_at)} ~ ${hhmm(E.end_at)} (${E.duration_min}분) · 문제 ${E.n_problems}개 · 응시 ${E.n_entries}명</div>${E.descr ? `<div style="margin-top:8px">${renderContent(E.descr, true)}</div>` : ''}<div class="muted small" style="margin-top:6px">🎁 ${esc(exRewardText(E.reward))}</div></div>`;
+    const head = () => `<div class="card"><h2 style="margin:0 0 4px">${esc(E.title)}</h2><div class="muted small">${exFree(E) ? `${exKindName(E)} · 응시 기간 ${fmt(E.start_at)} ~ ${fmt(E.close_at)} · ⏱ 제한 ${E.duration_min}분` : `${exKindName(E)} · 🗓️ ${fmt(E.start_at)} ~ ${hhmm(E.end_at)} (${E.duration_min}분)`} · 문제 ${E.n_problems}개 · 응시 ${E.n_entries}명</div>${E.descr ? `<div style="margin-top:8px">${renderContent(E.descr, true)}</div>` : ''}<div class="muted small" style="margin-top:6px">🎁 ${esc(exRewardText(E.reward))}</div></div>`;
 
     const refetch = async () => { const { data } = await sb.rpc('exam_get', { p_id: E.id }); if (data) E = data; };
 
     const drawSoon = () => {
+      if (exFree(E)) { box.innerHTML = `${head()}<div class="card center ex-wait"><div class="muted">응시 기간은 ${fmt(E.start_at)} 에 열려요</div><div class="ex-big" data-cd="start">--</div><div class="muted small">기간 안에는 언제든 시작할 수 있어요</div></div>`; return; }
       box.innerHTML = `${head()}<div class="card center ex-wait"><div class="muted">입장은 시작 ${E.entry_min >= 60 ? (E.entry_min / 60) + '시간' : E.entry_min + '분'} 전부터 할 수 있어요</div><div class="ex-big" data-cd="entry">--</div><div class="muted small">${hhmm(Date.parse(E.start_at) - E.entry_min * 60000)} 에 열려요</div></div>`;
     };
     const drawLobby = () => {
@@ -5073,9 +5088,23 @@ onmessage = (ev) => {
         <ul class="ex-rules muted small"><li>모든 사람이 같은 시각에 시작하고 같은 시각에 끝나요.</li><li>코드 문제는 자동 채점이에요. 제출은 여러 번 해도 되고, 문제마다 가장 높은 점수가 반영돼요.</li><li>부분 점수가 있어요 (통과한 테스트 비율).</li><li>✍️ 서술형 문제는 선생님이 직접 채점해요. 마지막으로 제출한 답이 채점돼요.</li><li>끝나는 순간 마지막으로 쓴 코드를 자동으로 채점해서 내요.</li></ul></div>`;
       bindEnter();
     };
+    // 🗓 자유 응시: 기간 안에 아무 때나 "시작하기"를 누르면 그 순간부터 제한 시간이 흘러요
+    const drawFreeStart = () => {
+      try { jworker().catch(() => {}); } catch (e) { /* 파이썬 미리 준비 */ }
+      box.innerHTML = `${head()}<div class="card center ex-wait">
+        <div class="muted">응시 마감까지 남은 시간</div><div class="ex-big" data-cd="close">--</div>
+        ${adm ? `<a class="primary btn" href="#/exam/${E.id}/preview">👀 미리보기로 확인하기</a><div class="muted small">선생님은 직접 응시할 수 없어요</div>` : `<button class="primary" id="exEnter" type="button">▶ 시험 시작하기 (${E.duration_min}분)</button>`}
+        <ul class="ex-rules muted small"><li>시작 버튼을 누르는 순간부터 <b>${E.duration_min}분</b> 타이머가 돌아가요. 중간에 나가거나 새로고침해도 시간은 계속 가요.</li><li>응시는 <b>한 번</b>만 할 수 있어요. 준비가 됐을 때 시작하세요.</li><li>응시 마감 시각 전에 시작해야 해요. 마감 전에 시작하면 제한 시간은 끝까지 다 쓸 수 있어요.</li><li>코드 문제는 자동 채점이에요. 제출은 여러 번 해도 되고, 문제마다 가장 높은 점수가 반영돼요.</li><li>✍️ 서술형 문제는 선생님이 직접 채점해요. 순위는 모든 응시가 끝난 뒤에 나와요.</li></ul></div>`;
+      bindEnter();
+    };
+    const drawWait = () => {
+      document.body.classList.remove('exam-on');
+      box.innerHTML = `${head()}<div class="card center ex-wait"><div class="ex-ok">✅ 응시를 마쳤어요!</div><div class="muted">모든 응시가 끝나는 <b>${fmt(E.end_at)}</b> 이후에 순위와 문제 해설이 나와요.</div><div class="ex-big" data-cd="all">--</div><a class="ghost btn" href="#/exam">📝 시험 목록</a></div>`;
+    };
     const bindEnter = () => {
       const b = $('#exEnter', box);
       if (b) b.onclick = async () => {
+        if (exFree(E) && !confirm(`지금 시작할까요?\n시작하면 ${E.duration_min}분 타이머가 바로 돌아가고, 응시는 한 번만 할 수 있어요.`)) return;
         b.disabled = true;
         const { data } = await sb.rpc('exam_enter', { p_id: E.id });
         const M = { early: '아직 입장 시간이 아니에요', closed: '이미 끝난 시험이에요', nouser: '학생 계정만 입장할 수 있어요' };
@@ -5346,15 +5375,15 @@ onmessage = (ev) => {
       if (ph !== cur || force) {
         const prev = cur;
         cur = ph;
-        if (prev === 'live' && ph === 'over' && roomApi && !ending) {
+        if (prev === 'live' && (ph === 'over' || ph === 'wait') && roomApi && !ending) {
           ending = true;
           box.insertAdjacentHTML('afterbegin', '<div class="ex-over" id="exOverMsg">⏰ 시험 종료!</div>');
           await roomApi.finish((m) => { const el = $('#exOverMsg', box); if (el) el.textContent = m; });
           roomApi = null; ending = false;
         }
-        if (ph === 'live' || ph === 'over') await refetch();
+        if (ph === 'live' || ph === 'over' || ph === 'wait') await refetch();
         if (!alive()) return;
-        if (ph === 'soon') drawSoon(); else if (ph === 'lobby') drawLobby(); else if (ph === 'live') drawLive(); else drawOver();
+        if (ph === 'soon') drawSoon(); else if (ph === 'lobby') (exFree(E) ? drawFreeStart() : drawLobby()); else if (ph === 'live') drawLive(); else if (ph === 'wait') drawWait(); else drawOver();
       }
       if (cur === 'live' && roomApi && Date.now() - lastRev > 25000) {
         lastRev = Date.now();
@@ -5369,7 +5398,7 @@ onmessage = (ev) => {
       const t = exNow();
       box.querySelectorAll('[data-cd]').forEach((el) => {
         const k = el.dataset.cd;
-        const target = k === 'entry' ? Date.parse(E.start_at) - E.entry_min * 60000 : k === 'start' ? Date.parse(E.start_at) : Date.parse(E.end_at);
+        const target = k === 'entry' ? Date.parse(E.start_at) - E.entry_min * 60000 : k === 'start' ? Date.parse(E.start_at) : k === 'close' ? Date.parse(E.close_at || E.start_at) : k === 'all' ? Date.parse(E.end_at) : exEndMs(E);
         el.textContent = exCd(target - t);
         if (k === 'end') el.classList.toggle('warn', target - t < 300000);
       });
@@ -5981,7 +6010,9 @@ onmessage = (ev) => {
     const R = (cur && cur.reward) || { pt_rank: [300, 200, 100], pt_join: 50, item_first: 'exam_balloon_gold', item_top3: 'exam_balloon_silver', item_join: 'exam_balloon_blue' };
     const loc = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
     const defStart = loc(new Date(Date.now() + 36e5 * 24).toISOString());
-    const rows = (L.exams || []).map((e) => { const ph = exPhase(e); return `<div class="row"><div class="row-main"><b>${esc(e.title)}</b> <span class="badge ${EX_PH[ph][1]}">${EX_PH[ph][0]}</span> <span class="chip">${e.status === 'open' ? '공개' : '비공개'}</span><br><span class="muted small">${fmt(e.start_at)} · ${e.duration_min}분 · 문제 ${e.n_problems} · 응시 ${e.n_entries}${e.n_essay ? ` · 서술형 ${e.n_essay}` : ''}${e.settled ? ' · 정산 완료' : ''}</span></div><div><a class="ghost btn" href="#/exam/${e.id}/preview">👀 미리보기</a> <a class="ghost btn" href="#/exam/${e.id}">보기</a> <button class="ghost" data-exnote="${e.id}" type="button">📣 알림</button>${e.n_essay ? ` <button class="ghost" data-exgrade="${e.id}" type="button">✍️ 채점${e.settled ? ' 보기' : ''}</button>` : ''} <button class="ghost" data-exedit="${e.id}" type="button">수정</button> <button class="ghost danger" data-exdel="${e.id}" type="button">삭제</button></div></div>`; }).join('') || '<p class="muted center pad">아직 시험이 없어요.</p>';
+    const defClose = loc(new Date(Date.now() + 36e5 * 24 * 8).toISOString());
+    const isFree = !!(cur && cur.kind === 'free');
+    const rows = (L.exams || []).map((e) => { const ph = exPhase(e); return `<div class="row"><div class="row-main"><b>${esc(e.title)}</b> <span class="badge ${exBadge(e, ph)[1]}">${exBadge(e, ph)[0]}</span> <span class="chip">${exKindName(e)}</span> <span class="chip">${e.status === 'open' ? '공개' : '비공개'}</span><br><span class="muted small">${exFree(e) ? `${fmt(e.start_at)} ~ ${fmt(e.close_at)}` : fmt(e.start_at)} · ${e.duration_min}분 · 문제 ${e.n_problems} · 응시 ${e.n_entries}${e.n_essay ? ` · 서술형 ${e.n_essay}` : ''}${e.settled ? ' · 정산 완료' : ''}</span></div><div><a class="ghost btn" href="#/exam/${e.id}/preview">👀 미리보기</a> <a class="ghost btn" href="#/exam/${e.id}">보기</a> <button class="ghost" data-exnote="${e.id}" type="button">📣 알림</button>${e.n_essay ? ` <button class="ghost" data-exgrade="${e.id}" type="button">✍️ 채점${e.settled ? ' 보기' : ''}</button>` : ''} <button class="ghost" data-exedit="${e.id}" type="button">수정</button> <button class="ghost danger" data-exdel="${e.id}" type="button">삭제</button></div></div>`; }).join('') || '<p class="muted center pad">아직 시험이 없어요.</p>';
     return [`
       <div class="card list"><h3 style="padding:14px 18px 0;margin:0">📝 시험 목록</h3>${rows}</div>
       <div class="card"><h3>${cur ? `✏️ 시험 수정 · #${cur.id}` : '➕ 새 시험 만들기'}</h3>
@@ -5990,9 +6021,11 @@ onmessage = (ev) => {
           <label>제목<input type="text" id="exTitle" maxlength="60" required value="${esc(cur ? cur.title : '')}" placeholder="예) 1학기 중간고사"></label>
           <label>안내 글 <span class="muted small">(마크다운)</span><textarea id="exDesc" rows="3" maxlength="2000" placeholder="시험 범위, 주의사항 등">${esc(cur ? cur.descr : '')}</textarea></label>
           <div class="ga-grid">
-            <label>시작 시각<input type="datetime-local" id="exStart" required value="${cur ? loc(cur.start_at) : defStart}"></label>
-            <label>시험 시간(분)<input type="number" id="exDur" min="5" max="600" value="${cur ? cur.duration_min : 60}"></label>
-            <label>입장 가능(시작 몇 분 전부터)<input type="number" id="exEntry" min="0" max="1440" value="${cur ? cur.entry_min : 60}"></label>
+            <label>시험 유형<select id="exKind"><option value="regular" ${isFree ? '' : 'selected'}>⏰ 정기 시험 — 정해진 시각에 모두 같이 시작·종료</option><option value="free" ${isFree ? 'selected' : ''}>🗓 자유 응시 — 기간 안에 아무 때나 시작, 시작하면 제한 시간</option></select></label>
+            <label><span id="exStartLbl">${isFree ? '응시 시작(이 시각부터 시작 가능)' : '시작 시각'}</span><input type="datetime-local" id="exStart" required value="${cur ? loc(cur.start_at) : defStart}"></label>
+            <label id="exCloseWrap" ${isFree ? '' : 'hidden'}>응시 마감(이 시각까지 시작 가능)<input type="datetime-local" id="exClose" value="${cur && cur.close_at ? loc(cur.close_at) : defClose}"></label>
+            <label><span id="exDurLbl">${isFree ? '제한 시간(분) — 시작한 순간부터' : '시험 시간(분)'}</span><input type="number" id="exDur" min="5" max="600" value="${cur ? cur.duration_min : 60}"></label>
+            <label id="exEntryWrap" ${isFree ? 'hidden' : ''}>입장 가능(시작 몇 분 전부터)<input type="number" id="exEntry" min="0" max="1440" value="${cur ? cur.entry_min : 60}"></label>
             <label>공개 상태<select id="exStatus"><option value="draft" ${cur && cur.status === 'open' ? '' : 'selected'}>비공개 (준비 중)</option><option value="open" ${cur && cur.status === 'open' ? 'selected' : ''}>공개 (학생에게 보임)</option></select></label>
           </div>
           <h4>🎁 보상</h4>
@@ -6017,6 +6050,13 @@ onmessage = (ev) => {
       const mcFrom = (t) => { const t0 = (t && t[0]) || {}; return { opts: (t0.options || []).join('\n'), ans: (t0.answer || []).map((x) => Number(x) + 1).join(',') }; };
       const probs = cur ? cur.problems.map((p) => ({ ...p, ...(p.kind === 'mc' ? mcFrom(p.tests) : {}), part: p.part || 1, starter: p.starter || '', tests: JSON.stringify(p.tests || [], null, 1) })) : [];
       let parts = cur && Array.isArray(cur.parts) ? cur.parts.map((x) => ({ n: Number(x.n), name: x.name || '', run: x.run !== false })) : [];
+      const syncKind = () => {
+        const f = $('#exKind', v).value === 'free';
+        $('#exCloseWrap', v).hidden = !f; $('#exEntryWrap', v).hidden = f;
+        $('#exStartLbl', v).textContent = f ? '응시 시작(이 시각부터 시작 가능)' : '시작 시각';
+        $('#exDurLbl', v).textContent = f ? '제한 시간(분) — 시작한 순간부터' : '시험 시간(분)';
+      };
+      $('#exKind', v).onchange = syncKind;
       const drawParts = () => {
         $('#exPartOn', v).checked = parts.length > 0;
         $('#exPartList', v).innerHTML = parts.map((x, i) => `<div class="pe-part"><b>구간 ${x.n}</b><input type="text" data-pn="${i}" maxlength="30" placeholder="이름 (예: 추론·빈칸)" value="${esc(x.name)}"><label class="inline"><input type="checkbox" data-pr="${i}" ${x.run ? 'checked' : ''}> ▶ 실행 허용</label>${i === parts.length - 1 && parts.length > 2 ? `<button type="button" class="ghost danger" data-prm="${i}">✕</button>` : ''}</div>`).join('') + (parts.length ? '<div class="pe-part"><button type="button" class="ghost" id="exPartAdd">+ 구간 추가</button><span class="muted small">문제마다 어느 구간인지 고를 수 있어요. 마지막 구간은 마감할 필요가 없어요.</span></div>' : '');
@@ -6085,6 +6125,8 @@ onmessage = (ev) => {
           if (isExam || !$('#exTitle', v).value.trim()) { if (o.title && !$('#exTitle', v).value.trim()) $('#exTitle', v).value = String(o.title).slice(0, 60); }
           if (!$('#exDesc', v).value.trim() && (o.descr || o.description)) $('#exDesc', v).value = String(o.descr || o.description).slice(0, 2000);
           if (isExam && o.duration_min) $('#exDur', v).value = Math.max(5, Math.min(600, parseInt(o.duration_min, 10) || 60));
+          if (isExam && (o.kind === 'free' || o.kind === 'regular')) { $('#exKind', v).value = o.kind; syncKind(); }
+          if (isExam && o.kind === 'free' && o.close_at && !isNaN(Date.parse(o.close_at))) $('#exClose', v).value = loc(new Date(o.close_at).toISOString());
           if (isExam && o.entry_min != null) $('#exEntry', v).value = Math.max(0, Math.min(1440, parseInt(o.entry_min, 10) || 0));
           if (isExam && Array.isArray(o.parts) && o.parts.length && !parts.length) { parts = o.parts.map((x, k) => ({ n: k + 1, name: String(x.name || ''), run: x.run !== false })).slice(0, 8); }
           if (parts.length) add.forEach((p) => { p.part = Math.max(1, Math.min(parts.length, Number(p.part) || 1)); });
@@ -6180,8 +6222,10 @@ onmessage = (ev) => {
         const nz = (id) => ($(id, v).value.trim() || null);
         const p = { id: cur ? cur.id : null, title: $('#exTitle', v).value.trim(), descr: $('#exDesc', v).value, start_at: new Date($('#exStart', v).value).toISOString(),
           duration_min: parseInt($('#exDur', v).value, 10) || 60, entry_min: parseInt($('#exEntry', v).value, 10) || 0, status: $('#exStatus', v).value,
+          kind: $('#exKind', v).value, close_at: $('#exKind', v).value === 'free' && $('#exClose', v).value ? new Date($('#exClose', v).value).toISOString() : null,
           reward: { pt_rank: pts, pt_join: parseInt($('#exJoin', v).value, 10) || 0, item_first: nz('#exI1'), item_top3: nz('#exI3'), item_join: nz('#exIj') }, parts: parts.map((x, k) => ({ n: k + 1, name: x.name || '', run: !!x.run })), problems: plist };
         if (!p.title) return toast('제목을 입력하세요', true);
+        if (p.kind === 'free' && (!p.close_at || Date.parse(p.close_at) <= Date.parse(p.start_at))) return toast('응시 마감은 시작보다 뒤여야 해요', true);
         if (p.status === 'open' && !plist.length) return toast('문제를 하나 이상 넣고 공개해 주세요', true);
         const { data, error: e2 } = await sb.rpc('exam_save', { p });
         if (e2 || !data || data.status !== 'ok') return toast({ forbidden: '권한이 없어요', settled: '정산이 끝난 시험은 고칠 수 없어요', invalid: '값이 올바르지 않아요' }[data && data.status] || '저장하지 못했어요', true);

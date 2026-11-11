@@ -1218,3 +1218,4 @@ details.fold > .sets { margin: 12px 0 4px; }
   .ex-room.short[data-view="prob"] .ex-right { display: block; margin-top: 12px; }
 }
 .ex-room.lk .ex-right { display: none !important; }
+#exCloseWrap[hidden],#exEntryWrap[hidden]{display:none!important}
