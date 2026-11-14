@@ -1,4 +1,4 @@
-# PyNest 학습 JSON 형식 `pynest-learn-v1` (V4.2.0)
+# PyNest 학습 JSON 형식 `pynest-learn-v2` (V5.9.0) — v1 파일도 그대로 열려요
 
 📚 **학습** 메뉴(코스 → 레슨 → 단계)에 올리는 파일이에요. **문제집 JSON(`pynest-problemset-v1`)과는 별개**예요.
 올리는 곳: 📚 학습 → [＋ JSON으로 코스 추가] (새 코스) / 코스 화면 → [＋ JSON으로 레슨 추가] (레슨만 추가).
@@ -31,7 +31,7 @@
 | `lessons[].minutes` | 걸리는 시간(분, 선택) |
 | `lessons[].rank_points` | 이 레슨만 따로 정하는 랭킹 점수 (선택, 없으면 코스 점수. `0` 이면 이 레슨만 점수 없음) |
 | `lessons[].summary` | 레슨 끝에 보여 줄 핵심 정리 (마크다운, 선택) |
-| `lessons[].steps` | 단계 목록 (필수, 1~80개). 위에서 아래 순서대로 한 단계씩 진행 |
+| `lessons[].steps` | 단계 목록 (필수, 1~120개). 위에서 아래 순서대로 한 단계씩 진행 |
 
 학생은 **한 단계씩** 진행해요. 개념(explain)은 읽고 "다음", 확인 문제(quiz)는 **맞혀야** 다음으로, 실습(practice)은 **채점을 통과**해야 다음으로 넘어가요.
 
@@ -151,3 +151,66 @@
 12. 실습(practice)은 레슨마다 3개: ① 따라 치기(starter 가 거의 채워져 있음) ② 응용(starter 에 뼈대만) ③ 도전(starter 는 주석뿐, 레슨 내용을 합쳐서 써야 풀림). 문제 body 에는 상황 설명, 입력 형식, 출력 형식, 예시 입출력을 모두 쓰고, 출력 형식(띄어쓰기·줄바꿈)을 정확히 명시해.
 13. hints 는 3단계: ① 방향(어떤 개념을 쓰는지) ② 구조(코드 뼈대) ③ 거의 정답(핵심 한 줄). tests 는 보이는 예제 2개 + hidden 경계값 3~5개(0, 음수, 큰 수, 빈 입력 등). solution 에는 주석으로 한 줄씩 설명을 달아.
 ````
+
+---
+
+# ✨ v2 추가 기능 (V5.9.0)
+
+`"format": "pynest-learn-v2"` (v1 도 허용). 예시: `learn_sample_v2.json`. 기존 필드는 모두 그대로이고 아래만 늘었어요.
+
+## A. 설명을 쪼개 읽기 — `explain.parts`
+
+`parts` 는 **묶음의 배열**이고, 묶음 하나는 **블록의 배열**이에요. 학생은 "계속 ▾" 를 누를 때마다 한 묶음씩 펼치고, 끝까지 읽어야 "다음"으로 넘어가요 (30묶음 이하). `body`/`code` 와 같이 써도 돼요(먼저 보여 줌).
+**한 묶음 = 3~6줄 설명 + 도구 1개** 정도로 짧게 쓰세요.
+
+```json
+{ "type": "explain", "title": "인덱스", "parts": [
+  [ {"type":"text","body":"문자열은 **칸**이 줄지어 선 상자예요."}, {"type":"index","name":"s","value":"PYTHON"} ],
+  [ {"type":"callout","style":"key","body":"번호는 **0부터**!"} ]
+]}
+```
+`{"type":"review", ...}` 또는 `"review": true` 를 붙이면 단계 이름이 **🔁 복습**으로 표시돼요 (레슨 맨 앞에 지난 레슨 복습을 둘 때).
+
+## B. 설명 블록 11종 (`parts` 안)
+
+| type | 필드 | 설명 |
+|---|---|---|
+| `text` | `body`(마크다운) | 글 |
+| `code` | `code`, `title`, `run`(기본 true), `stdin` | 고쳐서 ▶ 실행해 보는 코드 |
+| `callout` | `style`: tip/warn/key/exam/think, `title`, `body` | 💡팁·⚠️주의·🔑핵심·🎯시험 포인트·🤔생각. `{"type":"exam","body":..}` 처럼 style 을 type 으로 써도 돼요 |
+| `compare` | `left`,`right` = {`title`,`body`,`code`,`tone`:good/bad} | 나란히 비교 (✅/❌) |
+| `tabs` | `tabs`:[{`title`,`body`,`code`}] 2~8개 | 탭 |
+| `flip` | `cards`:[["앞","뒤"],…] 1~30장 | 눌러서 뒤집는 카드 (암기용) |
+| `reveal` | `label`,`body`,`code` | 눌러야 정답이 보임 (생각해 보고 확인) |
+| `steps` | `items`:["글",{`title`,`body`}] 2~20개 | 단계를 하나씩 펼침 |
+| `trace` | `code`, `title`, `frames`, `notes`, `stdin` | **한 줄씩 따라가기**: 변수·출력이 단계마다 바뀜 |
+| `index` | `name`,`value`("PYTHON" 또는 리스트) | 칸을 누르면 `s[2]`·`s[-4]` 표시 |
+| `slice` | `name`,`value`,`start`,`stop`,`step` | 숫자를 바꾸면 고른 칸이 바로 색칠됨 (슬라이싱 체험) |
+
+**trace**: `frames` 를 **비워 두면**(`[]`) 학생이 버튼을 누를 때 파이썬이 실제로 코드를 한 줄씩 실행해 변수·출력을 자동 기록해요 (300단계까지, `input()` 은 `stdin`). 직접 쓰려면 `"frames":[ {"line":2,"vars":{"total":"0"},"out":"","note":"설명"}, … ]` (`line` 은 1부터, 0 은 "끝"). `notes` 는 `{"3": "3번째 줄일 때 설명"}`.
+
+## C. 새 확인 문제 6종 (`quiz.kind`)
+
+틀리면 기존처럼 🔁 오답 복습에 들어가요. 공통: `question`, `explanation`, `review`.
+
+```json
+{ "type":"quiz","kind":"match","question":"이어 보세요.","pairs":[["print()","화면에 출력"],["input()","키보드 입력"]] }
+{ "type":"quiz","kind":"order","question":"순서대로 놓으세요.","items":["total = 0","for i in range(3):","    total += i","print(total)"] }
+{ "type":"quiz","kind":"bucket","question":"분류하세요.","categories":["가변","불변"],"items":[["list",1],["str",2],["tuple",2]] }
+{ "type":"quiz","kind":"output","question":"출력은?","code":"print(7 // 2)","answer":"3","alts":["3\n"] }
+{ "type":"quiz","kind":"spot","question":"오류 줄은?","code":"a = 1\nb = a +\nprint(b)","answer":2 }
+{ "type":"quiz","kind":"essay","question":"서술하세요.","model":"모범 답안","rubric":["핵심어1","핵심어2"] }
+```
+
+| kind | 설명 |
+|---|---|
+| `match` 🔗 선 잇기 | `pairs` 2~8쌍. 오른쪽은 섞여서 나와요 (오른쪽 값은 서로 달라야 함) |
+| `order` 🔀 순서 맞추기 | `items` 를 **정답 순서대로** 쓰면 섞어서 보여 줘요 (2~14줄). 코드 줄이면 들여쓰기 그대로. 글이면 `"mono": false` |
+| `bucket` 🗂 분류 | `categories` 2~5개, `items` [글, 분류번호(1부터)] 2~16개 |
+| `output` 🖨 출력 예측 | `code` 를 보고 출력을 그대로 입력. 줄 끝 공백·마지막 빈 줄은 무시 |
+| `spot` 🐞 오류 줄 찾기 | `code` 에서 문제 줄 번호(`answer`: 1 또는 [2,4]) |
+| `essay` ✍️ 서술형 | 학생이 쓰고 → 모범 답안 + `rubric`(채점 기준) 체크로 **자기 채점**. 기준 60% 미만이면 오답 복습으로 |
+
+## D. v2 AI 프롬프트 추가 지침 (v1 프롬프트 뒤에 붙이세요)
+
+> 형식은 pynest-learn-v2. 개념 설명은 `body` 한 덩어리로 쓰지 말고 `parts` 로 3~6개 묶음으로 쪼개고, 묶음마다 글 3~6줄 + 도구(callout/compare/trace/reveal/index/slice 등) 1개를 넣어라. 모든 레슨의 첫 단계는 지난 레슨 복습(`review`) + 짧은 확인 문제. 개념 하나가 끝날 때마다 quiz 를 두고 ox/choice 만 반복하지 말고 match·order·output·spot·bucket 을 섞어라. 각 레슨 끝에는 practice 와 essay(시험 서술형 대비)를 넣어라. 모든 코드의 출력은 직접 실행해서 확인한 값만 써라.

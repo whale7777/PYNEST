@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.8.0';
+  const APP_VERSION = '5.9.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -3713,21 +3713,393 @@ onmessage = (ev) => {
     return n;
   }
 
+
+  /* ====================================================================
+     📚 학습 v2 (V5.9.0) — 설명을 여러 번에 나눠 보여 주는 parts · 설명 도구(블록) · 새 문제 종류
+     JSON 형식: pynest-learn-v2 (v1 파일도 그대로 열려요)
+     ==================================================================== */
+  const LX_CALL = { tip: '💡 팁', warn: '⚠️ 주의', key: '🔑 핵심', exam: '🎯 시험 포인트', think: '🤔 생각해 보기' };
+  const lxItems = (v) => (Array.isArray(v) ? v.map((x) => String(x)) : [...String(v ?? '')]);
+  function normLxBlock(b, bad) {
+    if (typeof b === 'string') b = { type: 'text', body: b };
+    if (!b || typeof b !== 'object') bad('설명 블록이 객체({ })가 아니에요');
+    let t = String(b.type || (b.code != null && b.body == null ? 'code' : 'text')).toLowerCase();
+    if (t === 'md' || t === 'markdown') t = 'text';
+    if (LX_CALL[t]) { b = { ...b, style: t }; t = 'callout'; }
+    const S = (x) => learnTxt(x ?? '').trim();
+    const C = (x) => learnTxt(x ?? '').replace(/\s+$/, '');
+    if (t === 'text') { const body = S(b.body ?? b.text); if (!body) bad('text 블록에 body 가 필요해요'); return { type: t, body }; }
+    if (t === 'code') { const code = C(b.code); if (!code) bad('code 블록에 code 가 필요해요'); return { type: t, title: S(b.title), code, run: b.run !== false, stdin: learnTxt(b.stdin ?? '') }; }
+    if (t === 'callout') { const body = S(b.body ?? b.text); if (!body) bad('callout 블록에 body 가 필요해요'); return { type: t, style: LX_CALL[b.style] ? b.style : 'tip', title: S(b.title), body }; }
+    if (t === 'compare') {
+      const side = (x) => ({ title: S(x && x.title), body: S(x && x.body), code: C(x && x.code), tone: ['good', 'bad'].includes(x && x.tone) ? x.tone : '' });
+      const left = side(b.left); const right = side(b.right);
+      if (!(left.body || left.code) || !(right.body || right.code)) bad('compare 블록에는 left·right (body 또는 code) 가 필요해요');
+      return { type: t, left, right };
+    }
+    if (t === 'tabs') {
+      const tabs = (Array.isArray(b.tabs) ? b.tabs : []).map((x) => ({ title: S(x && x.title), body: S(x && x.body), code: C(x && x.code) })).filter((x) => x.title && (x.body || x.code));
+      if (tabs.length < 2 || tabs.length > 8) bad('tabs 블록의 tabs 는 2~8개예요 (title + body/code)');
+      return { type: t, tabs };
+    }
+    if (t === 'flip') {
+      const cards = (Array.isArray(b.cards) ? b.cards : []).map((x) => (Array.isArray(x) ? { front: S(x[0]), back: S(x[1]) } : { front: S(x && x.front), back: S(x && x.back) })).filter((x) => x.front && x.back);
+      if (!cards.length || cards.length > 30) bad('flip 블록의 cards 는 1~30장이에요 ({front, back})');
+      return { type: t, cards };
+    }
+    if (t === 'reveal') { const body = S(b.body); const code = C(b.code); if (!body && !code) bad('reveal 블록에 body 가 필요해요'); return { type: t, label: S(b.label) || '눌러서 확인하기', body, code }; }
+    if (t === 'steps') {
+      const items = (Array.isArray(b.items) ? b.items : []).map((x) => (typeof x === 'string' ? { title: '', body: S(x) } : { title: S(x && x.title), body: S(x && x.body) })).filter((x) => x.title || x.body);
+      if (items.length < 2 || items.length > 20) bad('steps 블록의 items 는 2~20개예요');
+      return { type: t, items };
+    }
+    if (t === 'trace') {
+      const code = C(b.code); if (!code) bad('trace 블록에 code 가 필요해요');
+      const nl = code.split('\n').length;
+      const frames = (Array.isArray(b.frames) ? b.frames : []).map((f) => {
+        const a = Array.isArray(f) ? { line: f[0], vars: f[1], out: f[2], note: f[3] } : f || {};
+        const line = Number(a.line);
+        if (!Number.isInteger(line) || line < 0 || line > nl) bad(`trace 의 frames.line 은 0~${nl} (0 = 끝) 이에요`);
+        const vars = a.vars && typeof a.vars === 'object' ? (Array.isArray(a.vars) ? a.vars : Object.entries(a.vars)).map((p) => [String(p[0]), String(p[1])]) : [];
+        return { line, vars, out: learnTxt(a.out ?? ''), note: S(a.note) };
+      });
+      if (frames.length > 400) bad('trace 의 frames 는 400개 이하예요');
+      const notes = {};
+      if (b.notes && typeof b.notes === 'object') Object.keys(b.notes).forEach((k) => { notes[k] = S(b.notes[k]); });
+      return { type: t, title: S(b.title), code, frames, notes, stdin: learnTxt(b.stdin ?? '') };
+    }
+    if (t === 'index' || t === 'slice') {
+      const items = lxItems(b.value ?? b.items);
+      if (!items.length || items.length > 24) bad(`${t} 블록의 value 는 1~24칸이에요 (글자 또는 리스트)`);
+      const out = { type: t, name: S(b.name) || 's', items, str: !Array.isArray(b.value ?? b.items) };
+      if (t === 'slice') { out.start = b.start == null ? '' : String(b.start); out.stop = b.stop == null ? '' : String(b.stop); out.step = b.step == null ? '' : String(b.step); }
+      return out;
+    }
+    return bad(`설명 블록 type "${t}" 은(는) 없어요 (text·code·callout·compare·tabs·flip·reveal·steps·trace·index·slice)`);
+  }
+  // explain 단계의 parts: [[블록,…],[블록,…]] — 한 묶음씩 "계속"을 눌러 펼쳐요
+  function normLxParts(s, bad) {
+    const raw = Array.isArray(s.parts) ? s.parts : Array.isArray(s.blocks) ? [s.blocks] : null;
+    if (!raw) return null;
+    const parts = raw.map((p) => (Array.isArray(p) ? p : p && Array.isArray(p.blocks) ? p.blocks : [p]).map((b) => normLxBlock(b, bad))).filter((p) => p.length);
+    if (!parts.length) bad('parts 가 비어 있어요');
+    if (parts.length > 30) bad('parts 는 30개 이하예요');
+    return parts;
+  }
+  const LX_QKINDS = ['match', 'order', 'bucket', 'output', 'spot', 'essay'];
+  function normLxQuiz(s, kind, out, bad) {
+    const C = (x) => learnTxt(x ?? '').replace(/\s+$/, '');
+    if (kind === 'match') {
+      const pairs = (Array.isArray(s.pairs) ? s.pairs : []).map((p) => (Array.isArray(p) ? [String(p[0] ?? '').trim(), String(p[1] ?? '').trim()] : [String((p && p.left) ?? '').trim(), String((p && p.right) ?? '').trim()]));
+      if (pairs.length < 2 || pairs.length > 8 || pairs.some((p) => !p[0] || !p[1])) bad('match 의 pairs 는 2~8쌍이에요 ([["왼쪽","오른쪽"],…])');
+      if (new Set(pairs.map((p) => p[1])).size !== pairs.length) bad('match 의 오른쪽 항목은 서로 달라야 해요');
+      out.pairs = pairs;
+    } else if (kind === 'order') {
+      const items = (Array.isArray(s.items) ? s.items : String(s.code ?? '').split('\n')).map((x) => learnTxt(x).replace(/\s+$/, '')).filter((x) => x.trim());
+      if (items.length < 2 || items.length > 14) bad('order 의 items 는 2~14줄이에요 (정답 순서대로 써요)');
+      out.items = items;
+      out.mono = s.mono !== false;
+    } else if (kind === 'bucket') {
+      const cats = (Array.isArray(s.categories) ? s.categories : []).map((x) => String(x).trim()).filter(Boolean);
+      if (cats.length < 2 || cats.length > 5) bad('bucket 의 categories 는 2~5개예요');
+      const items = (Array.isArray(s.items) ? s.items : []).map((x) => (Array.isArray(x) ? { text: String(x[0] ?? '').trim(), cat: Number(x[1]) } : { text: String((x && x.text) ?? '').trim(), cat: Number(x && x.cat) }));
+      if (items.length < 2 || items.length > 16 || items.some((x) => !x.text || !Number.isInteger(x.cat) || x.cat < 1 || x.cat > cats.length)) bad(`bucket 의 items 는 2~16개, cat 은 1~${cats.length} 번호예요`);
+      out.categories = cats; out.items = items;
+    } else if (kind === 'output') {
+      const code = C(s.code); if (!code) bad('output 에는 code 가 필요해요');
+      const a = C(s.answer); if (!a.trim()) bad('output 에는 answer(출력 결과) 가 필요해요');
+      out.code = code; out.answer = a; out.alts = (Array.isArray(s.alts) ? s.alts : []).map(C).filter((x) => x.trim());
+    } else if (kind === 'spot') {
+      const code = C(s.code); if (!code) bad('spot 에는 code 가 필요해요');
+      const nl = code.split('\n').length;
+      const arr = (Array.isArray(s.answer) ? s.answer : [s.answer]).map(Number);
+      if (!arr.length || arr.some((n) => !Number.isInteger(n) || n < 1 || n > nl)) bad(`spot 의 answer 는 줄 번호(1~${nl}) 예요`);
+      out.code = code; out.answer = [...new Set(arr)].sort((a, b) => a - b);
+    } else if (kind === 'essay') {
+      const model = learnTxt(s.model ?? s.answer ?? '').trim(); if (!model) bad('essay 에는 model(모범 답안) 이 필요해요');
+      out.model = model; out.rubric = (Array.isArray(s.rubric) ? s.rubric : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 10);
+    }
+    return out;
+  }
+  const lxShuffle = (arr) => {
+    const a = arr.slice();
+    for (let t = 0; t < 6; t += 1) {
+      for (let i = a.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      if (a.length < 2 || a.some((x, i) => x !== arr[i])) break;
+    }
+    return a;
+  };
+  const lxCodeLines = (code, cls = '') => `<div class="lx-lines ${cls}">${code.split('\n').map((l, i) => `<div class="lx-ln" data-ln="${i + 1}"><span class="lx-no">${i + 1}</span><code>${esc(l) || ' '}</code></div>`).join('')}</div>`;
+  // 파이썬 슬라이싱 흉내 (start:stop:step) → 고른 인덱스 목록, 잘못된 값이면 null
+  function lxSlice(n, a, b, c) {
+    const num = (x) => (String(x).trim() === '' ? null : Number(String(x).trim()));
+    const st = num(c) == null ? 1 : num(c);
+    let s = num(a); let e = num(b);
+    if (![st, s ?? 0, e ?? 0].every(Number.isInteger) || st === 0) return null;
+    const fix = (v, lo, hi) => { let x = v < 0 ? v + n : v; if (x < lo) x = lo; if (x > hi) x = hi; return x; };
+    const idx = [];
+    if (st > 0) { s = s == null ? 0 : fix(s, 0, n); e = e == null ? n : fix(e, 0, n); for (let i = s; i < e; i += st) idx.push(i); }
+    else { s = s == null ? n - 1 : fix(s, -1, n - 1); e = e == null ? -1 : fix(e, -1, n - 1); for (let i = s; i > e; i += st) idx.push(i); }
+    return idx;
+  }
+  const LX_TRACER = (b64, stdin) => `import sys as __s, io as __io, json as __j, base64 as __b
+__src = __b.b64decode("${b64}").decode("utf-8")
+__fr = []
+__buf = __io.StringIO()
+__old = __s.stdout
+def __snap(f):
+    d = {}
+    for k, x in list(f.f_locals.items()):
+        if k.startswith("__") or type(x).__name__ in ("module", "function", "type", "builtin_function_or_method"): continue
+        r = repr(x)
+        d[k] = r if len(r) <= 60 else r[:57] + "..."
+    return d
+def __t(f, e, a):
+    if f.f_code.co_filename != "<lx>": return None
+    if e == "line":
+        if len(__fr) >= 300: raise RuntimeError("단계가 너무 많아요 (300단계까지)")
+        __fr.append([f.f_lineno, __snap(f), __buf.getvalue()])
+    return __t
+__g = {"__name__": "__main__"}
+__err = ""
+__s.stdout = __buf
+__s.settrace(__t)
+try:
+    exec(compile(__src, "<lx>", "exec"), __g)
+except BaseException as __e:
+    __err = type(__e).__name__ + ": " + str(__e)
+finally:
+    __s.settrace(None)
+    __s.stdout = __old
+__fr.append([0, {k: (repr(x) if len(repr(x)) <= 60 else repr(x)[:57] + "...") for k, x in __g.items() if not k.startswith("__") and type(x).__name__ not in ("module", "function", "type")}, __buf.getvalue()])
+print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
+`;
+  async function lxAutoTrace(code, stdin) {
+    const b64 = btoa(unescape(encodeURIComponent(code)));
+    const r = await runOnce(LX_TRACER(b64), (stdin || '').replace(/\n?$/, '\n'), 6000);
+    const at = String(r.out || '').lastIndexOf('\u0001LX');
+    if (at < 0) throw new Error(r.status === 'TLE' ? '시간 초과 (무한 반복은 아닌가요?)' : r.err || '추적하지 못했어요');
+    const d = JSON.parse(r.out.slice(at + 3));
+    return { frames: d.f.map((f) => ({ line: f[0], vars: Object.entries(f[1]), out: f[2], note: '' })), err: d.e };
+  }
+
+  function lxBlockHtml(b) {
+    const md = (t) => (t ? `<div class="lr-md">${lrMd(t)}</div>` : '');
+    const pre = (c) => (c ? `<pre><code>${esc(c)}</code></pre>` : '');
+    if (b.type === 'text') return md(b.body);
+    if (b.type === 'code') return `${b.title ? `<div class="lx-cap">${mdInline(b.title)}</div>` : ''}${b.run ? `<div class="lr-codebox">${lrCodeBoxHtml(Math.min(14, Math.max(3, b.code.split('\n').length + 1)), { stdin: !!b.stdin })}</div>` : pre(b.code)}`;
+    if (b.type === 'callout') return `<div class="lx-call lx-${b.style}"><div class="lx-call-h">${esc(b.title || LX_CALL[b.style])}</div>${md(b.body)}</div>`;
+    if (b.type === 'compare') {
+      const side = (x) => `<div class="lx-side ${x.tone}">${x.title ? `<div class="lx-side-h">${x.tone === 'good' ? '✅ ' : x.tone === 'bad' ? '❌ ' : ''}${mdInline(x.title)}</div>` : ''}${pre(x.code)}${md(x.body)}</div>`;
+      return `<div class="lx-cmp">${side(b.left)}${side(b.right)}</div>`;
+    }
+    if (b.type === 'tabs') return `<div class="lx-tabs"><div class="lx-tabbar">${b.tabs.map((t, i) => `<button type="button" class="${i ? '' : 'on'}" data-lxtab="${i}">${mdInline(t.title)}</button>`).join('')}</div>${b.tabs.map((t, i) => `<div class="lx-tabpane" ${i ? 'hidden' : ''}>${md(t.body)}${pre(t.code)}</div>`).join('')}</div>`;
+    if (b.type === 'flip') return `<div class="lx-flips">${b.cards.map((c) => `<button type="button" class="lx-flip"><span class="lx-ff">${lrMd(c.front)}<i>눌러서 뒤집기</i></span><span class="lx-fb">${lrMd(c.back)}</span></button>`).join('')}</div>`;
+    if (b.type === 'reveal') return `<div class="lx-reveal"><button type="button" class="ghost" data-lxrev>👀 ${esc(b.label)}</button><div class="lx-rev-body" hidden>${md(b.body)}${pre(b.code)}</div></div>`;
+    if (b.type === 'steps') return `<div class="lx-steps">${b.items.map((it, i) => `<div class="lx-st ${i ? 'off' : ''}"><span class="lx-st-n">${i + 1}</span><div>${it.title ? `<b>${mdInline(it.title)}</b>` : ''}${md(it.body)}</div></div>`).join('')}<button type="button" class="ghost lx-st-more" data-lxstep>다음 단계 ▾ (1/${b.items.length})</button></div>`;
+    if (b.type === 'trace') return `<div class="lx-trace">${b.title ? `<div class="lx-cap">🔍 ${mdInline(b.title)}</div>` : '<div class="lx-cap">🔍 한 줄씩 따라가 보기</div>'}
+      <div class="lx-tr-grid"><div class="lx-tr-code">${lxCodeLines(b.code)}</div><div class="lx-tr-side"><div class="lx-tr-h">변수</div><div class="lx-tr-vars"></div><div class="lx-tr-h">출력</div><pre class="lx-tr-out"></pre></div></div>
+      <div class="lx-tr-note"></div>
+      <div class="lx-tr-ctl"><button type="button" class="ghost" data-tr="first" title="처음으로">⏮</button><button type="button" class="ghost" data-tr="prev">◀ 이전</button><span class="lx-tr-pos"></span><button type="button" class="primary" data-tr="next">다음 ▶</button><button type="button" class="ghost" data-tr="play">▶▶ 자동</button></div></div>`;
+    if (b.type === 'index' || b.type === 'slice') {
+      const n = b.items.length;
+      const cells = `<div class="lx-idx"><div class="lx-idx-row">${b.items.map((x, i) => `<div class="lx-cell" data-i="${i}"><span class="lx-ix">${i}</span><b>${esc(x === ' ' ? '␣' : x)}</b><span class="lx-ix neg">${i - n}</span></div>`).join('')}</div></div>`;
+      if (b.type === 'index') return `<div class="lx-index"><div class="lx-cap">칸을 눌러 보세요 — 위는 앞에서 센 번호, 아래는 뒤에서 센 번호예요</div>${cells}<div class="lx-idx-res muted small">&nbsp;</div></div>`;
+      return `<div class="lx-index lx-slice"><div class="lx-cap">숫자를 바꿔 보세요 — 고른 칸이 바로 표시돼요</div>${cells}
+        <div class="lx-sl-form"><code class="ic">${esc(b.name)}[</code><input type="text" inputmode="numeric" data-sl="0" value="${esc(b.start)}" placeholder="시작"><b>:</b><input type="text" inputmode="numeric" data-sl="1" value="${esc(b.stop)}" placeholder="끝"><b>:</b><input type="text" inputmode="numeric" data-sl="2" value="${esc(b.step)}" placeholder="간격"><code class="ic">]</code></div>
+        <div class="lx-idx-res"></div></div>`;
+    }
+    return '';
+  }
+  function lxMountBlock(el, b) {
+    if (b.type === 'code' && b.run) { lrCodeBox(el, b.code); if (b.stdin) { const s = $('.lr-stdin', el); if (s) s.value = b.stdin; } }
+    else if (b.type === 'tabs') {
+      el.querySelectorAll('[data-lxtab]').forEach((bt) => (bt.onclick = () => {
+        el.querySelectorAll('[data-lxtab]').forEach((x) => x.classList.toggle('on', x === bt));
+        el.querySelectorAll('.lx-tabpane').forEach((p, i) => { p.hidden = i !== Number(bt.dataset.lxtab); });
+      }));
+    } else if (b.type === 'flip') el.querySelectorAll('.lx-flip').forEach((c) => (c.onclick = () => c.classList.toggle('on')));
+    else if (b.type === 'reveal') { const bt = $('[data-lxrev]', el); bt.onclick = () => { $('.lx-rev-body', el).hidden = false; bt.hidden = true; }; }
+    else if (b.type === 'steps') {
+      let k = 1; const bt = $('[data-lxstep]', el); const rows = el.querySelectorAll('.lx-st');
+      bt.onclick = () => { if (k < rows.length) { rows[k].classList.remove('off'); k += 1; } if (k >= rows.length) bt.hidden = true; else bt.textContent = `다음 단계 ▾ (${k}/${rows.length})`; };
+    } else if (b.type === 'index') {
+      const res = $('.lx-idx-res', el); const n = b.items.length;
+      el.querySelectorAll('.lx-cell').forEach((c) => (c.onclick = () => {
+        el.querySelectorAll('.lx-cell').forEach((x) => x.classList.toggle('on', x === c));
+        const i = Number(c.dataset.i); const v = b.str ? JSON.stringify(b.items[i]) : b.items[i];
+        res.innerHTML = `<code class="ic">${esc(b.name)}[${i}]</code> 와 <code class="ic">${esc(b.name)}[${i - n}]</code> 는 같은 칸이에요 → <b>${esc(v)}</b>`;
+      }));
+    } else if (b.type === 'slice') {
+      const res = $('.lx-idx-res', el); const ins = [...el.querySelectorAll('[data-sl]')];
+      const draw = () => {
+        const idx = lxSlice(b.items.length, ins[0].value, ins[1].value, ins[2].value);
+        el.querySelectorAll('.lx-cell').forEach((c) => c.classList.toggle('on', !!idx && idx.includes(Number(c.dataset.i))));
+        if (!idx) { res.innerHTML = '<span class="bad-t">정수만 쓸 수 있고, 간격은 0 이 될 수 없어요</span>'; return; }
+        const got = idx.map((i) => b.items[i]);
+        res.innerHTML = `결과: <code class="ic">${esc(b.str ? JSON.stringify(got.join('')) : '[' + got.join(', ') + ']')}</code> <span class="muted small">(${got.length}칸)</span>`;
+      };
+      ins.forEach((i) => i.addEventListener('input', draw));
+      draw();
+    } else if (b.type === 'trace') {
+      let frames = b.frames; let at = 0; let timer = null;
+      const lines = [...el.querySelectorAll('.lx-ln')];
+      const vars = $('.lx-tr-vars', el); const out = $('.lx-tr-out', el); const note = $('.lx-tr-note', el); const pos = $('.lx-tr-pos', el);
+      const stop = () => { if (timer) { clearInterval(timer); timer = null; $('[data-tr="play"]', el).textContent = '▶▶ 자동'; } };
+      const draw = () => {
+        const f = frames[at]; const prev = at ? new Map(frames[at - 1].vars) : new Map();
+        lines.forEach((l) => l.classList.toggle('on', Number(l.dataset.ln) === f.line));
+        const cur = lines[f.line - 1]; if (cur && cur.scrollIntoView) { const bx = $('.lx-tr-code', el); if (cur.offsetTop < bx.scrollTop || cur.offsetTop > bx.scrollTop + bx.clientHeight - 30) bx.scrollTop = Math.max(0, cur.offsetTop - 40); }
+        vars.innerHTML = f.vars.length ? f.vars.map(([k, x]) => `<div class="lx-var ${prev.get(k) !== x ? 'chg' : ''}"><b>${esc(k)}</b><code>${esc(x)}</code></div>`).join('') : '<span class="muted small">아직 없어요</span>';
+        out.textContent = f.out || ''; out.classList.toggle('empty', !f.out);
+        const nt = f.note || (b.notes && b.notes[f.line]) || (f.line === 0 ? '프로그램이 끝났어요.' : `이제 ${f.line}번째 줄을 실행할 차례예요.`);
+        note.innerHTML = lrMd(nt);
+        pos.textContent = `${at + 1} / ${frames.length}`;
+        $('[data-tr="prev"]', el).disabled = at === 0; $('[data-tr="first"]', el).disabled = at === 0; $('[data-tr="next"]', el).disabled = at >= frames.length - 1;
+        if (at >= frames.length - 1) stop();
+      };
+      const go = (d) => { at = Math.max(0, Math.min(frames.length - 1, d)); draw(); };
+      const bind = () => {
+        $('[data-tr="first"]', el).onclick = () => { stop(); go(0); };
+        $('[data-tr="prev"]', el).onclick = () => { stop(); go(at - 1); };
+        $('[data-tr="next"]', el).onclick = () => { stop(); go(at + 1); };
+        $('[data-tr="play"]', el).onclick = (e) => { if (timer) return stop(); if (at >= frames.length - 1) go(0); e.target.textContent = '⏸ 멈춤'; timer = setInterval(() => go(at + 1), 1100); };
+        draw();
+      };
+      if (frames.length) bind();
+      else {
+        const ctl = $('.lx-tr-ctl', el);
+        ctl.hidden = true;
+        ctl.insertAdjacentHTML('beforebegin', '<div class="lx-tr-start"><button type="button" class="primary" data-trgo>🔍 한 줄씩 따라가기 시작</button></div>');
+        const go0 = $('[data-trgo]', el);
+        note.innerHTML = '<span class="muted small">버튼을 누르면 파이썬이 코드를 한 줄씩 실행하며 변수와 출력을 기록해요.</span>';
+        go0.onclick = async () => {
+          go0.disabled = true; go0.textContent = '⏳ 준비하는 중…';
+          try { const r = await lxAutoTrace(b.code, b.stdin); frames = r.frames; if (r.err && frames.length) frames[frames.length - 1].note = `❌ 오류로 멈췄어요: \`${r.err}\``; $('.lx-tr-start', el).remove(); ctl.hidden = false; bind(); }
+          catch (er) { go0.disabled = false; go0.textContent = '🔍 다시 시도'; note.innerHTML = `<span class="bad-t">${esc(er.message)}</span>`; }
+        };
+      }
+    }
+  }
+  // parts 를 차례로 펼치는 설명 단계. 돌려주는 값: { left(): 남은 묶음 수, more(): 다음 묶음 펼치기 }
+  function lxMountParts(slot, parts, all) {
+    slot.innerHTML = `${parts.length > 1 ? `<div class="lx-prog">${parts.map(() => '<i></i>').join('')}</div>` : ''}<div class="lx-parts"></div>`;
+    const host = $('.lx-parts', slot);
+    let shown = 0;
+    const add = (scroll) => {
+      const sec = document.createElement('section');
+      sec.className = 'lx-part';
+      host.appendChild(sec);
+      parts[shown].forEach((b) => { const el = document.createElement('div'); el.className = 'lx-b lx-b-' + b.type; el.innerHTML = lxBlockHtml(b); sec.appendChild(el); lxMountBlock(el, b); });
+      shown += 1;
+      slot.querySelectorAll('.lx-prog i').forEach((d, i) => d.classList.toggle('on', i < shown));
+      if (scroll) window.scrollTo({ top: Math.max(0, sec.getBoundingClientRect().top + window.scrollY - 80), behavior: 'smooth' });
+    };
+    add(false);
+    if (all) while (shown < parts.length) add(false);
+    return { left: () => parts.length - shown, more: () => { if (shown < parts.length) add(true); } };
+  }
+
+  /* ----- 새 확인 문제: 선 잇기 · 순서 맞추기 · 분류 · 출력 예측 · 오류 줄 찾기 · 서술형 ----- */
+  function lxQuizAnswerHtml(st) {
+    if (st.kind === 'match') return `<ul class="md-l">${st.pairs.map((p) => `<li>${mdInline(p[0])} ↔ ${mdInline(p[1])}</li>`).join('')}</ul>`;
+    if (st.kind === 'order') return st.mono ? `<pre><code>${esc(st.items.join('\n'))}</code></pre>` : `<ol class="md-l">${st.items.map((x) => `<li>${mdInline(x)}</li>`).join('')}</ol>`;
+    if (st.kind === 'bucket') return `<ul class="md-l">${st.categories.map((c, i) => `<li><b>${esc(c)}</b>: ${st.items.filter((x) => x.cat === i + 1).map((x) => mdInline(x.text)).join(' · ') || '-'}</li>`).join('')}</ul>`;
+    if (st.kind === 'output') return `<pre><code>${esc(st.answer)}</code></pre>`;
+    if (st.kind === 'spot') return `<div>${st.answer.join(', ')}번째 줄</div>`;
+    if (st.kind === 'essay') return `<div class="lx-model">${lrMd(st.model)}</div>`;
+    return `<code class="ic">${esc(quizAnswerText(st))}</code>`;
+  }
+  function lxQuizInner(st) {
+    const chk = (t = '정답 확인') => `<div class="form-actions"><button class="primary" type="button" data-qcheck>${t}</button></div>`;
+    if (st.kind === 'match') {
+      const right = lxShuffle(st.pairs.map((p, i) => i));
+      return `<p class="muted small">왼쪽을 누르고 → 짝이 되는 오른쪽을 눌러 이어 주세요. 다시 누르면 바꿀 수 있어요.</p><div class="lx-match"><div class="lx-mcol">${st.pairs.map((p, i) => `<button type="button" class="lx-mi" data-ml="${i}"><span class="lx-mb"></span><span>${mdInline(p[0])}</span></button>`).join('')}</div><svg class="lx-mlines"></svg><div class="lx-mcol">${right.map((i) => `<button type="button" class="lx-mi" data-mr="${i}"><span class="lx-mb"></span><span>${mdInline(st.pairs[i][1])}</span></button>`).join('')}</div></div>${chk()}`;
+    }
+    if (st.kind === 'order') {
+      const sh = lxShuffle(st.items.map((x, i) => i));
+      return `<p class="muted small">아래 조각을 순서대로 눌러 위에 쌓으세요. 위에 올린 조각을 누르면 다시 내려가요.</p><div class="lx-ord-ans ${st.mono ? 'mono' : ''}" data-empty="여기에 순서대로 쌓여요"></div><div class="lx-ord-pool ${st.mono ? 'mono' : ''}">${sh.map((i) => `<button type="button" class="lx-oi" data-oi="${i}">${st.mono ? `<code>${esc(st.items[i])}</code>` : mdInline(st.items[i])}</button>`).join('')}</div>${chk()}`;
+    }
+    if (st.kind === 'bucket') return `<p class="muted small">각 항목이 어디에 속하는지 골라 주세요.</p><div class="lx-bkt">${lxShuffle(st.items.map((x, i) => i)).map((i) => `<div class="lx-bk" data-bk="${i}"><div class="lx-bk-t">${mdInline(st.items[i].text)}</div><div class="lx-bk-c">${st.categories.map((c, k) => `<button type="button" data-bc="${k + 1}">${esc(c)}</button>`).join('')}</div></div>`).join('')}</div>${chk()}`;
+    if (st.kind === 'output') return `<pre><code>${esc(st.code)}</code></pre><label class="muted small">실행하면 화면에 나오는 출력을 그대로 써 보세요 (줄바꿈 포함)</label><textarea class="code lx-outans" rows="${Math.min(8, Math.max(2, st.answer.split('\n').length + 1))}" spellcheck="false" placeholder="출력 결과"></textarea>${chk()}`;
+    if (st.kind === 'spot') return `<p class="muted small">${st.answer.length > 1 ? `문제가 있는 줄 ${st.answer.length}개를 모두` : '문제가 있는 줄을'} 눌러 고르세요.</p>${lxCodeLines(st.code, 'lx-pick')}${chk()}`;
+    if (st.kind === 'essay') return `<p class="muted small">✍️ 서술형 — 실제 시험처럼 문장으로 써 보세요. 쓰고 나면 모범 답안과 채점 기준이 열려요.</p><textarea class="lx-essay" rows="5" placeholder="여기에 답을 써 보세요"></textarea>${chk('모범 답안과 비교하기')}<div class="lx-essay-after" hidden></div>`;
+    return '';
+  }
+  function lxMountQuiz(root, st, api) { // api: { judge(ok), finish(tries), wrong() }
+    const chk = $('[data-qcheck]', root);
+    if (st.kind === 'match') {
+      const link = new Map(); let sel = null;
+      const box = $('.lx-match', root); const svg = $('.lx-mlines', root);
+      const draw = () => {
+        root.querySelectorAll('[data-ml]').forEach((b) => { const i = Number(b.dataset.ml); b.classList.toggle('sel', sel === i); b.classList.toggle('on', link.has(i)); $('.lx-mb', b).textContent = link.has(i) ? i + 1 : ''; b.dataset.c = link.has(i) ? i % 8 : ''; });
+        root.querySelectorAll('[data-mr]').forEach((b) => { const r = Number(b.dataset.mr); const l = [...link].find((p) => p[1] === r); b.classList.toggle('on', !!l); $('.lx-mb', b).textContent = l ? l[0] + 1 : ''; b.dataset.c = l ? l[0] % 8 : ''; });
+        const bb = box.getBoundingClientRect();
+        svg.innerHTML = [...link].map(([l, r]) => { const a = $(`[data-ml="${l}"]`, root).getBoundingClientRect(); const z = $(`[data-mr="${r}"]`, root).getBoundingClientRect(); return `<line class="c${l % 8}" x1="${a.right - bb.left}" y1="${a.top + a.height / 2 - bb.top}" x2="${z.left - bb.left}" y2="${z.top + z.height / 2 - bb.top}"/>`; }).join('');
+      };
+      root.querySelectorAll('[data-ml]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.ml); if (link.has(i) && sel !== i) link.delete(i); sel = sel === i ? null : i; draw(); }));
+      root.querySelectorAll('[data-mr]').forEach((b) => (b.onclick = () => {
+        const r = Number(b.dataset.mr);
+        if (sel == null) { const l = [...link].find((p) => p[1] === r); if (l) { link.delete(l[0]); draw(); } else toast('왼쪽 항목을 먼저 눌러 주세요', true); return; }
+        [...link].forEach(([l, rr]) => { if (rr === r) link.delete(l); });
+        link.set(sel, r); sel = null; draw();
+      }));
+      setTimeout(draw, 0);
+      chk.onclick = () => { if (link.size < st.pairs.length) return toast('모든 항목을 이어 주세요', true); api.judge([...link].every(([l, r]) => l === r)); };
+    } else if (st.kind === 'order') {
+      const ans = $('.lx-ord-ans', root); const pool = $('.lx-ord-pool', root);
+      root.querySelectorAll('.lx-oi').forEach((b) => (b.onclick = () => { (b.parentElement === pool ? ans : pool).appendChild(b); }));
+      chk.onclick = () => { if (pool.children.length) return toast('모든 조각을 올려 주세요', true); api.judge([...ans.children].every((b, i) => st.items[Number(b.dataset.oi)] === st.items[i])); };
+    } else if (st.kind === 'bucket') {
+      root.querySelectorAll('.lx-bk').forEach((row) => row.querySelectorAll('[data-bc]').forEach((b) => (b.onclick = () => { row.dataset.pick = b.dataset.bc; row.querySelectorAll('[data-bc]').forEach((x) => x.classList.toggle('on', x === b)); })));
+      chk.onclick = () => { const rows = [...root.querySelectorAll('.lx-bk')]; if (rows.some((r) => !r.dataset.pick)) return toast('모든 항목을 분류해 주세요', true); api.judge(rows.every((r) => Number(r.dataset.pick) === st.items[Number(r.dataset.bk)].cat)); };
+    } else if (st.kind === 'output') {
+      const nz = (t) => normOut(t).split('\n').map((l) => l.trim()).join('\n');
+      chk.onclick = () => { const v = nz($('.lx-outans', root).value); if (!v) return toast('출력 결과를 써 보세요', true); api.judge([st.answer, ...(st.alts || [])].some((a) => nz(a) === v)); };
+    } else if (st.kind === 'spot') {
+      const multi = st.answer.length > 1;
+      root.querySelectorAll('.lx-pick .lx-ln').forEach((l) => (l.onclick = () => { if (chk.disabled) return; if (!multi) root.querySelectorAll('.lx-ln.sel').forEach((x) => x !== l && x.classList.remove('sel')); l.classList.toggle('sel'); }));
+      chk.onclick = () => { const p = [...root.querySelectorAll('.lx-ln.sel')].map((l) => Number(l.dataset.ln)).sort((a, b) => a - b); if (!p.length) return toast('줄을 골라 주세요', true); api.judge(p.length === st.answer.length && p.every((x, i) => x === st.answer[i])); };
+    } else if (st.kind === 'essay') {
+      const ta = $('.lx-essay', root); const after = $('.lx-essay-after', root);
+      chk.onclick = () => {
+        if (ta.value.trim().length < 5) return toast('먼저 직접 써 보세요 (짧아도 괜찮아요)', true);
+        ta.readOnly = true; chk.disabled = true; after.hidden = false;
+        after.innerHTML = `<div class="lx-model"><b>📝 모범 답안</b>${lrMd(st.model)}</div>${st.rubric.length ? `<div class="lx-rub"><b>채점 기준 — 내 답에 들어 있는 것을 체크하세요</b>${st.rubric.map((r, i) => `<label class="lx-rb"><input type="checkbox" data-rb="${i}"><span>${mdInline(r)}</span></label>`).join('')}</div>` : ''}${st.explanation ? `<div class="lr-ex">${lrMd(st.explanation)}</div>` : ''}<div class="form-actions"><button class="primary" type="button" data-essdone>자기 채점 끝</button></div>`;
+        $('[data-essdone]', after).onclick = (e) => {
+          const n = st.rubric.length; const got = after.querySelectorAll('[data-rb]:checked').length;
+          const ok = !n || got >= Math.ceil(n * 0.6);
+          after.querySelectorAll('input').forEach((x) => { x.disabled = true; });
+          e.target.disabled = true;
+          e.target.insertAdjacentHTML('afterend', `<span class="muted small" style="align-self:center">${n ? `${got} / ${n} 항목 · ` : ''}${ok ? '잘 썼어요! 👍' : '빠진 항목을 모범 답안에서 다시 확인해요. 오답 복습에 넣어 둘게요.'}</span>`);
+          if (!ok) api.wrong();
+          api.finish(ok ? 1 : 2);
+        };
+      };
+    }
+  }
+
   /* ----- JSON 읽기 ----- */
   function normLearnStep(s, at) {
     const bad = (m) => { throw new Error(`${at}: ${m}`); };
     if (!s || typeof s !== 'object') bad('단계가 객체({ })가 아니에요');
     let type = String(s.type || '').toLowerCase();
     let kind = String(s.kind || '').toLowerCase();
-    if (LEARN_KINDS.includes(type)) { kind = type; type = 'quiz'; } // {"type":"ox"} 처럼 줄여 써도 돼요
+    if (LEARN_KINDS.includes(type) || LX_QKINDS.includes(type)) { kind = type; type = 'quiz'; } // {"type":"ox"} 처럼 줄여 써도 돼요
+    if (type === 'review') type = 'explain';
+    if (type === 'explain' && String(s.type).toLowerCase() === 'review') s = { ...s, review: true };
     if (['code', 'text', 'concept', 'md'].includes(type)) type = 'explain';
     if (type === 'exercise' || type === 'problem') type = 'practice';
     const title = String(s.title || '');
     if (type === 'explain') {
       const body = learnTxt(s.body ?? s.text ?? '').trim();
       const code = s.code == null ? '' : learnTxt(s.code).replace(/\s+$/, '');
-      if (!body && !code) bad('explain 에는 body(설명) 가 필요해요');
-      return { type, title, body, code, run: s.run !== false };
+      const parts = normLxParts(s, bad);
+      if (!body && !code && !parts) bad('explain 에는 body(설명) 또는 parts 가 필요해요');
+      const o = { type, title, body, code, run: s.run !== false };
+      if (parts) o.parts = parts;
+      if (s.review) o.review = true;
+      return o;
     }
     if (type === 'quiz') {
       const question = learnTxt(s.question ?? s.body ?? '').trim();
@@ -3759,7 +4131,9 @@ onmessage = (ev) => {
         if (ans.length !== n || ans.some((x) => !x.length)) bad(`fill 의 answers 는 빈칸 개수(${n}개)만큼 필요해요 (칸마다 정답 하나, 또는 ["정답","다른정답"])`);
         out.code = code;
         out.answers = ans;
-      } else bad('quiz 의 kind 는 ox / choice / short / fill 중 하나예요');
+      } else if (LX_QKINDS.includes(kind)) normLxQuiz(s, kind, out, bad);
+      else bad('quiz 의 kind 는 ox / choice / short / fill / match / order / bucket / output / spot / essay 중 하나예요');
+      if (s.review) out.review = true;
       return out;
     }
     if (type === 'practice') {
@@ -3780,7 +4154,7 @@ onmessage = (ev) => {
     const title = String(l.title || '').trim();
     if (!title) throw new Error(`${at}에 title 이 필요해요`);
     if (!Array.isArray(l.steps) || !l.steps.length) throw new Error(`${at}("${title}")에 steps 가 하나도 없어요`);
-    if (l.steps.length > 80) throw new Error(`${at}("${title}")의 단계가 너무 많아요 (80개 이하)`);
+    if (l.steps.length > 120) throw new Error(`${at}("${title}")의 단계가 너무 많아요 (120개 이하)`);
     const m = Number(l.minutes);
     const rp = l.rank_points === undefined || l.rank_points === null || l.rank_points === '' ? null : Number(l.rank_points);
     if (rp !== null && (!Number.isInteger(rp) || rp < 0 || rp > 100000)) throw new Error(`${at}("${title}")의 rank_points 는 0 이상의 정수예요`);
@@ -3793,7 +4167,7 @@ onmessage = (ev) => {
     let d;
     try { d = JSON.parse(text); } catch (e) { throw new Error('JSON 형식 오류예요 (쉼표·따옴표를 확인해 보세요)'); }
     if (!d || typeof d !== 'object') throw new Error('올바른 학습 파일이 아니에요');
-    if (d.format && d.format !== 'pynest-learn-v1') throw new Error('지원하지 않는 형식이에요: ' + d.format);
+    if (d.format && !['pynest-learn-v1', 'pynest-learn-v2'].includes(d.format)) throw new Error('지원하지 않는 형식이에요: ' + d.format);
     const lessons = (Array.isArray(d.lessons) ? d.lessons : d.title && d.steps ? [d] : []).map(normLearnLesson);
     if (!lessons.length) throw new Error('레슨(lessons)이 하나도 없어요');
     const c = d.course && typeof d.course === 'object' ? d.course : null;
@@ -3804,7 +4178,7 @@ onmessage = (ev) => {
   }
   function exportLearn(course, lessons) {
     const out = {
-      format: 'pynest-learn-v1',
+      format: 'pynest-learn-v2',
       course: { title: course.title, description: course.description || '', sequential: course.sequential !== false, rank_points: course.rank_points || 0 },
       lessons: lessons.map((l) => ({ title: l.title, minutes: l.minutes || undefined, rank_points: l.rank_points == null ? undefined : l.rank_points, summary: l.summary || '', steps: l.steps })),
     };
@@ -3861,6 +4235,7 @@ onmessage = (ev) => {
     <div class="lr-btns"><button class="ghost" type="button" data-lrrun>▶ 실행해 보기</button>${reset ? '<button class="ghost" type="button" data-lrreset>↺ 처음 코드로</button>' : ''}</div><div class="lr-out judge-out" hidden></div>`;
 
   /* ----- 확인 문제 (O/X · 객관식 · 단답 · 빈칸) — 학습 화면과 오답 복습이 같이 써요 ----- */
+  const quizAnsHtml = (st) => (LX_QKINDS.includes(st.kind) ? lxQuizAnswerHtml(st) : `<code class="ic">${esc(quizAnswerText(st))}</code>`);
   const quizAnswerText = (st) => {
     if (st.kind === 'ox') return st.answer ? 'O (맞아요)' : 'X (틀려요)';
     if (st.kind === 'choice') return st.answer.map((n) => `${n}. ${st.options[n - 1]}`).join(' / ');
@@ -3876,6 +4251,8 @@ onmessage = (ev) => {
       inner = `${multi ? '<p class="muted small">정답이 여러 개예요. 모두 골라요.</p>' : ''}<div class="lr-opts">${st.options.map((o, i) => `<label class="lr-opt"><input type="${multi ? 'checkbox' : 'radio'}" name="lrc" value="${i + 1}"><span class="lr-no">${i + 1}</span><span>${mdInline(o)}</span></label>`).join('')}</div><div class="form-actions"><button class="primary" type="button" data-qcheck>정답 확인</button></div>`;
     } else if (st.kind === 'short') {
       inner = '<input class="lr-short" type="text" autocomplete="off" spellcheck="false" placeholder="정답을 입력하세요"><div class="form-actions"><button class="primary" type="button" data-qcheck>정답 확인</button></div>';
+    } else if (LX_QKINDS.includes(st.kind)) {
+      inner = lxQuizInner(st);
     } else {
       const parts = st.code.split('___');
       inner = `<pre class="lr-fill"><code>${parts.map((p, i) => esc(p) + (i < parts.length - 1 ? '<input class="lr-blank" type="text" autocomplete="off" spellcheck="false" size="6" aria-label="빈칸 ' + (i + 1) + '">' : '')).join('')}</code></pre><div class="form-actions"><button class="primary" type="button" data-qcheck>정답 확인</button></div>`;
@@ -3888,14 +4265,14 @@ onmessage = (ev) => {
     const fb = $('.lr-fb', root);
     let tries = 0;
     let over = false;
-    const lock = () => { root.querySelectorAll('input,button[data-ox],[data-qcheck]').forEach((e) => { e.disabled = true; }); };
+    const lock = () => { root.querySelectorAll('input,textarea,button[data-ox],[data-qcheck],.lx-mi,.lx-oi,[data-bc]').forEach((e) => { e.disabled = true; }); };
     const finish = (peek) => { over = true; lock(); cb.onDone({ tries, peek }); };
     const showFb = (ok, peek) => {
       fb.hidden = false;
       fb.className = 'lr-fb ' + (ok ? 'ok' : 'bad');
       const ex = st.explanation ? `<div class="lr-ex">${lrMd(st.explanation)}</div>` : '';
       if (ok) fb.innerHTML = `<b>${tries === 1 ? '🎉 정답이에요!' : '✅ 정답이에요!'}</b>${ex}`;
-      else if (peek) fb.innerHTML = `<b>💡 정답은</b> <code class="ic">${esc(quizAnswerText(st))}</code>${ex}`;
+      else if (peek) fb.innerHTML = `<b>💡 정답은</b> ${quizAnsHtml(st)}${ex}`;
       else fb.innerHTML = `<b>${tries >= 2 ? '🤔 아직이에요. 설명을 다시 읽고 도전해 보세요!' : '😅 아쉬워요, 다시 해 볼까요?'}</b>${tries >= 2 ? '<div class="form-actions"><button class="ghost" type="button" data-peek>정답 보기</button></div>' : ''}`;
       const pk = $('[data-peek]', fb);
       if (pk) pk.onclick = () => { showFb(false, true); finish(true); };
@@ -3905,6 +4282,10 @@ onmessage = (ev) => {
       tries += 1;
       if (ok) { showFb(true); finish(false); } else { cb.onWrong(); showFb(false, false); }
     };
+    if (LX_QKINDS.includes(st.kind)) {
+      lxMountQuiz(root, st, { judge, wrong: () => cb.onWrong(), finish: (t) => { tries = t; finish(false); } });
+      return;
+    }
     root.querySelectorAll('[data-ox]').forEach((b) => (b.onclick = () => judge((b.dataset.ox === '1') === st.answer)));
     const chk = $('[data-qcheck]', root);
     if (chk) chk.onclick = () => {
@@ -3928,7 +4309,7 @@ onmessage = (ev) => {
   }
   // 이미 푼 확인문제를 다시 볼 때
   const quizSolvedHtml = (st) => `${st.question ? `<div class="lr-q">${lrMd(st.question)}</div>` : ''}${st.kind === 'fill' ? `<pre class="lr-fill"><code>${esc(st.code)}</code></pre>` : ''}
-    <div class="lr-fb ok"><b>✅ 이미 푼 문제예요</b><div>정답: <code class="ic">${esc(quizAnswerText(st))}</code></div>${st.explanation ? `<div class="lr-ex">${lrMd(st.explanation)}</div>` : ''}</div>`;
+    <div class="lr-fb ok"><b>✅ 이미 푼 문제예요</b><div>정답: ${quizAnsHtml(st)}</div>${st.explanation ? `<div class="lr-ex">${lrMd(st.explanation)}</div>` : ''}</div>`;
 
   /* ----- 학습 홈 ----- */
   async function pageLearn(b, c) {
@@ -4146,6 +4527,16 @@ onmessage = (ev) => {
       if (course) route(true); else location.hash = '#/learn/c/' + cid;
     };
   }
+  // ✏️ 새 형식(parts · 새 문제 종류) 단계는 이 단계의 JSON 을 고쳐요
+  function openStepJson(st, onSave) {
+    const m = modal(`<h3>✏️ 이 단계 수정 (JSON)</h3><label>단계 JSON<textarea id="sjText" class="code" style="min-height:340px" spellcheck="false"></textarea></label><p class="muted small" id="sjInfo"></p>
+      <div class="form-actions"><button class="primary" id="sjSave" type="button">저장</button><button class="ghost" id="sjCancel" type="button">취소</button></div>`);
+    $('#sjText', m.el).value = JSON.stringify(st, null, 1);
+    $('#sjCancel', m.el).onclick = m.close;
+    $('#sjSave', m.el).onclick = () => {
+      try { onSave(normLearnStep(JSON.parse($('#sjText', m.el).value), '이 단계'), m.close); } catch (e) { $('#sjInfo', m.el).textContent = '⚠️ ' + (e instanceof SyntaxError ? 'JSON 형식 오류예요' : e.message); }
+    };
+  }
   // ✏️ 학습 단계 하나를 자세히 고치는 창 (JSON 이 아니라 칸에 글로 써요)
   function openStepEditor(st, onSave) {
     const S = {
@@ -4294,6 +4685,7 @@ onmessage = (ev) => {
       const n = steps.length;
       let cur = 0;
       const box = $('#lrStep', v);
+      let lxCur = null;
       const doneCount = () => steps.filter((_, k) => P.done[k]).length;
       const reach = () => { for (let k = 0; k < n; k += 1) if (!P.done[k]) return k; return n - 1; };
       const saveProg = async () => {
@@ -4306,14 +4698,14 @@ onmessage = (ev) => {
         $('#lrBar', v).style.width = `${Math.round((doneCount() / n) * 100)}%`;
         $('#lrXp', v).textContent = `⭐ ${P.xp} XP`;
         const r = reach();
-        $('#lrDots', v).innerHTML = steps.map((s, k) => `<button type="button" class="lr-dot ${P.done[k] ? 'ok' : ''} ${k === cur ? 'cur' : ''}" data-dot="${k}" ${k > r && !P.completed ? 'disabled' : ''} title="${k + 1}. ${esc(s.title || ({ explain: '개념', quiz: '확인', practice: '실습' })[s.type])}">${({ explain: '📖', quiz: '❓', practice: '💻' })[s.type]}</button>`).join('');
+        $('#lrDots', v).innerHTML = steps.map((s, k) => `<button type="button" class="lr-dot ${P.done[k] ? 'ok' : ''} ${k === cur ? 'cur' : ''}" data-dot="${k}" ${k > r && !P.completed ? 'disabled' : ''} title="${k + 1}. ${esc(s.title || ({ explain: '개념', quiz: '확인', practice: '실습' })[s.type])}">${s.review ? '🔁' : ({ explain: '📖', quiz: '❓', practice: '💻' })[s.type]}</button>`).join('');
         v.querySelectorAll('[data-dot]').forEach((b) => (b.onclick = () => show(Number(b.dataset.dot))));
       };
       const updateNav = () => {
         const ok = !!P.done[cur];
         const nx = $('#lrNext', v);
         nx.textContent = cur >= n - 1 ? '완료 🎉' : '다음 →';
-        nx.className = ok || steps[cur].type === 'explain' ? 'primary' : 'ghost';
+        nx.className = ok || (steps[cur].type === 'explain' && (!lxCur || lxCur.left() === 0)) ? 'primary' : 'ghost';
         $('#lrPrev', v).disabled = cur === 0;
       };
       const markDone = async (k, info) => {
@@ -4345,12 +4737,26 @@ onmessage = (ev) => {
         P.cur = cur;
         const st = steps[cur];
         const done = P.done[cur];
-        const label = { explain: '📖 개념', quiz: '❓ 확인 문제', practice: '💻 실습' }[st.type];
+        const label = st.review ? '🔁 복습' : { explain: '📖 개념', quiz: '❓ 확인 문제', practice: '💻 실습' }[st.type];
+        lxCur = null;
         box.innerHTML = `<div class="lr-kind">${label} <span class="muted small">${cur + 1} / ${n}</span>${staff ? '<button class="icon step-pen" type="button" data-steppen title="이 단계 자세히 고치기">✏️</button>' : ''}</div>${st.title ? `<h3 class="lr-title">${esc(st.title)}</h3>` : ''}<div class="lr-slot"></div>`;
         const slot = $('.lr-slot', box);
         if (st.type === 'explain') {
           slot.innerHTML = `${st.body ? `<div class="lr-md">${lrMd(st.body)}</div>` : ''}${st.code ? (st.run ? `<div class="lr-codebox">${lrCodeBoxHtml(Math.min(14, Math.max(3, st.code.split('\n').length + 1)))}</div>` : `<pre><code>${esc(st.code)}</code></pre>`) : ''}`;
           if (st.code && st.run) lrCodeBox(slot, st.code);
+          if (st.parts) {
+            slot.insertAdjacentHTML('beforeend', '<div class="lx-host"></div><div class="lx-more"></div>');
+            lxCur = lxMountParts($('.lx-host', slot), st.parts, !!done || P.completed);
+            const more = $('.lx-more', slot);
+            const total = st.parts.length;
+            const paint = () => {
+              const left = lxCur.left();
+              more.innerHTML = left ? `<button class="primary" type="button" data-lxmore>계속 ▾ <span class="small">(${total - left} / ${total})</span></button>` : '';
+              const bt = $('[data-lxmore]', more);
+              if (bt) bt.onclick = () => { lxCur.more(); paint(); updateNav(); };
+            };
+            paint();
+          }
         } else if (st.type === 'quiz') {
           if (done) slot.innerHTML = quizSolvedHtml(st);
           else {
@@ -4426,6 +4832,7 @@ onmessage = (ev) => {
       $('#lrNext', v).onclick = async () => {
         const st = steps[cur];
         if (!P.done[cur]) {
+          if (st.type === 'explain' && lxCur && lxCur.left() > 0) return toast('"계속" 을 눌러 끝까지 읽어 주세요', true);
           if (st.type === 'explain') await markDone(cur, { xp: XP_EXPLAIN });
           else if (st.type === 'practice' && !st.tests.length) await markDone(cur, { xp: 5 });
           else return toast(st.type === 'quiz' ? '먼저 문제를 풀어 보세요' : '먼저 채점을 통과해 보세요 (막히면 힌트·정답 코드를 쓸 수 있어요)', true);
@@ -4444,6 +4851,15 @@ onmessage = (ev) => {
         });
         box.addEventListener('click', (ev) => {
           if (!ev.target.closest('[data-steppen]')) return;
+          const sc = steps[cur];
+          if (sc.parts || sc.review || LX_QKINDS.includes(sc.kind)) {
+            return openStepJson(sc, async (ns, close) => {
+              const old = steps[cur]; steps[cur] = ns;
+              const err = await saveSteps();
+              if (err) { steps[cur] = old; return toast('저장하지 못했어요: ' + err, true); }
+              close(); toast('저장했어요'); show(cur);
+            });
+          }
           openStepEditor(steps[cur], async (ns, close) => {
             const old = steps[cur]; steps[cur] = ns;
             const err = await saveSteps();

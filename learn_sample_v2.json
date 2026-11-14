@@ -1,0 +1,31 @@
+{
+ "format": "pynest-learn-v2",
+ "course": { "title": "학습 v2 맛보기: 문자열과 슬라이싱", "description": "쪼개 읽기·설명 도구·새 문제 유형을 한 번에 보여 주는 샘플", "sequential": true, "rank_points": 0 },
+ "lessons": [
+  { "title": "문자열 인덱스·슬라이싱", "minutes": 10, "summary": "- 인덱스는 0부터, 음수는 뒤에서부터\n- `s[a:b:c]` 는 b 직전까지",
+   "steps": [
+    { "type": "review", "title": "지난 시간 복습", "parts": [[
+        { "type": "text", "body": "지난 시간에 배운 **변수와 출력**을 잠깐 떠올려 봐요." },
+        { "type": "reveal", "label": "`print('a', 'b')` 의 출력은?", "code": "a b" }
+    ]]},
+    { "type": "quiz", "kind": "match", "review": true, "question": "알맞게 이어 보세요.", "pairs": [["print()", "화면에 출력"], ["input()", "키보드로 입력"], ["int()", "정수로 변환"]], "explanation": "복습 끝!" },
+    { "type": "explain", "title": "인덱스란?", "parts": [
+      [ { "type": "text", "body": "문자열은 **글자가 줄지어 선 상자**예요. 각 칸에는 번호(인덱스)가 있어요." },
+        { "type": "index", "name": "s", "value": "PYTHON" },
+        { "type": "callout", "style": "key", "body": "번호는 **0부터** 시작해요." } ],
+      [ { "type": "slice", "name": "s", "value": "PYTHON", "start": 1, "stop": 4 },
+        { "type": "compare", "left": { "title": "맞는 코드", "tone": "good", "code": "s = 'abc'\nprint(s[0])" }, "right": { "title": "틀린 코드", "tone": "bad", "code": "s = 'abc'\ns[0] = 'z'", "body": "문자열은 바꿀 수 없어요 (TypeError)" } } ],
+      [ { "type": "trace", "title": "합 구하기", "code": "total = 0\nfor i in range(1, 4):\n    total += i\nprint(total)", "frames": [] },
+        { "type": "tabs", "tabs": [ { "title": "for", "code": "for i in range(3):\n    print(i)" }, { "title": "while", "code": "i = 0\nwhile i < 3:\n    print(i)\n    i += 1" } ] },
+        { "type": "flip", "cards": [["s[::-1]", "뒤집기"], ["s[::2]", "짝수 번째 칸"]] },
+        { "type": "steps", "items": [ { "title": "시작", "body": "start 를 정해요" }, { "title": "끝", "body": "stop 직전까지" }, "step 만큼 건너뛰어요" ] },
+        { "type": "exam", "body": "시험에서는 `s[::-1]` 로 회문 판별을 자주 물어봐요." } ]
+    ]},
+    { "type": "quiz", "kind": "output", "question": "출력은?", "code": "s = 'PYTHON'\nprint(s[1:4])", "answer": "YTH" },
+    { "type": "quiz", "kind": "order", "question": "합계를 구하는 순서로 놓아 보세요.", "items": ["total = 0", "for i in range(3):", "    total += i", "print(total)"] },
+    { "type": "quiz", "kind": "bucket", "question": "가변/불변으로 나눠 보세요.", "categories": ["가변", "불변"], "items": [["list", 1], ["str", 2], ["tuple", 2], ["dict", 1]] },
+    { "type": "quiz", "kind": "spot", "question": "오류가 있는 줄은?", "code": "s = 'abc'\ns[0] = 'z'\nprint(s)", "answer": 2, "explanation": "문자열은 불변이라 칸을 바꿀 수 없어요." },
+    { "type": "quiz", "kind": "essay", "question": "문자열이 불변이면 어떤 점이 달라지는지 서술하세요.", "model": "문자열의 일부를 직접 바꿀 수 없고, 바꾸려면 새 문자열을 만들어야 한다.", "rubric": ["일부를 바꿀 수 없다", "새 문자열을 만든다"] }
+   ]}
+ ]
+}
