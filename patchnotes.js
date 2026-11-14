@@ -1,5 +1,10 @@
 /* PyNest 패치 노트 — 하단 버전을 5번 누르면 보여요. 새 버전은 맨 위에 추가하세요. at 은 한국 시간(KST). */
 window.PYNEST_PATCHES = [
+  { v: '5.10.2', at: '2026-11-15 04:50', t: '📦 라이브러리 자동 import (libs)', items: [
+    '문제집·학습 JSON 에 "libs": ["numpy", "pandas"] 를 적어 두면, 코드를 돌리기 전에 자동으로 import 돼요. 학생은 import 없이 np, pd 를 바로 쓸 수 있어요. (numpy→np · pandas→pd · matplotlib→plt · sklearn · scipy)',
+    '문제집: 파일 맨 위(전체) 또는 문제마다 libs 를 써요. 문제 편집의 태그 칸에 lib:numpy 로 직접 적어도 돼요. 문제 카드에는 📦 표시가 떠요.',
+    '학습: course 안, 레슨마다, 또는 단계마다 libs 를 써요. 더 안쪽에 적은 것이 우선해요. 학습의 ▶ 실행·실습 채점·문제집 채점에 모두 적용돼요.',
+    '모든 문제에 공통으로 넣고 싶으면 선생님 도구의 공용 함수에 import numpy as np 를 넣어 두세요. 그것도 자동으로 불러와져요.'] },
   { v: '5.10.1', at: '2026-11-15 04:30', t: '📊 numpy · pandas · scikit-learn 실행', items: [
     '학습 페이지의 ▶ 실행해 보기와 문제 풀이·자동 채점·시험에서 numpy, pandas, scikit-learn(sklearn), scipy, matplotlib 를 import 해서 쓸 수 있어요.',
     'import 한 패키지만 필요할 때 불러와요. 처음 한 번은 몇 초~몇십 초 걸리고, 그다음부터는 브라우저에 저장돼서 빨라요. 불러오는 시간은 채점 시간에 들어가지 않아요.',
