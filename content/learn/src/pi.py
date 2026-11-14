@@ -1,0 +1,1870 @@
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from lotc import *
+
+C = Course('π', '2학년 1학기 2차고사 범위: 로지스틱 회귀(시그모이드·log loss·결정 경계·임계값), '
+           '분류 평가(혼동행렬·정확도·정밀도·재현율·F1·ROC-AUC), 검증(train/test·K-Fold·StratifiedKFold·'
+           'GridSearchCV·Pipeline), KNN(거리·k 선택·스케일링·차원의 저주), 나이브 베이즈(베이즈 정리), '
+           '결정트리(Gini 불순도·깊이와 과적합), 앙상블(배깅·랜덤포레스트·부스팅), SVM(마진·C), '
+           '인코딩(원-핫·레이블)과 다중공선성, 편향-분산 트레이드오프, One-vs-Rest')
+
+# =====================================================================
+L = C.lesson('π-01 시작하기: 2차 시험 지도 + ε 실력 점검', 20,
+'''- 2차는 **분류 모델**(로지스틱·KNN·나이브 베이즈·SVM·트리·앙상블)과 **평가·검증**이 중심이에요.
+- 시험은 전부 **서술형**: 코랩 코드 빈칸 + 개념 서술 + 손계산(정밀도·Gini·베이즈 확률).
+- ε 내용(MSE·스케일링·train_test_split·BFS)은 2차에서도 **도구**로 계속 써요.
+- 스케일러는 **학습 데이터로만 fit**, 테스트는 transform 만!''')
+
+L.explain('이번 시험은 이렇게 나와요',
+    [T('2학년 1학기 **인공지능프로그래밍 2차고사**는 분석한 기출 기준으로 **모든 문항이 서술형**이에요.\n'
+       '객관식이 없으니 개념을 **내 말로 쓰는 연습**이 꼭 필요해요. 문항은 크게 네 모양이에요.'),
+     STEPS(('A 코랩 코드 빈칸', '`model.fit(X_train, y_train)`, `predict_proba`, `confusion_matrix` 처럼 sklearn 흐름의 빈칸을 채워요.'),
+           ('B 개념 서술', '"정확도만으로 평가하면 안 되는 이유", "k 가 너무 작으면?" 처럼 **이유**를 써요.'),
+           ('C 수식·손계산', '혼동행렬 → 정밀도·재현율·F1, Gini 불순도, 베이즈 확률, 시그모이드 값을 직접 계산해요.'),
+           ('D 결과 해석', '학습/테스트 점수를 보고 과적합인지, 임계값을 바꾸면 무엇이 변하는지 설명해요.'))],
+    [T('이 코스는 1차(ε)와 2차의 경계를 이렇게 잡았어요.\n\n'
+       '- **ε(1차)**: 탐색(DFS·BFS), pandas EDA, 전처리·스케일링, 선형회귀\n'
+       '- **π(2차)**: 로지스틱 회귀부터 분류 평가·검증·여러 분류 모델·앙상블까지'),
+     WARN('기출 분석이 앞쪽 문항 위주라 1차/2차 경계가 해마다 조금 다를 수 있어요. **선생님이 공지한 시험 범위**를 꼭 함께 확인하세요.')],
+    [T('공부 순서는 이렇게 추천해요.\n\n'
+       '1. 레슨 하나를 끝까지(복습 → 개념 → 확인 → 실습 → 서술).\n'
+       '2. 손계산 문제는 **식을 먼저 쓰고** 숫자를 넣는 습관.\n'
+       '3. 사이트에서는 sklearn 이 실행되지 않으니, sklearn 코드는 **읽고 흐름을 외우고**, 계산은 순수 파이썬 실습으로 익혀요.'),
+     EXAM('서술형은 **핵심어**가 채점 기준이에요. "과적합", "일반화", "데이터 누수", "불균형" 같은 용어를 정확히 넣어 쓰세요.')])
+
+L.choice('이 시험(인공지능프로그래밍 2차)의 문항 형태에 대한 설명으로 가장 알맞은 것은?',
+    ['객관식 위주라 용어만 외우면 된다', '코드 빈칸·개념 서술·손계산이 섞인 서술형이다',
+     '긴 프로그램을 처음부터 작성하는 문항만 나온다', '실행 결과 캡처를 제출한다'], 2,
+    '분석한 기출은 모두 서술형이고, 코랩 코드 빈칸 + 개념·수식 서술이 중심이에요.')
+
+L.explain('ε 점검 ① 선형회귀와 MSE',
+    [T('선형회귀는 `ŷ = w·x + b` 처럼 **직선(평면)** 으로 숫자를 예측해요.\n'
+       '얼마나 틀렸는지는 **MSE(평균제곱오차)** 로 재요.\n\n'
+       '`MSE = (1/n) * Σ (y - ŷ)²`  — 오차를 **제곱해서 평균**'),
+     CODE('y    = [3, 5, 7]\ny_hat = [2, 5, 9]\nerr = [(a - b) ** 2 for a, b in zip(y, y_hat)]\nprint(err)\nprint(sum(err) / len(err))', 'MSE 직접 계산')],
+    [T('제곱을 하는 이유는 두 가지예요. **음수 오차와 양수 오차가 상쇄되지 않게**, 그리고 **큰 오차를 더 크게 벌주려고**.\n'
+       '모델은 MSE 가 가장 작아지는 w, b 를 찾아요(경사하강법 또는 정규방정식).'),
+     KEY('`R² = 1 - (오차 제곱합) / (평균과의 차 제곱합)` — 1 에 가까울수록 잘 맞아요. 평균만 찍는 모델은 R² = 0.')])
+
+L.output('MSE 를 계산하는 코드예요. 출력은?', '''\
+y = [10, 20, 30, 40]
+p = [12, 18, 30, 44]
+mse = sum((a - b) ** 2 for a, b in zip(y, p)) / len(y)
+print(mse)''',
+    '오차는 -2, 2, 0, -4 → 제곱 4, 4, 0, 16 → 합 24 ÷ 4 = {out}')
+
+L.explain('ε 점검 ② 스케일링',
+    [T('특성마다 단위·범위가 다르면(나이 17, 키 170, 연봉 3000) 큰 숫자가 결과를 좌우해요.\n'
+       '그래서 범위를 맞추는 **스케일링**을 해요. 대표적인 두 가지를 기억하세요.'),
+     CMP(side('StandardScaler (표준화)', '`z = (x - 평균) / 표준편차`\n\n평균 0, 표준편차 1 로 맞춰요.'),
+         side('MinMaxScaler (정규화)', '`x\' = (x - 최솟값) / (최댓값 - 최솟값)`\n\n0 ~ 1 사이로 맞춰요.'))],
+    [T('스케일러도 "학습"을 해요. **평균·표준편차(또는 최소·최대)를 기억하는 것**이 fit 이에요.\n'
+       '이 값은 반드시 **학습 데이터에서만** 구해야 해요.'),
+     CODE('''from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+X_train_s = sc.fit_transform(X_train)   # 학습: 평균·표준편차 구하고 변환
+X_test_s  = sc.transform(X_test)        # 테스트: 변환만!''', 'fit 은 학습 데이터에만', run_=False, expect_error=True),
+     WARN('테스트 데이터까지 fit 하면 테스트 정보가 학습에 새어 들어가요(**데이터 누수**). 2차의 Pipeline 이 이 문제를 막아 줘요.')])
+
+L.match('스케일링 용어와 뜻을 이어 보세요.',
+    [['StandardScaler', '평균 0, 표준편차 1 로 변환'], ['MinMaxScaler', '0 ~ 1 범위로 변환'],
+     ['fit', '변환에 쓸 통계값(평균 등)을 구함'], ['transform', '구해 둔 값으로 데이터를 변환'],
+     ['데이터 누수', '테스트 정보가 학습 과정에 섞임']],
+    '2차에서 KNN·SVM 을 배울 때 스케일링이 **필수**로 다시 나와요. fit/transform 구분이 코드 빈칸 단골이에요.')
+
+L.explain('ε 점검 ③ train_test_split',
+    [T('모델이 **처음 보는 데이터**에서도 잘 맞는지(일반화) 보려면 데이터를 나눠야 해요.\n'
+       '`train_test_split` 이 학습용과 테스트용으로 한 번에 잘라 줘요.'),
+     CODE('''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+X, y = load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=0, stratify=y)
+print(X_train.shape, X_test.shape)''', '데이터 나누기', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+X, y = load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=0, stratify=y)
+print(X_train.shape, X_test.shape)''', '569개 중 25% 가 테스트로 갔어요.')],
+    [T('인자 세 개의 뜻을 꼭 구분하세요.\n\n'
+       '- `test_size=0.25` : 25% 를 테스트로\n'
+       '- `random_state=0` : 섞는 방식을 고정 → 실행할 때마다 같은 결과\n'
+       '- `stratify=y` : 학습/테스트의 **클래스 비율을 원본과 같게**'),
+     TIP('반환 순서는 **X_train, X_test, y_train, y_test** 예요. X 두 개 다음 y 두 개!')])
+
+L.fill('데이터를 나누는 코드의 빈칸을 채우세요. (반환 순서와 클래스 비율 유지 인자)', '''\
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+X, y = load_iris(return_X_y=True)
+X_train, ___, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1, ___=y)
+print(len(y_test))''', [['X_test'], ['stratify']],
+    '반환 순서는 X_train, **X_test**, y_train, y_test. 클래스 비율을 맞추는 인자는 **stratify**. 150개의 20% 라 테스트는 30개예요.',
+    expect='30')
+
+L.explain('ε 점검 ④ BFS 한 번 더',
+    [T('BFS(너비 우선 탐색)는 **가까운 곳부터** 차례로 방문해요. **큐(FIFO)** 를 써요.\n'
+       '간선 가중치가 모두 같으면 BFS 로 찾은 경로가 **최단 경로**예요. DFS 는 스택(또는 재귀)을 써요.'),
+     TRACE('''from collections import deque
+g = {1: [2, 3], 2: [4], 3: [4, 5], 4: [6], 5: [6], 6: []}
+visited = [1]
+q = deque([1])
+while q:
+    v = q.popleft()
+    print(v, end=" ")
+    for nxt in g[v]:
+        if nxt not in visited:
+            visited.append(nxt)
+            q.append(nxt)''', 'BFS 따라가기')],
+    [T('`popleft()` 로 **먼저 넣은 것부터** 꺼내는 게 BFS 의 핵심이에요. `pop()` 으로 바꾸면 나중에 넣은 것부터 꺼내 DFS 처럼 움직여요.'),
+     KEY('BFS = 큐(popleft), DFS = 스택(pop)/재귀. 방문 표시는 **큐에 넣을 때** 해야 중복으로 넣지 않아요.')])
+
+L.output('BFS 방문 순서를 쓰세요.', '''\
+from collections import deque
+g = {"A": ["B", "C"], "B": ["D"], "C": ["D", "E"], "D": [], "E": []}
+seen = {"A"}
+q = deque(["A"])
+order = []
+while q:
+    v = q.popleft()
+    order.append(v)
+    for n in g[v]:
+        if n not in seen:
+            seen.add(n)
+            q.append(n)
+print(order)''',
+    'A → (B, C 넣기) → B → (D) → C → (E, D 는 이미 봄) → D → E.\n\n```\n{out}\n```')
+
+L.ox('R² 가 1 에 가까울수록 회귀 모델이 데이터를 잘 설명한다.', True,
+     'R² = 1 - SSE/SST 예요. 오차(SSE)가 0 이면 R² = 1. 평균만 찍는 모델은 0, 그보다 못하면 음수도 나와요.')
+
+L.practice('[기출유사] 회귀 모델 채점기 — MSE 와 R²',
+'''집값 예측 모델의 성능을 직접 계산하려고 해요. 첫째 줄에 실제값, 둘째 줄에 예측값이 공백으로 주어져요.
+
+**[조건]**
+- 첫째 줄: `MSE = (1/n) * Σ (y - ŷ)²` 를 **소수 둘째 자리**까지 반올림해 `MSE: 값` 으로 출력
+- 둘째 줄: `R² = 1 - Σ(y - ŷ)² / Σ(y - ȳ)²` (ȳ 는 실제값의 평균)를 **소수 셋째 자리**까지 반올림해 `R2: 값` 으로 출력
+- 반올림은 `round()` 를 써요. 실제값이 모두 같은 경우는 주어지지 않아요.
+- numpy·sklearn 없이 계산하세요.
+
+{ex}
+
+{ex2}''',
+'''y = list(map(float, input().split()))
+p = list(map(float, input().split()))
+# MSE 와 R² 를 계산하세요
+''',
+'''y = list(map(float, input().split()))
+p = list(map(float, input().split()))
+n = len(y)
+sse = sum((a - b) ** 2 for a, b in zip(y, p))   # 오차 제곱합
+mean = sum(y) / n
+sst = sum((a - mean) ** 2 for a in y)           # 평균과의 차 제곱합
+print("MSE:", round(sse / n, 2))
+print("R2:", round(1 - sse / sst, 3))''',
+    ['3 5 7 9\n2.5 5.5 6 9', '10 20 30\n20 20 20'], ['1 2\n1 2', '5 5 5 6\n5 5 5 5', '2 4 6 8 10\n10 8 6 4 2'],
+    ['오차 제곱합은 `sum((a - b) ** 2 for a, b in zip(y, p))`',
+     '평균 `mean = sum(y) / n`, 분모는 `sum((a - mean) ** 2 for a in y)`',
+     '`print("MSE:", round(sse / n, 2))`, `print("R2:", round(1 - sse / sst, 3))`'],
+    'MSE 는 오차의 크기, R² 는 "평균만 찍는 것보다 얼마나 나은가" 예요. 두 값을 함께 보면 모델을 더 정확히 판단할 수 있어요.')
+
+L.practice('[기출유사] Min-Max 정규화 직접 하기',
+'''학생들의 공부 시간(분)이 한 줄에 공백으로 주어져요. 각 값을 Min-Max 정규화한 결과를 출력하세요.
+
+**[조건]**
+- `x' = (x - 최솟값) / (최댓값 - 최솟값)`
+- 결과는 각각 **소수 둘째 자리**까지 `f"{v:.2f}"` 로 만들어 공백으로 이어 한 줄에 출력해요.
+- 값은 2개 이상이고, 최댓값과 최솟값은 달라요.
+
+{ex}
+
+{ex2}''',
+'''nums = list(map(int, input().split()))
+# 정규화해서 출력하세요
+''',
+'''nums = list(map(int, input().split()))
+lo, hi = min(nums), max(nums)
+res = [f"{(x - lo) / (hi - lo):.2f}" for x in nums]   # 0~1 로 변환
+print(" ".join(res))''',
+    ['30 60 90 120', '50 10 30'], ['0 1', '7 7 8', '100 25 40 85 55'],
+    ['최솟값·최댓값은 `min(nums)`, `max(nums)`', '컴프리헨션으로 `(x - lo) / (hi - lo)` 를 계산해요.',
+     '`" ".join([f"{v:.2f}" for v in ...])` 로 한 줄에 출력'],
+    '최솟값은 0, 최댓값은 1 이 되고 나머지는 그 사이에 비율대로 놓여요. 실제 sklearn 의 MinMaxScaler 도 같은 식을 써요.')
+
+L.essay('스케일러를 **전체 데이터에 fit 한 뒤** train/test 로 나누면 어떤 문제가 생기는지 서술하세요.',
+    '테스트 데이터의 평균·표준편차(또는 최소·최대) 정보가 스케일러에 들어가 학습 과정에 반영된다. 이를 데이터 누수라고 하며, 모델이 테스트 데이터를 미리 엿본 셈이라 테스트 점수가 실제 일반화 성능보다 좋게 나올 수 있다. 따라서 먼저 나누고 학습 데이터로만 fit 한 뒤 테스트 데이터는 transform 만 해야 한다.',
+    ['테스트 정보가 학습에 섞인다(데이터 누수)', '테스트 점수가 실제보다 좋게(낙관적으로) 나온다', '학습 데이터로만 fit, 테스트는 transform'])
+
+# =====================================================================
+L = C.lesson('π-02 로지스틱 회귀: 시그모이드·결정 경계·log loss', 30,
+'''- 로지스틱 회귀는 `z = w·x + b` 를 **시그모이드** `σ(z) = 1 / (1 + e^(-z))` 에 넣어 **확률(0~1)** 로 바꿔요.
+- 기본 임계값 0.5 → `p ≥ 0.5` 이면 1. 이것은 `z ≥ 0` 과 같아요.
+- 결정 경계는 `w·x + b = 0` → **직선(선형)**.
+- 손실은 **log loss**: 확신하고 틀릴수록 크게 벌받아요.
+- sklearn: `fit` → `predict`(0/1) / `predict_proba`(확률)''')
+
+L.review('🔁 지난 시간 복습',
+    [T('지난 시간에는 시험 모양을 보고, ε 의 MSE·스케일링·데이터 나누기·BFS 를 점검했어요.\n'
+       '오늘은 **숫자 예측(회귀)** 에서 **분류**로 넘어가요.'),
+     REVEAL('스케일러에서 테스트 데이터에 써야 하는 메서드는?', '`transform` 만 써요. `fit` 은 학습 데이터에만!')])
+L.short('복습: 실제값 `[2, 4]`, 예측값 `[3, 3]` 일 때 MSE 는? (소수점까지 그대로, 예: 1.0)', '1.0',
+    '오차 -1, 1 → 제곱 1, 1 → 평균 1.0', review=True, alts=['1'],
+    check_code='print(((2-3)**2 + (4-3)**2) / 2)')
+
+L.explain('회귀에서 분류로: 시그모이드',
+    [T('"합격/불합격", "스팸/정상" 처럼 **둘 중 하나**를 맞히는 게 이진 분류예요.\n'
+       '선형식 `z = w·x + b` 는 -∞ ~ +∞ 어떤 값이든 나와서 확률로 쓸 수 없어요.\n'
+       '그래서 z 를 **0 ~ 1 사이로 눌러 주는** 시그모이드 함수에 넣어요.\n\n'
+       '`σ(z) = 1 / (1 + e^(-z))`'),
+     CODE('''import math
+def sigmoid(z):
+    return 1 / (1 + math.exp(-z))
+for z in [-4, -1, 0, 1, 4]:
+    print(z, round(sigmoid(z), 3))''', '시그모이드 값 보기')],
+    [T('표를 보면 규칙이 보여요.\n\n'
+       '- z = 0 이면 정확히 **0.5**\n'
+       '- z 가 클수록 1 에, 작을수록 0 에 가까워져요(닿지는 않아요).\n'
+       '- `σ(-z) = 1 - σ(z)` : 대칭이에요.'),
+     KEY('로지스틱 회귀의 출력 `σ(z)` 는 **"클래스 1 일 확률"** 로 해석해요.')])
+
+L.output('출력은? (math.exp 는 e 의 거듭제곱)', '''\
+import math
+z = 2 * 1.5 - 3
+p = 1 / (1 + math.exp(-z))
+print(z, p)''',
+    'z = 3 - 3 = 0 이라 `e^0 = 1`, p = 1 / (1 + 1) = 0.5 예요.\n\n```\n{out}\n```')
+
+L.ox('시그모이드 함수의 출력은 z 가 아주 크면 정확히 1 이 된다.', False,
+     '수학적으로는 1 에 **한없이 가까워질 뿐** 1 이 되지는 않아요. (컴퓨터에서는 아주 큰 z 에서 반올림으로 1.0 이 표시될 수는 있어요.)')
+
+L.explain('결정 경계와 임계값',
+    [T('확률이 나오면 **임계값(threshold)** 으로 0/1 을 정해요. 기본은 0.5 예요.\n'
+       '`p ≥ 0.5` ⇔ `σ(z) ≥ 0.5` ⇔ `z ≥ 0` 이에요.\n'
+       '그래서 두 클래스를 가르는 경계는 `w·x + b = 0` 인 곳이에요.'),
+     REVEAL('w1 = 2, w2 = -1, b = -3 일 때 점 (2, 0) 은 어느 클래스일까요?',
+            '`z = 2×2 + (-1)×0 - 3 = 1` → z > 0 이므로 p > 0.5 → **클래스 1**.\n\n경계는 `2·x1 - x2 - 3 = 0`, 즉 직선 `x2 = 2·x1 - 3` 이에요.')],
+    [T('특성이 2개면 결정 경계는 **직선**, 3개면 **평면**이에요. 그래서 로지스틱 회귀는 **선형 분류기**예요.\n'
+       '데이터가 곡선 모양으로 섞여 있으면 직선 하나로는 잘 못 나눠요.'),
+     THINK('임계값을 0.5 에서 0.8 로 올리면? → 확률이 0.8 이상인 것만 1 로 판정하니 **1 로 예측하는 개수가 줄어들어요**. 이건 π-04 에서 자세히!')])
+
+L.short('w = 3, b = -6 인 로지스틱 회귀(특성 1개)의 결정 경계는 x = ? (숫자만)', '2',
+    '`3x - 6 = 0` → x = 2. x 가 2 보다 크면 z > 0 이라 클래스 1 이에요.', alts=['2.0', 'x=2', 'x = 2'],
+    check_code='print(6 // 3)')
+
+L.explain('손실 함수: log loss',
+    [T('회귀는 MSE 로 오차를 쟀지만, 로지스틱 회귀는 보통 **log loss(이진 교차 엔트로피)** 를 줄이도록 학습해요.\n\n'
+       '`loss = -(1/n) * Σ [ y·log(p) + (1 - y)·log(1 - p) ]`\n\n'
+       'y = 1 이면 `-log(p)`, y = 0 이면 `-log(1 - p)` 만 남아요.'),
+     TABS(('정답 1, p = 0.9', '맞는 쪽으로 확신 → 손실 작음', 'import math\nprint(round(-math.log(0.9), 3))'),
+          ('정답 1, p = 0.5', '애매함 → 중간', 'import math\nprint(round(-math.log(0.5), 3))'),
+          ('정답 1, p = 0.1', '틀린 쪽으로 확신 → 손실 큼', 'import math\nprint(round(-math.log(0.1), 3))'))],
+    [T('`-log(p)` 는 p 가 0 에 가까워질수록 **매우 커져요**. 그래서 "확신하고 틀리면" 크게 벌을 받아요.\n'
+       '모델은 이 손실을 줄이는 방향으로 w, b 를 경사하강법 같은 방법으로 조정해요.'),
+     WARN('log(0) 은 정의되지 않아요. 직접 계산할 때 p 가 정확히 0 이나 1 이면 오류가 나요(`math.log(0)` → ValueError).')])
+
+L.bucket('정답(y)과 예측 확률(p)을 보고 손실이 **작은 것 / 큰 것**으로 나눠 보세요.', ['손실 작음', '손실 큼'],
+    [['y = 1, p = 0.95', 1], ['y = 0, p = 0.05', 1], ['y = 1, p = 0.02', 2], ['y = 0, p = 0.97', 2],
+     ['y = 0, p = 0.1', 1], ['y = 1, p = 0.08', 2]],
+    'y = 1 이면 p 가 클수록, y = 0 이면 p 가 작을수록 손실이 작아요. 정답 반대쪽으로 확신하면 손실이 커요.')
+
+L.explain('sklearn 으로 로지스틱 회귀',
+    [T('코랩에서는 몇 줄이면 돼요. 흐름은 **만들기 → fit → predict** 로 모든 모델이 같아요.\n'
+       '`predict` 는 0/1, `predict_proba` 는 **[클래스0 확률, 클래스1 확률]** 을 줘요.'),
+     CODE('''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+X, y = load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+sc = StandardScaler()
+X_train_s = sc.fit_transform(X_train)
+X_test_s = sc.transform(X_test)
+model = LogisticRegression()
+model.fit(X_train_s, y_train)
+print(model.predict(X_test_s[:5]))
+print(model.predict_proba(X_test_s[:2]).round(3))
+print(round(model.score(X_test_s, y_test), 3))''', '로지스틱 회귀 학습', run_=False)],
+    [REVEAL_RUN('실행 결과 보기', '''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+X, y = load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+sc = StandardScaler()
+X_train_s = sc.fit_transform(X_train)
+X_test_s = sc.transform(X_test)
+model = LogisticRegression()
+model.fit(X_train_s, y_train)
+print(model.predict(X_test_s[:5]))
+print(model.predict_proba(X_test_s[:2]).round(3))
+print(round(model.score(X_test_s, y_test), 3))''', '`predict_proba` 의 각 행은 합이 1 이에요. `score` 는 분류 모델에서 **정확도**예요.'),
+     TIP('클래스 1 의 확률만 꺼내려면 `model.predict_proba(X)[:, 1]` — **모든 행의 1번 열**이에요.')])
+
+L.fill('클래스 1 일 확률만 꺼내는 코드의 빈칸을 채우세요.', '''\
+from sklearn.linear_model import LogisticRegression
+X = [[1], [2], [3], [4], [5], [6]]
+y = [0, 0, 0, 1, 1, 1]
+model = LogisticRegression()
+model.___(X, y)
+p1 = model.___(X)[:, 1]
+print(len(p1))''', [['fit'], ['predict_proba']],
+    '학습은 `fit(X, y)`, 확률은 `predict_proba(X)`. `[:, 1]` 은 클래스 1 열이에요. 확률 6개가 나와요.', expect='6')
+
+L.order('코랩에서 분류 모델을 학습·평가하는 순서대로 놓으세요.',
+    ['from sklearn.linear_model import LogisticRegression', 'model = LogisticRegression()',
+     'model.fit(X_train, y_train)', 'pred = model.predict(X_test)', 'print(model.score(X_test, y_test))'],
+    '불러오기 → 모델 만들기 → **학습(fit)** → 예측(predict) → 평가(score). KNN·트리·SVM 도 이 순서가 똑같아요.')
+
+L.practice('[기출유사] 합격 확률 계산기',
+'''로지스틱 회귀로 "자격증 합격"을 예측하려 해요. 학습이 끝나 가중치가 정해져 있어요.
+첫째 줄에 `w1 w2 b`, 둘째 줄에 학생 수 n, 다음 n 줄에 각 학생의 `공부시간 모의고사점수` 가 주어져요.
+
+**[조건]**
+- `z = w1 * 공부시간 + w2 * 점수 + b`, `p = 1 / (1 + e^(-z))` (`math.exp` 사용)
+- 각 학생마다 `확률 판정` 을 한 줄에 출력: 확률은 `f"{p:.3f}"`, 판정은 `p >= 0.5` 이면 `합격`, 아니면 `불합격`
+- 입력은 모두 실수로 받아요.
+
+{ex}
+
+{ex2}''',
+'''import math
+w1, w2, b = map(float, input().split())
+n = int(input())
+# n명의 합격 확률을 계산하세요
+''',
+'''import math
+w1, w2, b = map(float, input().split())
+n = int(input())
+for _ in range(n):
+    h, s = map(float, input().split())
+    z = w1 * h + w2 * s + b          # 선형식
+    p = 1 / (1 + math.exp(-z))       # 시그모이드
+    print(f"{p:.3f}", "합격" if p >= 0.5 else "불합격")''',
+    ['0.5 0.1 -10\n3\n4 70\n10 50\n2 30', '1 0 -5\n2\n5 0\n7 0'],
+    ['0 0 0\n1\n1 1', '-1 0.05 2\n2\n10 100\n0 0', '2 2 -1\n1\n0 0'],
+    ['한 학생 입력: `h, s = map(float, input().split())`', '`p = 1 / (1 + math.exp(-z))`',
+     '조건부 표현식 `"합격" if p >= 0.5 else "불합격"` 을 쓰면 한 줄에 출력할 수 있어요.'],
+    'z = 0 이면 p = 0.5 라 **합격**이에요(조건이 `>=`). 임계값을 0.5 로 두는 것은 `z >= 0` 으로 판정하는 것과 같아요.')
+
+L.practice('log loss 직접 계산',
+'''첫째 줄에 정답(0 또는 1), 둘째 줄에 모델이 예측한 **클래스 1 확률**이 공백으로 주어져요. 평균 log loss 를 계산하세요.
+
+**[조건]**
+- `loss = -(1/n) * Σ [ y·log(p) + (1 - y)·log(1 - p) ]` (`math.log` 는 자연로그)
+- 결과를 `round(값, 4)` 로 출력해요.
+- 확률은 모두 0 보다 크고 1 보다 작아요.
+
+{ex}
+
+{ex2}''',
+'''import math
+y = list(map(int, input().split()))
+p = list(map(float, input().split()))
+# 평균 log loss 를 출력하세요
+''',
+'''import math
+y = list(map(int, input().split()))
+p = list(map(float, input().split()))
+total = 0
+for yi, pi in zip(y, p):
+    total += yi * math.log(pi) + (1 - yi) * math.log(1 - pi)
+print(round(-total / len(y), 4))''',
+    ['1 0 1\n0.9 0.2 0.6', '1 1\n0.5 0.5'], ['0\n0.01', '1 0\n0.01 0.99', '1 0 1 0\n0.7 0.3 0.8 0.4'],
+    ['for 로 `zip(y, p)` 를 함께 돌려요.', 'y = 1 이면 `log(p)`, y = 0 이면 `log(1 - p)` 가 남는 식 그대로 더해요.',
+     '마지막에 **마이너스**와 n 으로 나누기를 잊지 마세요: `round(-total / len(y), 4)`'],
+    '틀린 쪽으로 0.99 를 확신한 입력(`1 0 / 0.01 0.99`)은 손실이 4.6 이 넘어요. 확신하고 틀리면 크게 벌받는다는 걸 숫자로 확인할 수 있어요.')
+
+L.essay('선형회귀 출력 `w·x + b` 를 그대로 분류의 확률로 쓰기 어려운 이유와, 로지스틱 회귀가 이를 어떻게 해결하는지 서술하세요.',
+    '선형식의 출력은 -∞ ~ +∞ 의 값이 나올 수 있어 0 ~ 1 사이여야 하는 확률로 해석할 수 없다. 로지스틱 회귀는 선형식 z 를 시그모이드 함수 1/(1+e^(-z)) 에 넣어 0 과 1 사이 값으로 바꾸고, 이를 클래스 1 일 확률로 해석한 뒤 임계값(보통 0.5)으로 클래스를 정한다.',
+    ['선형식 출력은 범위 제한이 없다', '확률은 0~1 이어야 한다', '시그모이드로 0~1 로 변환', '임계값으로 클래스 결정'])
+
+# =====================================================================
+L = C.lesson('π-03 분류 평가 ①: 혼동행렬과 정밀도·재현율·F1', 30,
+'''- 혼동행렬: **TP**(1을 1로) · **FP**(0을 1로) · **FN**(1을 0으로) · **TN**(0을 0으로)
+- sklearn `confusion_matrix` 배치(0/1): `[[TN, FP], [FN, TP]]` — 행 = 실제, 열 = 예측
+- 정확도 `(TP+TN)/전체` · 정밀도 `TP/(TP+FP)` · 재현율 `TP/(TP+FN)`
+- F1 = `2·P·R / (P + R)` (조화평균)
+- 불균형 데이터에서는 정확도만 보면 속아요!''')
+
+L.review('🔁 지난 시간 복습',
+    [T('로지스틱 회귀는 `z = w·x + b` → 시그모이드 → 확률 → 임계값으로 0/1 을 정했어요.\n'
+       '오늘은 이렇게 낸 예측이 **얼마나 좋은지** 재는 방법을 배워요.'),
+     REVEAL('σ(0) 의 값과, 기본 임계값에서 z = 0 인 점의 판정은?', 'σ(0) = **0.5**, `p ≥ 0.5` 이므로 **클래스 1** 로 판정해요.')])
+L.ox('복습: 로지스틱 회귀의 결정 경계(특성 2개)는 직선이다.', True,
+    '`w1·x1 + w2·x2 + b = 0` 은 직선의 방정식이에요. 그래서 로지스틱 회귀는 선형 분류기예요.', review=True)
+
+L.explain('혼동행렬: 네 칸으로 나누기',
+    [T('예측 결과를 **실제 정답 × 예측** 으로 나누면 네 칸이 생겨요. 관심 있는 클래스(예: 질병, 스팸)를 **양성(1)** 이라 해요.\n\n'
+       '- **TP** (True Positive): 실제 1, 예측 1 ✅\n- **FN** (False Negative): 실제 1, 예측 0 ❌ (놓침)\n'
+       '- **FP** (False Positive): 실제 0, 예측 1 ❌ (헛경보)\n- **TN** (True Negative): 실제 0, 예측 0 ✅'),
+     KEY('**뒤 글자(P/N) = 모델이 예측한 것**, **앞 글자(T/F) = 그 예측이 맞았나**. FP 는 "1 이라고 예측했는데(P) 틀림(F)".')],
+    [T('sklearn 의 `confusion_matrix(y_true, y_pred)` 는 **행이 실제, 열이 예측**이에요.\n'
+       '레이블 0, 1 이면 `[[TN, FP], [FN, TP]]` 순서로 나와요. TP 가 **오른쪽 아래**!'),
+     CODE('''from sklearn.metrics import confusion_matrix
+y_true = [1, 0, 1, 1, 0, 0, 1, 0]
+y_pred = [1, 0, 0, 1, 1, 0, 1, 0]
+print(confusion_matrix(y_true, y_pred))''', 'confusion_matrix', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''from sklearn.metrics import confusion_matrix
+y_true = [1, 0, 1, 1, 0, 0, 1, 0]
+y_pred = [1, 0, 0, 1, 1, 0, 1, 0]
+print(confusion_matrix(y_true, y_pred))''', '왼쪽 위 TN=3, 오른쪽 위 FP=1, 왼쪽 아래 FN=1, 오른쪽 아래 TP=3 이에요.')])
+
+L.match('상황과 혼동행렬 칸을 이어 보세요. (양성 = 스팸)',
+    [['스팸을 스팸으로 걸러 냄', 'TP'], ['정상 메일을 스팸함에 넣음', 'FP'],
+     ['스팸을 받은편지함에 그대로 둠', 'FN'], ['정상 메일을 받은편지함에 둠', 'TN']],
+    '"모델이 스팸이라고 했나(P/N)" 를 먼저 보고, "그게 맞았나(T/F)" 를 붙이면 헷갈리지 않아요.')
+
+L.explain('정확도의 함정',
+    [T('**정확도(Accuracy)** = `(TP + TN) / 전체` — 전체 중 맞힌 비율이에요.\n'
+       '그런데 클래스 비율이 크게 차이 나는 **불균형 데이터**에서는 정확도가 속임수가 될 수 있어요.'),
+     THINK('환자 1000명 중 질병은 10명뿐이에요. 모델이 **무조건 "정상"** 이라고만 답하면 정확도는? → 990/1000 = **0.99**. 그런데 환자를 **한 명도** 못 찾아요!')],
+    [T('그래서 양성을 얼마나 잘 찾는지 보는 지표가 따로 필요해요. 바로 **정밀도**와 **재현율**이에요.'),
+     CODE('''y_true = [0] * 990 + [1] * 10
+y_pred = [0] * 1000                 # 무조건 정상
+correct = sum(1 for a, b in zip(y_true, y_pred) if a == b)
+tp = sum(1 for a, b in zip(y_true, y_pred) if a == 1 and b == 1)
+print("정확도", correct / len(y_true))
+print("찾은 환자", tp)''', '무조건 0 모델')])
+
+L.output('출력은?', '''\
+y_true = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+y_pred = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+acc = sum(a == b for a, b in zip(y_true, y_pred)) / len(y_true)
+tp = sum(a == 1 and b == 1 for a, b in zip(y_true, y_pred))
+print(acc, tp)''',
+    '전부 0 으로 예측해도 0 이 8개라 정확도 0.8 이에요. 하지만 TP 는 0 — 양성을 하나도 못 찾았어요.\n\n```\n{out}\n```')
+
+L.explain('정밀도와 재현율',
+    [T('- **정밀도(Precision)** = `TP / (TP + FP)` — **1 이라고 예측한 것 중** 진짜 1 의 비율\n'
+       '- **재현율(Recall, 민감도, TPR)** = `TP / (TP + FN)` — **실제 1 중** 모델이 찾아낸 비율\n\n'
+       '분모가 다르다는 게 핵심이에요. 정밀도는 **예측 기준**, 재현율은 **실제 기준**.'),
+     CMP(side('정밀도가 중요할 때', '**FP 가 비싼** 상황\n\n- 스팸 필터: 중요한 정상 메일을 스팸으로 버리면 곤란\n- 추천 시스템: 엉뚱한 추천은 신뢰 하락'),
+         side('재현율이 중요할 때', '**FN 이 비싼** 상황\n\n- 암·감염병 진단: 환자를 놓치면 위험\n- 사기 거래 탐지: 사기를 놓치면 손해'))],
+    [T('앞의 혼동행렬(TP=3, FP=1, FN=1, TN=3)로 계산해 봐요.'),
+     REVEAL('정밀도와 재현율은?', '정밀도 = 3 / (3 + 1) = **0.75**\n\n재현율 = 3 / (3 + 1) = **0.75**\n\n정확도 = (3 + 3) / 8 = **0.75**'),
+     EXAM('손계산 문제는 **식 → 숫자 대입 → 결과** 순서로 쓰면 부분 점수를 받기 좋아요.')])
+
+L.bucket('각 상황에서 **더 중요하게 볼 지표**로 분류하세요.', ['정밀도(FP 줄이기)', '재현율(FN 줄이기)'],
+    [['공항 보안 검색: 위험물 놓치면 안 됨', 2], ['스팸 필터: 정상 메일이 스팸함으로 가면 곤란', 1],
+     ['암 1차 검진', 2], ['유튜브 추천: 엉뚱한 영상 추천은 싫음', 1],
+     ['신용카드 사기 탐지', 2], ['법원 유죄 판단: 무고한 사람 처벌은 안 됨', 1]],
+    '"놓치면 큰일(FN)" → 재현율, "잘못 걸면 큰일(FP)" → 정밀도. 서술형에서는 **어떤 오류가 더 비싼지**를 근거로 써요.')
+
+L.explain('F1 점수: 둘을 하나로',
+    [T('정밀도와 재현율은 보통 한쪽을 올리면 다른 쪽이 내려가요. 둘을 함께 보려고 **F1 점수**를 써요.\n\n'
+       '`F1 = 2 × 정밀도 × 재현율 / (정밀도 + 재현율)` — **조화평균**'),
+     TABS(('P=0.8, R=0.8', '둘 다 좋으면 F1 도 높음', 'p, r = 0.8, 0.8\nprint(round(2 * p * r / (p + r), 3))'),
+          ('P=1.0, R=0.1', '산술평균이면 0.55 지만 F1 은 낮음', 'p, r = 1.0, 0.1\nprint(round(2 * p * r / (p + r), 3), (p + r) / 2)'))],
+    [T('조화평균은 **작은 값 쪽으로 끌려가요**. 그래서 한쪽만 좋은 모델은 F1 이 낮게 나와요.\n'
+       '불균형 데이터에서 정확도 대신 F1 을 자주 봐요.'),
+     CODE('''from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+y_true = [1, 0, 1, 1, 0, 0, 1, 0]
+y_pred = [1, 0, 0, 1, 1, 0, 1, 0]
+print(accuracy_score(y_true, y_pred), precision_score(y_true, y_pred),
+      recall_score(y_true, y_pred), f1_score(y_true, y_pred))''', 'sklearn 지표 함수', run_=False),
+     TIP('sklearn 지표 함수는 모두 `(y_true, y_pred)` 순서예요. 순서를 바꾸면 정밀도와 재현율이 뒤바뀌어요!')])
+
+L.short('정밀도 0.5, 재현율 1.0 인 모델의 F1 점수는? (소수 둘째 자리까지 반올림)', '0.67',
+    '`2 × 0.5 × 1.0 / (0.5 + 1.0) = 1.0 / 1.5 = 0.666…` → 0.67', alts=['0.667'],
+    check_code='print(round(2 * 0.5 * 1.0 / 1.5, 2))')
+
+L.spot('정밀도를 계산하려는 코드인데 **식이 잘못된** 줄은?', '''\
+tp, fp, fn, tn = 6, 2, 4, 8
+accuracy = (tp + tn) / (tp + fp + fn + tn)
+precision = tp / (tp + fn)
+recall = tp / (tp + fn)
+print(accuracy, precision, recall)''', 3,
+    '정밀도의 분모는 **예측이 1 인 것** = `tp + fp` 예요. 3번 줄은 재현율 식을 잘못 쓴 거예요.')
+
+L.practice('[기출유사] 혼동행렬과 지표 계산',
+'''질병 진단 모델의 결과를 평가하려 해요. 첫째 줄에 실제 정답, 둘째 줄에 예측값(0 또는 1)이 공백으로 주어져요. (1 = 질병)
+
+**[조건]**
+- 첫째 줄에 `TP=? FP=? FN=? TN=?` 형식으로 출력
+- 다음 네 줄에 정확도, 정밀도, 재현율, F1 을 `이름 값` 형식으로 출력. 값은 `f"{v:.2f}"`
+- 분모가 0 이 되는 지표는 0 으로 해요. (예: 1 로 예측한 것이 없으면 정밀도 0)
+- sklearn 없이 직접 세어 계산하세요.
+
+{ex}
+
+{ex2}''',
+'''y = list(map(int, input().split()))
+p = list(map(int, input().split()))
+tp = fp = fn = tn = 0
+# 네 칸을 세고 지표를 출력하세요
+''',
+'''y = list(map(int, input().split()))
+p = list(map(int, input().split()))
+tp = fp = fn = tn = 0
+for a, b in zip(y, p):
+    if a == 1 and b == 1: tp += 1
+    elif a == 0 and b == 1: fp += 1
+    elif a == 1 and b == 0: fn += 1
+    else: tn += 1
+print(f"TP={tp} FP={fp} FN={fn} TN={tn}")
+acc = (tp + tn) / len(y)
+prec = tp / (tp + fp) if tp + fp > 0 else 0     # 분모 0 처리
+rec = tp / (tp + fn) if tp + fn > 0 else 0
+f1 = 2 * prec * rec / (prec + rec) if prec + rec > 0 else 0
+print("정확도", f"{acc:.2f}")
+print("정밀도", f"{prec:.2f}")
+print("재현율", f"{rec:.2f}")
+print("F1", f"{f1:.2f}")''',
+    ['1 0 1 1 0 0 1 0 1 0\n1 0 0 1 1 0 1 0 0 0', '0 0 0 0 1\n0 0 0 0 0'],
+    ['1 1 1\n1 1 1', '0 1 0 1\n1 0 1 0', '1 0 0 0 0 0 0 0 0 1\n1 1 1 0 0 0 0 0 0 1'],
+    ['`zip(y, p)` 로 (실제, 예측) 쌍을 보며 if/elif 로 네 칸 중 하나에 +1',
+     '분모 0 처리: `prec = tp / (tp + fp) if tp + fp > 0 else 0`',
+     'F1 은 `2 * prec * rec / (prec + rec)`, 이것도 분모 0 을 확인해요.'],
+    '두 번째 예시는 정확도가 0.80 인데 정밀도·재현율·F1 이 모두 0 이에요. 불균형 데이터에서 정확도만 보면 안 되는 이유가 바로 이거예요.')
+
+L.essay('정확도(Accuracy)만으로 분류 모델을 평가하면 안 되는 경우를 **예를 들어** 서술하고, 대신 볼 지표를 쓰세요.',
+    '클래스 비율이 크게 다른 불균형 데이터에서는 정확도만으로 평가하면 안 된다. 예를 들어 1000명 중 환자가 10명이면, 모두 정상으로 예측하는 모델도 정확도가 99% 이지만 환자를 한 명도 찾지 못한다(재현율 0). 따라서 양성 클래스에 대한 정밀도, 재현율, F1 점수 등을 함께 확인해야 한다.',
+    ['불균형 데이터', '다수 클래스만 예측해도 정확도가 높다', '양성을 못 찾는다(재현율 0)', '정밀도·재현율·F1 을 함께 본다'])
+
+L.essay('암 진단 모델에서 정밀도보다 재현율을 더 중요하게 보는 이유를 FN, FP 를 써서 서술하세요.',
+    '암 진단에서 FN 은 실제 암 환자를 정상으로 판정해 치료 시기를 놓치게 하는 오류이고, FP 는 정상인을 암 의심으로 판정해 추가 검사를 받게 하는 오류이다. FN 의 피해가 훨씬 크므로 실제 환자 중 찾아낸 비율인 재현율 TP/(TP+FN) 을 높이는 것이 더 중요하다.',
+    ['FN = 환자를 놓침', 'FP = 정상인을 의심(추가 검사)', 'FN 의 피해가 더 크다', '재현율 = TP/(TP+FN)'])
+
+# =====================================================================
+L = C.lesson('π-04 분류 평가 ②: 임계값과 ROC-AUC', 30,
+'''- 임계값 ↓ → 1 로 예측하는 수 ↑ → **재현율 ↑**(또는 그대로), 대신 FP 가 늘어 정밀도는 대체로 ↓
+- 임계값 ↑ → 그 반대
+- **ROC 곡선**: 임계값을 바꾸며 (FPR, TPR) 점을 이은 곡선. `FPR = FP/(FP+TN)`, `TPR = 재현율`
+- **AUC**: ROC 아래 넓이. 1 = 완벽, 0.5 = 무작위 수준
+- AUC 는 임계값 하나에 묶이지 않고 **순위(점수 매기기) 능력**을 봐요.''')
+
+L.review('🔁 지난 시간 복습',
+    [T('혼동행렬의 네 칸, 그리고 정확도·정밀도·재현율·F1 을 배웠어요.'),
+     FLIP(['정밀도', 'TP / (TP + FP) — 1 이라 예측한 것 중 진짜'], ['재현율', 'TP / (TP + FN) — 실제 1 중 찾아낸 것'],
+          ['F1', '2PR / (P + R) — 조화평균'])])
+L.short('복습: TP=8, FP=2, FN=8, TN=82 일 때 재현율은? (소수 첫째 자리)', '0.5',
+    '재현율 = 8 / (8 + 8) = 0.5. 정밀도는 8 / 10 = 0.8 이에요.', review=True,
+    check_code='print(8 / (8 + 8))')
+
+L.explain('임계값을 바꾸면 무엇이 달라질까',
+    [T('로지스틱 회귀는 확률을 주고, **임계값**으로 0/1 을 정해요. 기본은 0.5 지만 **바꿀 수 있어요**.\n'
+       '같은 확률 목록을 임계값만 바꿔 판정해 볼게요.'),
+     TABS(('임계값 0.3', '', 'prob = [0.9, 0.7, 0.45, 0.35, 0.2, 0.1]\nprint([1 if p >= 0.3 else 0 for p in prob])'),
+          ('임계값 0.5', '', 'prob = [0.9, 0.7, 0.45, 0.35, 0.2, 0.1]\nprint([1 if p >= 0.5 else 0 for p in prob])'),
+          ('임계값 0.8', '', 'prob = [0.9, 0.7, 0.45, 0.35, 0.2, 0.1]\nprint([1 if p >= 0.8 else 0 for p in prob])'))],
+    [T('임계값을 **낮추면** 1 로 판정하는 경우가 늘어요 → 실제 1 을 더 많이 잡아 **재현율이 오르거나 그대로**예요. 대신 0 도 1 로 잡는 FP 가 늘어 정밀도는 보통 떨어져요.\n'
+       '임계값을 **높이면** 확실한 것만 1 → 정밀도가 보통 오르고 재현율은 내려가요.'),
+     KEY('재현율은 임계값을 낮출수록 **절대 줄지 않아요**. 정밀도는 "대체로" 오르내리는 경향이라 항상 그렇다고 단정하진 마세요.'),
+     CODE('''proba = model.predict_proba(X_test)[:, 1]
+pred_03 = (proba >= 0.3).astype(int)    # 임계값 0.3 으로 판정''', 'sklearn 에서 임계값 바꾸기', run_=False, expect_error=True)])
+
+L.choice('질병 검진 모델의 임계값을 0.5 에서 **0.2** 로 낮췄어요. 일반적으로 나타나는 변화는?',
+    ['재현율 ↓, FP ↓', '재현율 ↑ 또는 그대로, FP ↑ 또는 그대로', '정확도가 반드시 오른다', '혼동행렬이 변하지 않는다'], 2,
+    '임계값을 낮추면 더 많은 사람을 양성으로 판정해요. 환자를 덜 놓치지만(재현율 ↑) 정상인을 의심하는 경우(FP)도 늘어요. 정확도는 오를지 내릴지 정해져 있지 않아요.')
+
+L.output('임계값 0.6 으로 판정하고 재현율을 구하는 코드예요. 출력은?', '''\
+y    = [1, 1, 1, 0, 0, 1, 0, 0]
+prob = [0.95, 0.7, 0.55, 0.62, 0.3, 0.4, 0.1, 0.05]
+pred = [1 if p >= 0.6 else 0 for p in prob]
+tp = sum(1 for a, b in zip(y, pred) if a == 1 and b == 1)
+print(pred)
+print(tp / sum(y))''',
+    '0.6 이상은 0.95, 0.7, 0.62 세 개. 그중 실제 1 은 두 개라 TP = 2, 실제 1 은 4개 → 재현율 0.5.\n\n```\n{out}\n```')
+
+L.explain('ROC 곡선',
+    [T('임계값을 하나로 정하지 않고 **모든 임계값**에서 성능을 보는 방법이 ROC 곡선이에요.\n\n'
+       '- 가로축 **FPR** = `FP / (FP + TN)` : 실제 0 중 1 로 잘못 판정한 비율\n'
+       '- 세로축 **TPR** = `TP / (TP + FN)` : 재현율\n\n'
+       '임계값마다 (FPR, TPR) 점을 하나씩 찍어 이으면 곡선이 돼요.'),
+     STEPS(('임계값을 아주 높게', '아무것도 1 로 판정하지 않아요 → (0, 0)'),
+           ('임계값을 낮춰 가며', 'TPR 과 FPR 이 함께 늘어나며 오른쪽 위로 올라가요.'),
+           ('임계값을 아주 낮게', '전부 1 로 판정 → (1, 1)'),
+           ('좋은 모델', 'FPR 이 작을 때 TPR 이 빨리 올라가 **왼쪽 위 모서리**에 붙어요.'))],
+    [T('**AUC**(Area Under the Curve)는 ROC 곡선 아래 넓이예요.\n\n'
+       '- AUC = 1 : 완벽하게 구분\n- AUC = 0.5 : 무작위로 찍는 수준(대각선)\n'
+       '- AUC 는 "**양성 하나와 음성 하나를 무작위로 뽑았을 때 양성에 더 높은 점수를 줄 확률**"로 해석할 수 있어요.'),
+     CODE('''from sklearn.metrics import roc_auc_score
+y_true = [0, 0, 1, 1]
+score  = [0.1, 0.4, 0.35, 0.8]
+print(roc_auc_score(y_true, score))''', 'roc_auc_score', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''from sklearn.metrics import roc_auc_score
+y_true = [0, 0, 1, 1]
+score  = [0.1, 0.4, 0.35, 0.8]
+print(roc_auc_score(y_true, score))''', '(양성, 음성) 쌍 4개 중 양성 점수가 더 높은 쌍이 3개 → 3/4 = 0.75'),
+     WARN('`roc_auc_score` 에는 0/1 예측이 아니라 **확률(점수)** 을 넣어요: `roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])`')])
+
+L.match('AUC 값과 의미를 이어 보세요.',
+    [['AUC = 1.0', '양성과 음성을 완벽히 구분'], ['AUC = 0.5', '무작위 추측과 비슷'],
+     ['AUC = 0.9', '대부분의 쌍에서 양성 점수가 더 높음'], ['ROC 대각선', 'TPR = FPR 인 무작위 모델의 곡선']],
+    'AUC 가 클수록 모델이 양성에 높은 점수를, 음성에 낮은 점수를 잘 주는 거예요.')
+
+L.ox('AUC 를 계산하려면 먼저 임계값 하나를 정해 0/1 예측을 만들어야 한다.', False,
+     'AUC 는 **모든 임계값**을 훑은 ROC 곡선의 넓이라서, 특정 임계값에 의존하지 않아요. 입력도 0/1 이 아니라 확률(점수)이에요.')
+
+L.order('ROC 곡선의 **점 하나**를 얻는 과정을 순서대로 놓으세요.',
+    ['모델로 각 데이터의 양성 확률을 구한다', '임계값 하나를 정한다', '확률 ≥ 임계값이면 1 로 판정한다',
+     '혼동행렬을 세어 TPR 과 FPR 을 계산한다', '(FPR, TPR) 점을 찍는다'],
+    '이걸 여러 임계값으로 반복해 점을 이으면 ROC 곡선이 돼요.', mono=False)
+
+L.fill('임계값 0.3 으로 판정한 예측을 만드는 코드의 빈칸을 채우세요.', '''\
+prob = [0.9, 0.25, 0.4, 0.1]
+pred = [1 if p ___ 0.3 else 0 for p in prob]
+print(pred)''', [['>=', '>']],
+    '`p >= 0.3` 이면 1. 결과 `[1, 0, 1, 0]`. sklearn 에서는 `(proba >= 0.3).astype(int)` 로 써요.',
+    expect='[1, 0, 1, 0]')
+
+L.practice('[기출유사] 임계값 바꿔 보기',
+'''보안 앱이 로그인 시도마다 "해킹일 확률"을 계산해요. 첫째 줄에 실제(1 = 해킹), 둘째 줄에 확률, 셋째 줄에 임계값이 주어져요.
+
+**[조건]**
+- 확률이 임계값 **이상**이면 1, 아니면 0 으로 판정해요.
+- 첫째 줄: 판정 결과를 공백으로 이어 출력
+- 둘째 줄: `재현율 값` (TPR), 셋째 줄: `FPR 값` — 값은 `f"{v:.2f}"`
+- `FPR = FP / (FP + TN)`. 실제 1 과 실제 0 은 각각 1개 이상 있어요.
+
+{ex}
+
+{ex2}''',
+'''y = list(map(int, input().split()))
+prob = list(map(float, input().split()))
+t = float(input())
+# 판정하고 재현율·FPR 을 출력하세요
+''',
+'''y = list(map(int, input().split()))
+prob = list(map(float, input().split()))
+t = float(input())
+pred = [1 if p >= t else 0 for p in prob]       # 임계값 이상이면 1
+print(" ".join(map(str, pred)))
+tp = sum(1 for a, b in zip(y, pred) if a == 1 and b == 1)
+fp = sum(1 for a, b in zip(y, pred) if a == 0 and b == 1)
+pos = y.count(1)            # TP + FN
+neg = y.count(0)            # FP + TN
+print("재현율", f"{tp / pos:.2f}")
+print("FPR", f"{fp / neg:.2f}")''',
+    ['1 0 1 0 1\n0.8 0.6 0.4 0.3 0.9\n0.5', '1 0 1 0 1\n0.8 0.6 0.4 0.3 0.9\n0.35'],
+    ['1 0\n0.5 0.5\n0.5', '1 1 0 0\n0.1 0.2 0.8 0.9\n0.5', '0 1 0 1 0 1\n0.3 0.7 0.2 0.65 0.6 0.31\n0.0'],
+    ['판정: `pred = [1 if p >= t else 0 for p in prob]`', '실제 1 의 개수가 재현율의 분모, 실제 0 의 개수가 FPR 의 분모예요.',
+     '`print(" ".join(map(str, pred)))` 로 리스트를 공백으로 이어요.'],
+    '두 예시를 비교하면 임계값을 0.5 → 0.35 로 낮췄을 때 재현율이 0.67 → 1.00 으로 올랐어요. 이번엔 FPR 이 0.50 그대로지만, 임계값을 더 낮추면(예: 0.0) FPR 도 1.00 까지 올라가요. 이 (FPR, TPR) 점들을 이으면 ROC 곡선이에요.')
+
+L.practice('AUC 를 쌍 비교로 계산하기',
+'''AUC 는 "양성 하나와 음성 하나를 뽑았을 때 양성 점수가 더 높을 확률"과 같아요. 첫째 줄에 실제(0/1), 둘째 줄에 점수가 주어질 때 AUC 를 구하세요.
+
+**[조건]**
+- 모든 (양성, 음성) 쌍을 비교해 양성 점수가 더 크면 1점, 같으면 0.5점, 작으면 0점
+- `AUC = 점수 합 / 쌍의 개수` 를 `round(값, 3)` 으로 출력
+- 양성·음성은 각각 1개 이상 있어요.
+
+{ex}
+
+{ex2}''',
+'''y = list(map(int, input().split()))
+s = list(map(float, input().split()))
+# AUC 를 계산하세요
+''',
+'''y = list(map(int, input().split()))
+s = list(map(float, input().split()))
+pos = [v for v, t in zip(s, y) if t == 1]   # 양성의 점수
+neg = [v for v, t in zip(s, y) if t == 0]   # 음성의 점수
+total = 0
+for a in pos:
+    for b in neg:
+        if a > b: total += 1
+        elif a == b: total += 0.5
+print(round(total / (len(pos) * len(neg)), 3))''',
+    ['0 0 1 1\n0.1 0.4 0.35 0.8', '1 0 1 0 1 0\n0.9 0.8 0.7 0.6 0.5 0.4'],
+    ['1 0\n0.2 0.9', '1 0\n0.5 0.5', '1 1 0 0 0\n0.7 0.9 0.1 0.2 0.3'],
+    ['양성 점수 목록과 음성 점수 목록을 컴프리헨션으로 따로 만들어요.', '이중 for 로 모든 쌍을 비교해요.',
+     '분모는 `len(pos) * len(neg)` 예요.'],
+    '첫 예시는 sklearn `roc_auc_score([0,0,1,1], [0.1,0.4,0.35,0.8])` 와 같은 0.75 가 나와요. AUC 가 **순위**만 본다는 것도 알 수 있어요 — 점수를 모두 2배 해도 결과가 같아요.')
+
+L.essay('분류 임계값을 0.5 보다 **낮추면** 혼동행렬과 재현율·정밀도에 어떤 변화가 생기는지, 그리고 어떤 상황에서 그렇게 하는지 서술하세요.',
+    '임계값을 낮추면 양성(1)으로 판정하는 데이터가 늘어난다. 그 결과 TP 는 늘거나 같고 FN 은 줄어 재현율이 올라가지만, FP 도 늘어나 정밀도는 대체로 떨어진다. 질병 검진이나 사기 탐지처럼 양성을 놓치는 것(FN)이 더 위험한 상황에서 임계값을 낮춘다.',
+    ['양성 판정이 늘어난다', 'FN ↓, 재현율 ↑', 'FP ↑, 정밀도 ↓(대체로)', 'FN 이 위험한 상황(질병 검진 등)'])
+
+# =====================================================================
+L = C.lesson('π-05 검증: 교차검증·GridSearchCV·Pipeline', 35,
+'''- 학습 점수만 높고 테스트 점수가 낮으면 **과적합**. 그래서 데이터를 나눠 검증해요.
+- **K-Fold**: 데이터를 K 조각으로 나눠 한 조각씩 돌아가며 검증 → K 개 점수의 **평균**
+- **StratifiedKFold**: 각 조각의 **클래스 비율을 원본과 같게** (불균형 데이터·분류에 적합)
+- **GridSearchCV**: 하이퍼파라미터 조합을 **모두** 교차검증해 가장 좋은 것(`best_params_`)을 골라요.
+- **Pipeline**: 전처리 + 모델을 묶어 교차검증 안에서도 **데이터 누수**를 막아요.''')
+
+L.review('🔁 지난 시간 복습',
+    [T('임계값을 낮추면 재현율 ↑·FP ↑, ROC 는 (FPR, TPR) 곡선, AUC 는 그 넓이였어요.'),
+     REVEAL('AUC = 0.5 인 모델은 어떤 모델일까요?', '양성과 음성을 **무작위로 찍는 수준**으로밖에 구분하지 못하는 모델이에요. ROC 곡선이 대각선에 가까워요.')])
+L.choice('복습: `roc_auc_score` 에 넣어야 하는 두 번째 인자로 알맞은 것은?',
+    ['model.predict(X_test)', 'model.predict_proba(X_test)[:, 1]', 'y_train', 'model.score(X_test, y_test)'], 2,
+    'AUC 는 순위를 보기 때문에 0/1 이 아니라 **양성 확률(점수)** 을 넣어요.', review=True)
+
+L.explain('왜 나눠서 검증할까: 과적합',
+    [T('모델이 학습 데이터를 **외워 버리면** 학습 점수는 높지만 처음 보는 데이터에서는 틀려요. 이게 **과적합(overfitting)** 이에요.\n'
+       '반대로 모델이 너무 단순해서 학습 데이터조차 못 맞히면 **과소적합(underfitting)** 이에요.\n'
+       '우리가 원하는 건 **일반화** — 새 데이터에서도 잘 맞는 것!'),
+     CMP(side('과적합', '학습 정확도 **1.00**\n테스트 정확도 **0.75**\n\n→ 둘의 차이가 큼', tone='bad'),
+         side('적당함', '학습 정확도 **0.93**\n테스트 정확도 **0.91**\n\n→ 둘 다 높고 차이가 작음', tone='good'))],
+    [T('그래서 테스트 데이터는 **마지막 평가에만** 쓰고, 모델을 고르거나 하이퍼파라미터를 조정할 때는 쓰지 않아요.\n'
+       '테스트 데이터를 보고 모델을 고치면 결국 테스트에 맞춰진 모델이 돼 버려요.'),
+     KEY('**하이퍼파라미터** = 사람이 정하는 설정값(KNN 의 k, 트리의 max_depth, SVM 의 C). 학습으로 정해지는 w, b 는 **파라미터**.')])
+
+L.bucket('학습/테스트 점수를 보고 상태를 분류하세요.', ['과적합', '과소적합', '적당함'],
+    [['학습 0.99 / 테스트 0.70', 1], ['학습 0.62 / 테스트 0.60', 2], ['학습 0.94 / 테스트 0.92', 3],
+     ['학습 1.00 / 테스트 0.81', 1], ['학습 0.55 / 테스트 0.57', 2]],
+    '학습 ≫ 테스트 → 과적합, 둘 다 낮음 → 과소적합, 둘 다 높고 비슷 → 적당함.')
+
+L.explain('K-Fold 교차검증',
+    [T('데이터를 한 번만 나누면 **어떻게 나뉘었느냐**(운)에 따라 점수가 달라져요. 그래서 여러 번 나눠 평균을 내요.'),
+     STEPS(('1. K 조각으로 나누기', '데이터를 K 개(보통 5)로 나눠요.'),
+           ('2. 돌아가며 검증', '1번 조각을 검증용, 나머지로 학습 → 점수. 2번 조각을 검증용 … K 번 반복.'),
+           ('3. 평균 내기', 'K 개 점수의 **평균**(과 표준편차)으로 모델을 평가해요.'),
+           ('장점', '모든 데이터가 **한 번씩은 검증**에 쓰여요. 점수가 한 번의 분할 운에 덜 흔들려요.'))],
+    [T('sklearn 의 `KFold(n_splits=K)` 는 기본으로 **섞지 않고(shuffle=False)** 앞에서부터 잘라요.\n'
+       'n 이 K 로 나누어떨어지지 않으면 **앞쪽 조각이 1개씩 더** 가져가요.'),
+     CODE('''import numpy as np
+from sklearn.model_selection import KFold
+X = np.arange(10)
+for train_idx, test_idx in KFold(n_splits=3).split(X):
+    print(test_idx, len(train_idx))''', 'KFold 의 검증 인덱스', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''import numpy as np
+from sklearn.model_selection import KFold
+X = np.arange(10)
+for train_idx, test_idx in KFold(n_splits=3).split(X):
+    print(test_idx, len(train_idx))''', '10 = 4 + 3 + 3. 첫 조각이 하나 더 많아요.')])
+
+L.output('10개를 `KFold(n_splits=4)` 로 나눌 때 **각 검증 조각의 크기**를 출력하는 코드예요. 출력은?', '''\
+import numpy as np
+from sklearn.model_selection import KFold
+sizes = [len(te) for tr, te in KFold(n_splits=4).split(np.arange(10))]
+print(sizes)''',
+    '10 ÷ 4 = 2 나머지 2 → 앞의 두 조각이 하나씩 더 가져가요.\n\n```\n{out}\n```')
+
+L.explain('StratifiedKFold: 비율 지키기',
+    [T('클래스가 불균형하면(0 이 8개, 1 이 4개) 그냥 자를 때 어떤 조각엔 1 이 하나도 없을 수 있어요.\n'
+       '**StratifiedKFold** 는 각 조각의 클래스 비율을 원본과 같게 맞춰 줘요. split 할 때 **y 도 함께** 넣어요.'),
+     CODE('''import numpy as np
+from sklearn.model_selection import StratifiedKFold
+y = np.array([0] * 8 + [1] * 4)
+X = np.zeros((12, 1))
+for tr, te in StratifiedKFold(n_splits=4).split(X, y):
+    print(y[te])''', 'StratifiedKFold', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''import numpy as np
+from sklearn.model_selection import StratifiedKFold
+y = np.array([0] * 8 + [1] * 4)
+X = np.zeros((12, 1))
+for tr, te in StratifiedKFold(n_splits=4).split(X, y):
+    print(y[te])''', '모든 조각이 0 두 개, 1 하나 — 원본 비율 2:1 그대로예요.')],
+    [T('실제로는 `cross_val_score` 한 줄로 교차검증 점수를 얻어요. 분류 모델에 `cv=5` 처럼 숫자를 주면 sklearn 이 **StratifiedKFold** 를 써요.'),
+     CODE('''from sklearn.datasets import load_iris
+from sklearn.model_selection import cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
+X, y = load_iris(return_X_y=True)
+scores = cross_val_score(KNeighborsClassifier(n_neighbors=5), X, y, cv=5)
+print(scores.round(3))
+print(round(scores.mean(), 3))''', 'cross_val_score', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''from sklearn.datasets import load_iris
+from sklearn.model_selection import cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
+X, y = load_iris(return_X_y=True)
+scores = cross_val_score(KNeighborsClassifier(n_neighbors=5), X, y, cv=5)
+print(scores.round(3))
+print(round(scores.mean(), 3))''', '점수 5개(조각마다 하나)와 그 평균이에요. 분류 모델의 기본 점수는 정확도예요.')])
+
+L.ox('StratifiedKFold 는 각 검증 조각의 클래스 비율이 원본 데이터와 비슷하도록 나눈다.', True,
+     '그래서 불균형 분류 데이터에서 특히 쓸모 있어요. split 에 `y` 를 넣어야 비율을 알 수 있어요.')
+
+L.explain('GridSearchCV: 하이퍼파라미터 고르기',
+    [T('k = 3, 5, 7 중 무엇이 좋을까? 하나씩 교차검증해서 평균 점수가 가장 높은 걸 고르면 돼요.\n'
+       '**GridSearchCV** 는 `param_grid` 의 **모든 조합**을 교차검증으로 평가해 줘요.\n\n'
+       '- `best_params_` : 가장 좋은 조합\n- `best_score_` : 그 조합의 교차검증 평균 점수\n'
+       '- 기본(`refit=True`)으로 최적 조합으로 **전체 학습 데이터에 다시 학습**해 둬요.'),
+     CODE('''from sklearn.datasets import load_iris
+from sklearn.model_selection import GridSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+X, y = load_iris(return_X_y=True)
+grid = GridSearchCV(KNeighborsClassifier(),
+                    param_grid={"n_neighbors": [1, 3, 5, 7, 9]}, cv=5)
+grid.fit(X, y)
+print(grid.best_params_)
+print(round(grid.best_score_, 3))''', 'GridSearchCV', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''from sklearn.datasets import load_iris
+from sklearn.model_selection import GridSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+X, y = load_iris(return_X_y=True)
+grid = GridSearchCV(KNeighborsClassifier(),
+                    param_grid={"n_neighbors": [1, 3, 5, 7, 9]}, cv=5)
+grid.fit(X, y)
+print(grid.best_params_)
+print(round(grid.best_score_, 3))''')],
+    [T('조합 수는 **각 후보 수의 곱**이에요. 후보가 많으면 시간이 빠르게 늘어요.'),
+     THINK('`{"n_neighbors": [3, 5, 7], "weights": ["uniform", "distance"]}` 에 `cv=5` 면? → 조합 3 × 2 = **6개**, 교차검증 학습은 6 × 5 = **30번** (+ 마지막 refit 1번).')])
+
+L.short('`param_grid = {"max_depth": [2, 4, 6, 8], "min_samples_leaf": [1, 5]}`, `cv=3` 인 GridSearchCV 가 교차검증에서 모델을 학습하는 횟수는? (refit 제외, 숫자만)', '24',
+    '조합 4 × 2 = 8개, 조합마다 3번 → 24번. refit 까지 세면 25번이에요.',
+    check_code='print(4 * 2 * 3)')
+
+L.explain('Pipeline: 전처리와 모델을 한 몸으로',
+    [T('KNN 처럼 스케일링이 필요한 모델을 교차검증할 때, **전체 X 를 먼저 스케일링**하면 검증 조각의 정보가 스케일러에 섞여요(데이터 누수).\n'
+       '**Pipeline** 으로 묶으면 교차검증의 **매 조각마다** 학습 부분으로만 스케일러를 fit 해요.'),
+     CODE('''from sklearn.datasets import load_breast_cancer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
+X, y = load_breast_cancer(return_X_y=True)
+pipe = Pipeline([("scaler", StandardScaler()), ("knn", KNeighborsClassifier())])
+grid = GridSearchCV(pipe, {"knn__n_neighbors": [3, 5, 7]}, cv=5)
+grid.fit(X, y)
+print(grid.best_params_)''', 'Pipeline + GridSearchCV', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''from sklearn.datasets import load_breast_cancer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
+X, y = load_breast_cancer(return_X_y=True)
+pipe = Pipeline([("scaler", StandardScaler()), ("knn", KNeighborsClassifier())])
+grid = GridSearchCV(pipe, {"knn__n_neighbors": [3, 5, 7]}, cv=5)
+grid.fit(X, y)
+print(grid.best_params_)''')],
+    [T('Pipeline 안의 하이퍼파라미터 이름은 **`단계이름__파라미터`** (밑줄 **두 개**)로 써요.\n'
+       '단계 이름을 `"knn"` 으로 지었으니 `"knn__n_neighbors"` 예요.'),
+     TIP('`make_pipeline(StandardScaler(), KNeighborsClassifier())` 처럼 쓰면 단계 이름이 소문자 클래스 이름(`kneighborsclassifier`)으로 자동으로 붙어요.')])
+
+L.fill('Pipeline 의 KNN 단계 k 값을 GridSearchCV 로 찾는 코드의 빈칸을 채우세요.', '''\
+from sklearn.datasets import load_iris
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
+X, y = load_iris(return_X_y=True)
+pipe = Pipeline([("sc", StandardScaler()), ("model", KNeighborsClassifier())])
+grid = GridSearchCV(pipe, {"___": [3, 5]}, cv=3)
+grid.fit(X, y)
+print(sorted(grid.___.keys()))''', [['model__n_neighbors'], ['best_params_']],
+    '단계 이름 `model` + 밑줄 두 개 + `n_neighbors`. 최적 조합은 `best_params_` 에 들어 있어요.',
+    expect="['model__n_neighbors']")
+
+L.spot('교차검증 점수를 구하는 코드예요. **데이터 누수**가 일어나는 줄은?', '''\
+X, y = load_breast_cancer(return_X_y=True)
+X = StandardScaler().fit_transform(X)
+model = KNeighborsClassifier()
+scores = cross_val_score(model, X, y, cv=5)
+print(scores.mean())''', 2,
+    '2번 줄에서 **전체 X** 로 스케일러를 fit 해서 각 검증 조각의 평균·표준편차가 학습에 섞여요. `make_pipeline(StandardScaler(), KNeighborsClassifier())` 를 cross_val_score 에 넣어야 해요.')
+
+L.practice('[기출유사] K-Fold 인덱스 나누기',
+'''데이터 n 개를 섞지 않고 k 조각으로 나누는 KFold 를 직접 만들어 보세요. 한 줄에 `n k` 가 주어져요.
+
+**[조건]**
+- 인덱스는 0 부터 n-1 까지. 앞에서부터 순서대로 잘라요.
+- 조각 크기는 `n // k` 이고, 나머지 `n % k` 개는 **앞쪽 조각부터 1개씩** 더 가져가요. (sklearn KFold 와 같은 방식)
+- 조각마다 `fold 번호: 검증=[인덱스 리스트] 학습개수=값` 형식으로 출력해요. (리스트는 `print` 그대로의 모양)
+
+{ex}
+
+{ex2}''',
+'''n, k = map(int, input().split())
+start = 0
+# k 개 조각을 출력하세요
+''',
+'''n, k = map(int, input().split())
+start = 0
+for i in range(k):
+    size = n // k + (1 if i < n % k else 0)   # 앞쪽 조각이 1개씩 더
+    test = list(range(start, start + size))
+    print(f"fold {i + 1}: 검증={test} 학습개수={n - size}")
+    start += size''',
+    ['10 3', '6 2'], ['5 5', '7 3', '12 4'],
+    ['조각 크기: `n // k + (1 if i < n % k else 0)`', '`start` 를 조각 크기만큼 계속 옮겨요.',
+     '검증 리스트는 `list(range(start, start + size))`, 학습 개수는 `n - size`'],
+    '`10 3` 결과가 앞에서 본 sklearn `KFold(n_splits=3)` 출력(4, 3, 3개)과 똑같아요. 모든 인덱스가 딱 한 번씩 검증에 쓰여요.')
+
+L.practice('[기출유사] 그리드 서치 손으로 하기',
+'''KNN 의 k 후보마다 5-Fold 교차검증 점수가 주어졌어요. 첫째 줄에 후보 수 m, 다음 m 줄에 `후보이름 점수1 점수2 …` 가 주어져요.
+
+**[조건]**
+- 후보마다 `후보이름 평균` 을 출력. 평균은 `f"{v:.3f}"`
+- 마지막 줄에 `최적: 후보이름` 출력. 평균이 같으면 **먼저 나온** 후보를 골라요.
+- 점수 개수는 후보마다 같아요.
+
+{ex}
+
+{ex2}''',
+'''m = int(input())
+best_name, best_mean = "", -1
+# 후보마다 평균을 구하고 최적을 고르세요
+''',
+'''m = int(input())
+best_name, best_mean = "", -1
+for _ in range(m):
+    parts = input().split()
+    name = parts[0]
+    scores = list(map(float, parts[1:]))
+    mean = sum(scores) / len(scores)
+    print(name, f"{mean:.3f}")
+    if mean > best_mean:          # 더 클 때만 바꿔서 동점이면 먼저 나온 것 유지
+        best_name, best_mean = name, mean
+print("최적:", best_name)''',
+    ['3\nk=1 0.90 0.85 0.88 0.92 0.86\nk=5 0.93 0.94 0.91 0.95 0.92\nk=15 0.89 0.90 0.88 0.91 0.90',
+     '2\ndepth=3 0.8 0.8\ndepth=5 0.9 0.7'],
+    ['1\nC=1 0.5', '2\na 1 1 1\nb 0 0 0', '4\nk=3 0.7 0.9\nk=5 0.95 0.95\nk=7 0.6 0.6\nk=9 0.99 0.98'],
+    ['`parts = input().split()` 하면 `parts[0]` 이 이름, `parts[1:]` 이 점수예요.',
+     '최댓값을 찾을 때 `>` 를 쓰면 동점일 때 먼저 나온 것이 남아요.', '평균 출력은 `f"{mean:.3f}"`'],
+    'GridSearchCV 가 하는 일이 바로 이거예요: 조합마다 교차검증 평균을 구하고 가장 높은 것을 `best_params_` 로 고르죠. `k=1` 처럼 너무 작은 k 는 과적합으로 점수가 낮게 나오는 경우가 많아요.')
+
+L.essay('모델을 평가할 때 train/test 한 번 나누기 대신 **K-Fold 교차검증**을 쓰는 이유를 서술하세요.',
+    '데이터를 한 번만 나누면 어떤 데이터가 테스트에 들어갔는지에 따라 점수가 크게 달라질 수 있다. K-Fold 교차검증은 데이터를 K 조각으로 나누어 각 조각을 한 번씩 검증에 쓰고 K 개의 점수를 평균하므로, 모든 데이터를 학습과 검증에 활용하고 분할 운에 덜 흔들리는 믿을 만한 성능 추정을 얻을 수 있다. 하이퍼파라미터를 고를 때도 테스트 데이터를 쓰지 않고 비교할 수 있다.',
+    ['한 번 분할은 운에 따라 점수가 달라진다', 'K 조각을 돌아가며 검증', 'K 개 점수의 평균', '모든 데이터가 검증에 한 번씩 쓰인다'])
+
+# =====================================================================
+L = C.lesson('π-06 KNN: 가까운 이웃에게 물어보기', 30,
+'''- KNN 은 새 데이터와 **가장 가까운 k 개**의 학습 데이터를 찾아 **다수결**로 분류해요.
+- 거리: 유클리드 `√((x1-x2)² + (y1-y2)²)` (sklearn 기본)
+- k 작음 → 잡음에 민감 → **과적합**, k 큼 → 경계가 뭉개짐 → **과소적합**. 이진 분류는 **홀수 k**.
+- 거리를 쓰니 **스케일링 필수**. 특성이 아주 많으면 **차원의 저주**.
+- 학습 때는 저장만, 예측 때 계산 → 예측이 느려요.''')
+
+L.review('🔁 지난 시간 복습',
+    [T('K-Fold 로 평균 점수를 내고, GridSearchCV 로 하이퍼파라미터를 고르고, Pipeline 으로 데이터 누수를 막았어요.'),
+     REVEAL('Pipeline 의 단계 이름이 "knn" 일 때 k 를 그리드 서치하는 키 이름은?', '`"knn__n_neighbors"` — 밑줄 **두 개**!')])
+L.output('복습: 13개를 섞지 않고 5조각으로 나눌 때 각 조각 크기는?', '''\
+n, k = 13, 5
+print([n // k + (1 if i < n % k else 0) for i in range(k)])''',
+    '13 = 5×2 + 3 → 앞의 3조각이 하나씩 더.\n\n```\n{out}\n```', review=True)
+
+L.explain('KNN 의 원리',
+    [T('KNN(K-Nearest Neighbors)은 아주 단순해요. "**나와 비슷한(가까운) 친구들은 뭘까?**"\n\n'
+       '1. 새 점과 모든 학습 점 사이의 **거리**를 구해요.\n2. 가장 가까운 **k 개**를 골라요.\n3. 그 k 개 중 **가장 많은 클래스**로 예측해요.'),
+     CODE('''import math
+def dist(a, b):
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+print(dist((1, 2), (4, 6)))
+print(round(dist((0, 0, 0), (1, 2, 2)), 2))''', '유클리드 거리')],
+    [T('KNN 은 학습(fit) 단계에서 하는 일이 **데이터 저장뿐**이에요(게으른 학습, lazy learning).\n'
+       '그 대신 예측할 때마다 모든 학습 데이터와 거리를 계산하니 **데이터가 많으면 예측이 느려요**.'),
+     KEY('sklearn `KNeighborsClassifier()` 의 기본값: `n_neighbors=5`, 거리 = 민코프스키(p=2) = **유클리드 거리**.')])
+
+L.output('세 점 중 (2, 2) 에서 가장 가까운 점의 이름은?', '''\
+import math
+pts = {"A": (5, 6), "B": (3, 1), "C": (0, 5)}
+q = (2, 2)
+best = min(pts, key=lambda n: math.dist(pts[n], q))
+print(best, round(math.dist(pts[best], q), 3))''',
+    'A: √(9+16)=5, B: √(1+1)≈1.414, C: √(4+9)≈3.606 → B.\n\n```\n{out}\n```')
+
+L.explain('k 는 어떻게 고를까',
+    [T('k 는 KNN 의 핵심 **하이퍼파라미터**예요.'),
+     CMP(side('k 가 너무 작으면 (k = 1)', '가장 가까운 점 **하나**만 보고 결정 → 잡음·이상치 하나에도 결과가 바뀌어요.\n\n경계가 울퉁불퉁 → **과적합**(학습 정확도는 1.0 이 되기 쉬움)', tone='bad'),
+         side('k 가 너무 크면 (k = 전체 개수)', '거의 전부의 다수결 → 항상 **가장 많은 클래스**만 답해요.\n\n경계가 너무 단순 → **과소적합**', tone='bad'))],
+    [T('그래서 적당한 k 를 **교차검증(GridSearchCV)** 으로 골라요.\n'
+       '이진 분류에서는 다수결이 **동점이 되지 않도록 홀수 k** 를 자주 써요.'),
+     TIP('`weights="distance"` 로 두면 가까운 이웃일수록 표에 더 큰 무게를 줘요. 기본은 `"uniform"`(모두 1표).')])
+
+L.match('k 값에 따른 KNN 의 모습을 이어 보세요.',
+    [['k = 1', '학습 데이터는 거의 다 맞히지만 잡음에 민감(과적합)'], ['k = 전체 데이터 수', '항상 다수 클래스만 예측(과소적합)'],
+     ['적당한 k', '교차검증 점수가 가장 높은 값'], ['홀수 k', '이진 분류에서 다수결 동점 방지']],
+    'k 가 작을수록 복잡한 모델(분산 ↑), 클수록 단순한 모델(편향 ↑)이에요. π-11 의 편향-분산과 연결돼요.')
+
+L.explain('스케일링이 꼭 필요한 이유',
+    [T('KNN 은 **거리**로 판단해요. 특성의 단위가 다르면 숫자가 큰 특성이 거리를 독차지해요.\n'
+       '예: 나이(10~20)와 용돈(10000~50000원). 나이가 5살 차이 나도 용돈 100원 차이보다 작게 취급돼요!'),
+     CODE('''import math
+a = (17, 30000)      # (나이, 용돈)
+b = (12, 30100)
+c = (17, 31000)
+print(round(math.dist(a, b), 1))   # 나이 5살 차이
+print(round(math.dist(a, c), 1))   # 용돈만 1000원 차이''', '스케일링 전 거리')],
+    [T('표준화(또는 Min-Max)로 범위를 맞추면 각 특성이 공평하게 거리에 기여해요. 실제 데이터에서도 차이가 나요.'),
+     REVEAL_RUN('유방암 데이터: 스케일링 전/후 KNN 정확도', '''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+raw = KNeighborsClassifier().fit(X_tr, y_tr)
+scaled = make_pipeline(StandardScaler(), KNeighborsClassifier()).fit(X_tr, y_tr)
+print("스케일링 전", round(raw.score(X_te, y_te), 3))
+print("스케일링 후", round(scaled.score(X_te, y_te), 3))''', '같은 데이터·같은 k 인데 스케일링만으로 정확도가 올랐어요.'),
+     WARN('결정트리·랜덤포레스트는 거리 대신 "기준값보다 큰가?" 로 나누기 때문에 스케일링의 영향을 거의 받지 않아요. **KNN·SVM·로지스틱 회귀**(경사하강) 쪽이 스케일링에 민감해요.')])
+
+L.bucket('스케일링에 **민감한** 모델과 **거의 영향 없는** 모델로 나눠 보세요.', ['스케일링 중요', '거의 영향 없음'],
+    [['KNN', 1], ['SVM', 1], ['결정트리', 2], ['랜덤포레스트', 2], ['로지스틱 회귀(규제·경사하강)', 1]],
+    '거리·내적을 쓰거나 경사하강으로 학습하는 모델은 스케일이 결과에 영향을 줘요. 트리는 특성 하나씩 기준값으로 자르니 단위와 상관없어요.')
+
+L.explain('차원의 저주',
+    [T('특성(차원)이 아주 많아지면 데이터가 공간에 **듬성듬성** 흩어져요.\n'
+       '그러면 "가장 가까운 이웃"도 사실 **멀리** 있고, 가까운 점과 먼 점의 거리 차이가 작아져 **이웃의 의미가 약해져요**.\n'
+       '같은 밀도를 유지하려면 필요한 데이터 양이 차원에 따라 **폭발적으로** 늘어나요.'),
+     THINK('1차원 [0, 1] 구간을 0.1 간격 칸으로 채우려면 점 10개, 2차원 정사각형은 100개, 10차원이면 10¹⁰ 개가 필요해요!'),
+     TIP('대처: 쓸모없는 특성 제거(특성 선택), 차원 축소(PCA 등), 데이터 더 모으기.')])
+
+L.ox('KNN 에서 특성의 개수가 매우 많아지면 거리 기반 이웃 찾기가 덜 믿을 만해질 수 있다.', True,
+     '차원의 저주 때문이에요. 고차원에서는 점들 사이 거리가 서로 비슷해져 "가까운 이웃"을 구분하기 어려워요.')
+
+L.fill('k = 3 인 KNN 을 만들어 학습하는 코드의 빈칸을 채우세요.', '''\
+from sklearn.neighbors import KNeighborsClassifier
+X = [[1, 1], [1, 2], [2, 1], [8, 8], [8, 9], [9, 8]]
+y = [0, 0, 0, 1, 1, 1]
+knn = KNeighborsClassifier(___=3)
+knn.fit(X, y)
+print(knn.___([[2, 2], [7, 8]]))''', [['n_neighbors'], ['predict']],
+    '이웃 수 인자는 `n_neighbors`, 예측은 `predict`. (2,2) 근처는 0, (7,8) 근처는 1 → `[0 1]`.', expect='[0 1]')
+
+L.practice('[기출유사] KNN 직접 구현하기',
+'''동아리 지원서를 KNN 으로 분류하려 해요. 첫째 줄에 학습 데이터 수 n, 다음 n 줄에 `x y 클래스`, 그다음 줄에 새 점 `x y`, 마지막 줄에 k 가 주어져요.
+
+**[조건]**
+- 유클리드 거리 `√((x1-x2)² + (y1-y2)²)` 를 써요 (`math.sqrt` 또는 `math.dist`).
+- 거리가 가까운 순으로 k 개를 골라요. 거리가 같으면 **먼저 입력된 점**이 앞이에요.
+- 첫째 줄: `이웃:` 뒤에 고른 k 개의 클래스를 가까운 순서로 공백으로 출력
+- 둘째 줄: `예측:` 뒤에 k 개 중 가장 많은 클래스 출력 (클래스는 2종류, k 는 홀수라 동점은 없어요)
+- sklearn 없이 구현하세요.
+
+{ex}
+
+{ex2}''',
+'''import math
+n = int(input())
+data = []
+for _ in range(n):
+    x, y, c = input().split()
+    data.append((float(x), float(y), c))
+# 새 점과 k 를 입력받아 분류하세요
+''',
+'''import math
+n = int(input())
+data = []
+for _ in range(n):
+    x, y, c = input().split()
+    data.append((float(x), float(y), c))
+qx, qy = map(float, input().split())
+k = int(input())
+# (거리, 클래스) 목록을 만들고 거리 순으로 안정 정렬 → 같은 거리면 입력 순서 유지
+dists = [(math.sqrt((x - qx) ** 2 + (y - qy) ** 2), c) for x, y, c in data]
+near = sorted(dists, key=lambda t: t[0])[:k]
+labels = [c for d, c in near]
+print("이웃:", " ".join(labels))
+votes = {}
+for c in labels:
+    votes[c] = votes.get(c, 0) + 1
+print("예측:", max(votes, key=votes.get))''',
+    ['6\n1 1 A\n2 1 A\n1 2 A\n6 6 B\n7 6 B\n6 7 B\n2 2\n3', '5\n0 0 X\n4 0 O\n0 4 O\n3 3 X\n5 5 O\n2 2\n3'],
+    ['3\n0 0 A\n10 10 B\n1 1 A\n9 9\n1', '4\n1 0 A\n0 1 B\n-1 0 B\n0 -1 A\n0 0\n3', '5\n1 1 A\n2 2 A\n8 8 B\n9 9 B\n10 10 B\n5 5\n5'],
+    ['거리 목록 `[(거리, 클래스), …]` 를 컴프리헨션으로 만들어요.',
+     '`sorted(dists, key=lambda t: t[0])[:k]` — 파이썬 정렬은 안정 정렬이라 같은 거리면 입력 순서가 유지돼요.',
+     '딕셔너리로 표를 세고 `max(votes, key=votes.get)` 으로 다수결'],
+    '마지막 숨은 테스트처럼 k 를 전체 개수(5)로 두면 새 점 위치와 상관없이 **다수 클래스(B)** 가 나와요. k 가 너무 크면 과소적합되는 이유예요.')
+
+L.essay('KNN 에서 k 를 1 처럼 **너무 작게** 정했을 때 생기는 문제를 과적합과 연결해 서술하세요.',
+    'k 가 1 이면 가장 가까운 학습 데이터 하나만 보고 클래스를 정하므로, 그 점이 잡음이나 이상치이면 예측이 바로 틀린다. 학습 데이터에서는 자기 자신이 가장 가까워 정확도가 매우 높지만, 결정 경계가 지나치게 복잡해져 새로운 데이터에서는 성능이 떨어지는 과적합이 일어난다. 따라서 교차검증으로 적절한 k 를 골라야 한다.',
+    ['가장 가까운 하나만 본다', '잡음·이상치에 민감', '학습 정확도는 높고 테스트는 낮다(과적합)', '교차검증으로 k 선택'])
+
+L.essay('KNN 을 쓰기 전에 특성 스케일링을 해야 하는 이유를 서술하세요.',
+    'KNN 은 데이터 사이의 거리로 이웃을 찾는데, 특성마다 단위와 범위가 다르면 값의 범위가 큰 특성이 거리 계산을 대부분 차지한다. 그러면 범위가 작은 특성은 중요해도 거의 반영되지 않는다. 표준화나 정규화로 범위를 맞추면 모든 특성이 공평하게 거리에 기여한다.',
+    ['KNN 은 거리 기반', '범위가 큰 특성이 거리를 지배', '작은 범위 특성이 무시됨', '스케일링으로 공평하게'])
+
+# =====================================================================
+L = C.lesson('π-07 나이브 베이즈: 확률로 분류하기', 30,
+'''- 베이즈 정리: `P(A|B) = P(B|A) × P(A) / P(B)` — 사전확률을 증거로 **업데이트**
+- 나이브 베이즈: 클래스 C 마다 `P(C) × P(x1|C) × P(x2|C) × …` 를 계산해 **가장 큰 클래스**로 분류
+- "나이브" = 클래스가 주어지면 특성들이 **서로 독립**이라고 가정
+- 확률 0 하나가 전체를 0 으로 만드는 문제 → **라플라스 스무딩**(개수 +1)
+- GaussianNB(연속값), MultinomialNB(단어 개수), BernoulliNB(있다/없다)''')
+
+L.review('🔁 지난 시간 복습',
+    [T('KNN 은 가장 가까운 k 개의 다수결. k 가 작으면 과적합, 크면 과소적합, 거리 기반이라 스케일링 필수였어요.'),
+     REVEAL('k = 1 인 KNN 의 학습 데이터 정확도가 거의 1.0 이 되는 이유는?', '학습 데이터의 각 점은 **자기 자신**이 가장 가까운 이웃(거리 0)이라 자기 클래스를 그대로 맞히기 때문이에요. (같은 위치에 다른 클래스 점이 겹치면 예외)')])
+L.ox('복습: 결정트리는 KNN 보다 특성 스케일링의 영향을 훨씬 덜 받는다.', True,
+    '트리는 특성 하나를 기준값으로 자르기만 하니 단위가 바뀌어도 자르는 위치만 같이 바뀌어요.', review=True)
+
+L.explain('조건부 확률과 베이즈 정리',
+    [T('`P(A|B)` 는 "B 가 일어났을 때 A 일 확률"이에요. **조건이 바뀌면 확률이 달라져요**.\n'
+       '베이즈 정리는 거꾸로 된 조건부 확률을 이어 줘요.\n\n'
+       '`P(A|B) = P(B|A) × P(A) / P(B)`\n\n'
+       '- `P(A)` : 사전확률(증거 보기 전)\n- `P(B|A)` : 가능도\n- `P(A|B)` : 사후확률(증거 본 뒤)'),
+     KEY('분모 `P(B)` 는 "B 가 일어날 전체 확률" = `P(B|A)P(A) + P(B|A가 아님)P(A가 아님)` 으로 구해요.')],
+    [T('유명한 예: 유병률 1% 인 질병, 검사의 민감도(환자를 양성으로) 90%, 위양성률(정상인을 양성으로) 5%.\n'
+       '양성이 나왔을 때 진짜 환자일 확률은?'),
+     CODE('''p_d = 0.01           # P(질병)
+p_pos_d = 0.90       # P(양성 | 질병)
+p_pos_nd = 0.05      # P(양성 | 정상)
+p_pos = p_pos_d * p_d + p_pos_nd * (1 - p_d)     # P(양성)
+print(round(p_pos, 4))
+print(round(p_pos_d * p_d / p_pos, 4))           # P(질병 | 양성)''', '베이즈 정리 계산'),
+     THINK('양성이 나와도 실제 환자일 확률은 약 15% 뿐이에요! 유병률(사전확률)이 낮으면 양성 중 대부분이 위양성이에요.')])
+
+L.short('주머니 A 를 고를 확률 0.5, B 를 고를 확률 0.5. A 에서 빨간 공이 나올 확률 0.6, B 에서 0.2. 빨간 공이 나왔을 때 주머니가 A 였을 확률은? (소수 둘째 자리)', '0.75',
+    '`P(A|빨강) = 0.6×0.5 / (0.6×0.5 + 0.2×0.5) = 0.3 / 0.4 = 0.75`',
+    check_code='print(round(0.6*0.5 / (0.6*0.5 + 0.2*0.5), 2))')
+
+L.explain('나이브 베이즈 분류기',
+    [T('분류하려면 클래스마다 `P(C | 특성들)` 을 비교하면 돼요. 베이즈 정리로 바꾸면\n\n'
+       '`P(C | x1, x2) ∝ P(C) × P(x1, x2 | C)`\n\n'
+       '분모 `P(x1, x2)` 는 모든 클래스에서 **같아서** 비교할 땐 빼도 돼요.\n'
+       '그런데 `P(x1, x2 | C)` 를 직접 구하기 어려워서 **"특성들이 서로 독립"** 이라고 가정해요(나이브!).\n\n'
+       '`P(C) × P(x1|C) × P(x2|C)`'),
+     STEPS(('예시 데이터 (10일)', '운동함 6일, 안 함 4일. 운동한 날 중 맑음 4일·더움 2일, 안 한 날 중 맑음 1일·더움 3일'),
+           ('운동함 점수', '`P(운동) × P(맑음|운동) × P(더움|운동) = 6/10 × 4/6 × 2/6 ≈ 0.1333`'),
+           ('안 함 점수', '`P(안함) × P(맑음|안함) × P(더움|안함) = 4/10 × 1/4 × 3/4 = 0.075`'),
+           ('결론', '"맑고 더운 날" → 점수가 더 큰 **운동함**으로 분류'))],
+    [T('점수를 합이 1 이 되게 나누면 실제 사후확률이 돼요: `0.1333 / (0.1333 + 0.075) ≈ 0.64`.\n'
+       '하지만 **분류만** 할 거면 크기 비교로 충분해요.'),
+     WARN('독립 가정은 현실에서 잘 안 맞을 때가 많아요(맑음과 더움은 관련 있죠). 그래도 계산이 빠르고 텍스트 분류(스팸) 같은 데서 꽤 잘 작동해요.')])
+
+L.output('나이브 베이즈 점수를 계산하는 코드예요. 출력은?', '''\
+p_spam, p_ham = 0.4, 0.6
+p_word = {"spam": {"무료": 0.5, "회의": 0.1},
+          "ham":  {"무료": 0.05, "회의": 0.4}}
+words = ["무료", "회의"]
+s = p_spam * p_word["spam"]["무료"] * p_word["spam"]["회의"]
+h = p_ham * p_word["ham"]["무료"] * p_word["ham"]["회의"]
+print(round(s, 3), round(h, 3))
+print("spam" if s > h else "ham")''',
+    '스팸: 0.4 × 0.5 × 0.1 = 0.02, 정상: 0.6 × 0.05 × 0.4 = 0.012 → 스팸 점수가 더 커요.\n\n```\n{out}\n```')
+
+L.explain('확률 0 문제와 라플라스 스무딩',
+    [T('학습 데이터에서 "당첨" 이라는 단어가 정상 메일에 **한 번도** 안 나왔다면 `P(당첨|정상) = 0`.\n'
+       '곱셈이라 다른 단어가 아무리 정상 같아도 정상 점수가 **0** 이 돼 버려요.\n\n'
+       '그래서 개수에 **1 을 더해** 0 을 피해요(라플라스 스무딩).\n'
+       '`P(단어|C) = (단어 개수 + 1) / (C 의 전체 단어 수 + 단어 종류 수)`'),
+     TIP('sklearn `MultinomialNB(alpha=1.0)` 의 `alpha` 가 이 더하는 값이에요. 기본값이 1.0 이에요.')],
+    [T('특성 종류에 따라 쓰는 나이브 베이즈가 달라요.'),
+     FLIP(['GaussianNB', '연속값 특성 (키, 꽃잎 길이) — 클래스별로 정규분포를 가정'],
+          ['MultinomialNB', '개수 특성 (문서의 단어 등장 횟수) — 텍스트 분류'],
+          ['BernoulliNB', '있다/없다(0/1) 특성 — 단어 포함 여부']),
+     CODE('''from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+X, y = load_iris(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+nb = GaussianNB().fit(X_tr, y_tr)
+print(round(nb.score(X_te, y_te), 3))''', 'GaussianNB', run_=False)])
+
+L.match('나이브 베이즈 용어와 뜻을 이어 보세요.',
+    [['사전확률 P(C)', '특성을 보기 전 클래스의 비율'], ['가능도 P(x|C)', '그 클래스일 때 특성 x 가 나올 확률'],
+     ['사후확률 P(C|x)', '특성을 본 뒤 클래스일 확률'], ['나이브 가정', '클래스가 주어지면 특성끼리 독립'],
+     ['라플라스 스무딩', '개수에 1 을 더해 확률 0 방지']],
+    '서술형에서 "나이브" 의 뜻(조건부 독립 가정)은 자주 물어봐요.')
+
+L.ox('나이브 베이즈로 분류만 할 때는 분모 P(x) 를 계산하지 않아도 된다.', True,
+     '모든 클래스의 점수에 같은 P(x) 가 나눠지므로 **크기 비교**에는 영향이 없어요. 실제 확률값이 필요할 때만 나눠요.')
+
+L.practice('[기출유사] 나이브 베이즈로 운동 여부 예측',
+'''지난 기록으로 "오늘 운동할지"를 예측해요. 첫째 줄에 기록 수 n, 다음 n 줄에 `날씨 기온 결과` (결과는 `예` 또는 `아니오`), 마지막 줄에 오늘의 `날씨 기온` 이 주어져요.
+
+**[조건]**
+- 클래스 c 마다 `점수 = P(c) × P(날씨|c) × P(기온|c)` 를 개수 세기로 계산해요. (스무딩 없음)
+- `P(c) = c 의 기록 수 / n`, `P(날씨|c) = c 중 그 날씨인 기록 수 / c 의 기록 수`
+- `예 점수`, `아니오 점수` 를 각각 한 줄씩 `f"{v:.4f}"` 로 출력하고, 마지막 줄에 `예측: 예` 또는 `예측: 아니오`
+- 점수가 같으면 `예` 로 예측해요. 두 클래스 모두 기록이 1개 이상 있어요.
+
+{ex}
+
+{ex2}''',
+'''n = int(input())
+rows = [input().split() for _ in range(n)]
+w, t = input().split()
+# 클래스별 점수를 계산하세요
+''',
+'''n = int(input())
+rows = [input().split() for _ in range(n)]
+w, t = input().split()
+scores = {}
+for c in ["예", "아니오"]:
+    sub = [r for r in rows if r[2] == c]              # 그 클래스의 기록
+    prior = len(sub) / n                               # P(c)
+    p_w = sum(1 for r in sub if r[0] == w) / len(sub)  # P(날씨|c)
+    p_t = sum(1 for r in sub if r[1] == t) / len(sub)  # P(기온|c)
+    scores[c] = prior * p_w * p_t
+    print(c, f"{scores[c]:.4f}")
+print("예측:", "예" if scores["예"] >= scores["아니오"] else "아니오")''',
+    ['6\n맑음 더움 아니오\n맑음 보통 예\n흐림 보통 예\n비 추움 아니오\n맑음 보통 예\n흐림 더움 예\n맑음 보통',
+     '5\n비 추움 아니오\n비 보통 아니오\n맑음 추움 예\n비 추움 아니오\n맑음 보통 예\n비 추움'],
+    ['2\n맑음 더움 예\n비 추움 아니오\n흐림 보통', '4\n맑음 더움 예\n맑음 더움 아니오\n비 추움 예\n비 추움 아니오\n맑음 더움',
+     '7\n맑음 더움 예\n맑음 더움 예\n흐림 더움 예\n비 더움 아니오\n맑음 추움 아니오\n맑음 더움 아니오\n흐림 보통 예\n맑음 더움'],
+    ['클래스별로 `sub = [r for r in rows if r[2] == c]` 로 기록을 걸러요.',
+     '`P(날씨|c)` 는 `sub` 안에서 날씨가 같은 기록 수 ÷ `len(sub)`',
+     '점수 세 개를 곱하고, 마지막에 `>=` 로 비교해 동점이면 예'],
+    '숨은 테스트 중 처음 보는 조합(흐림·보통)은 두 클래스 모두 확률 0 이 돼요. 이게 바로 **라플라스 스무딩**이 필요한 이유예요.')
+
+L.practice('[기출유사] 검사 결과를 믿어도 될까? (베이즈 정리)',
+'''한 줄에 `유병률 민감도 위양성률` 이 주어져요. 검사에서 **양성**이 나왔을 때 실제로 병이 있을 확률을 구하세요.
+
+**[조건]**
+- 민감도 = `P(양성|질병)`, 위양성률 = `P(양성|정상)`
+- 첫째 줄: `P(양성) 값` — `P(양성) = 민감도×유병률 + 위양성률×(1-유병률)`
+- 둘째 줄: `P(질병|양성) 값` — 베이즈 정리 사용
+- 값은 `f"{v:.4f}"` 로 출력. P(양성) 은 0 이 아니에요.
+
+{ex}
+
+{ex2}''',
+'''prev, sens, fpr = map(float, input().split())
+# 베이즈 정리로 계산하세요
+''',
+'''prev, sens, fpr = map(float, input().split())
+p_pos = sens * prev + fpr * (1 - prev)       # 전체 양성 확률
+post = sens * prev / p_pos                   # 베이즈 정리
+print("P(양성)", f"{p_pos:.4f}")
+print("P(질병|양성)", f"{post:.4f}")''',
+    ['0.01 0.9 0.05', '0.3 0.95 0.1'], ['0.5 0.5 0.5', '0.001 0.99 0.01', '1 0.8 0.2'],
+    ['분모 `P(양성)` 은 "환자가 양성" + "정상인이 양성" 두 경우의 합이에요.', '`post = sens * prev / p_pos`',
+     '출력 이름 `P(질병|양성)` 을 정확히 써요.'],
+    '유병률 0.1% 인 숨은 테스트는 민감도 99% 라도 사후확률이 약 9% 예요. 사전확률이 작으면 결과 해석을 조심해야 해요.')
+
+L.essay('나이브 베이즈 분류기에서 "나이브(naive, 순진한)" 라는 이름이 붙은 이유를 서술하고, 그 가정 덕분에 생기는 장점을 쓰세요.',
+    '클래스가 주어졌을 때 모든 특성이 서로 독립이라고 단순하게 가정하기 때문이다. 실제로는 특성끼리 관련이 있는 경우가 많아 순진한 가정이지만, 이 가정 덕분에 P(x1, x2, … | C) 를 각 특성의 확률 P(xi|C) 의 곱으로 계산할 수 있어 필요한 계산과 데이터 양이 크게 줄고 학습과 예측이 빠르다.',
+    ['클래스가 주어지면 특성들이 독립이라고 가정', '현실에서는 잘 안 맞는 단순한 가정', '확률을 각 특성 확률의 곱으로 계산', '계산이 빠르고 데이터가 적어도 됨'])
+
+# =====================================================================
+L = C.lesson('π-08 결정트리: 질문으로 나누기와 Gini 불순도', 35,
+'''- 결정트리는 "특성 ≤ 기준값?" 질문으로 데이터를 계속 나눠요. 끝(리프)에서 다수 클래스로 예측.
+- **Gini 불순도** `= 1 - Σ pᵢ²` : 한 클래스만 있으면 **0**(순수), 2클래스 반반이면 **0.5**(최대)
+- 분할 평가: 자식 노드 Gini 의 **가중 평균**(개수 비율로)이 가장 작은 분할을 골라요.
+- 깊이 제한이 없으면 리프가 순수해질 때까지 자라 **과적합** → `max_depth`, `min_samples_leaf` 로 가지치기
+- 스케일링 불필요, 해석이 쉬움(규칙으로 읽힘)''')
+
+L.review('🔁 지난 시간 복습',
+    [T('나이브 베이즈는 `P(C) × Π P(xᵢ|C)` 가 가장 큰 클래스를 골랐어요. 확률 0 은 라플라스 스무딩으로 막았어요.'),
+     REVEAL('P(A)=0.2, P(B|A)=0.5, P(B)=0.25 일 때 P(A|B) 는?', '`0.5 × 0.2 / 0.25 = 0.4`')])
+L.short('복습: P(스팸)=0.5, P(무료|스팸)=0.6, P(무료|정상)=0.2 일 때 P(스팸|무료) 는? (소수 둘째 자리)', '0.75',
+    '`0.6×0.5 / (0.6×0.5 + 0.2×0.5) = 0.3 / 0.4 = 0.75`', review=True,
+    check_code='print(round(0.3 / 0.4, 2))')
+
+L.explain('결정트리의 생김새',
+    [T('결정트리는 **스무고개**처럼 질문을 이어 가며 분류해요.\n\n'
+       '- **루트 노드**: 맨 처음 질문 (전체 데이터)\n- **내부 노드**: "공부시간 ≤ 3?" 같은 질문\n'
+       '- **리프 노드**: 더 나누지 않는 끝. 그 안의 **다수 클래스**가 예측값'),
+     STEPS(('루트', '시험 합격 데이터 10명: 합격 6, 불합격 4'),
+           ('질문 1: 공부시간 ≤ 3?', '예 → 4명(합격 1, 불합격 3) / 아니오 → 6명(합격 5, 불합격 1)'),
+           ('질문 2 (왼쪽): 출석 ≤ 80%?', '예 → 3명(불합격 3) 리프: **불합격** / 아니오 → 1명(합격 1) 리프: **합격**'),
+           ('좋은 질문이란?', '나눈 뒤 각 쪽이 **한 클래스로 몰릴수록**(순수할수록) 좋은 질문이에요.'))],
+    [T('"얼마나 섞여 있나" 를 숫자로 재는 게 **불순도**예요. sklearn 결정트리의 기본 기준은 **Gini 불순도**(`criterion="gini"`)이고, 엔트로피(`"entropy"`)도 쓸 수 있어요.'),
+     KEY('트리는 매 단계에서 **불순도를 가장 많이 줄이는** 질문(특성, 기준값)을 골라요.')])
+
+L.explain('Gini 불순도 계산',
+    [T('`Gini = 1 - Σ pᵢ²` (pᵢ = 노드에서 클래스 i 의 비율)\n\n'
+       '- 전부 한 클래스: `1 - 1² = 0` → **완전히 순수**\n'
+       '- 2클래스 반반: `1 - (0.5² + 0.5²) = 0.5` → 2클래스에서 **가장 불순**'),
+     TABS(('[5, 0]', '한 클래스뿐', 'c = [5, 0]\nn = sum(c)\nprint(1 - sum((k / n) ** 2 for k in c))'),
+          ('[3, 3]', '반반', 'c = [3, 3]\nn = sum(c)\nprint(1 - sum((k / n) ** 2 for k in c))'),
+          ('[3, 1]', '한쪽이 많음', 'c = [3, 1]\nn = sum(c)\nprint(1 - sum((k / n) ** 2 for k in c))'),
+          ('[2, 2, 2]', '3클래스 균등', 'c = [2, 2, 2]\nn = sum(c)\nprint(round(1 - sum((k / n) ** 2 for k in c), 3))'))],
+    [T('Gini 는 "노드에서 무작위로 하나 뽑고, 그 노드의 클래스 비율대로 무작위로 이름표를 붙였을 때 **틀릴 확률**" 로 해석할 수 있어요.\n'
+       '그래서 순수하면 틀릴 일이 없어 0 이에요.'),
+     EXAM('손계산은 `1 - (a/n)² - (b/n)²` 처럼 **식을 먼저** 쓰고 분수 그대로 계산하면 실수가 줄어요. 예: [3, 1] → `1 - 9/16 - 1/16 = 6/16 = 0.375`')])
+
+L.short('합격 2명, 불합격 6명이 있는 노드의 Gini 불순도는? (소수 셋째 자리까지, 예: 0.123)', '0.375',
+    '`1 - (2/8)² - (6/8)² = 1 - 1/16 - 9/16 = 6/16 = 0.375`', alts=['0.38', '3/8'],
+    check_code='print(1 - (2/8)**2 - (6/8)**2)')
+
+L.choice('Gini 불순도가 **0** 인 노드에 대한 설명으로 옳은 것은?',
+    ['두 클래스가 정확히 반반이다', '노드에 데이터가 하나도 없다', '노드의 모든 데이터가 같은 클래스이다', '트리의 루트 노드이다'], 3,
+    'Gini 0 = 완전히 순수. 더 나눌 필요가 없어 리프가 돼요. 반반(2클래스)은 최댓값 0.5 예요.')
+
+L.explain('어떤 질문이 더 좋을까: 가중 Gini',
+    [T('질문 하나로 나누면 자식이 두 개 생겨요. 두 자식의 Gini 를 **데이터 개수 비율로 가중 평균**해요.\n\n'
+       '`가중 Gini = (n왼/n) × Gini(왼) + (n오/n) × Gini(오)`\n\n'
+       '이 값이 **가장 작은** 질문을 골라요. (= 부모보다 불순도가 가장 많이 줄어드는 질문)'),
+     CODE('''def gini(c):
+    n = sum(c)
+    return 1 - sum((k / n) ** 2 for k in c)
+# 부모 [합격 6, 불합격 4]
+split_a = ([1, 3], [5, 1])     # 공부시간 ≤ 3 ?
+split_b = ([3, 2], [3, 2])     # 이름이 가나다 앞쪽?
+for left, right in (split_a, split_b):
+    n = sum(left) + sum(right)
+    w = sum(left) / n * gini(left) + sum(right) / n * gini(right)
+    print(round(w, 3))
+print(round(gini([6, 4]), 3))''', '분할 두 개 비교')],
+    [T('분할 A 는 가중 Gini 0.317 로 부모(0.48)보다 많이 줄었고, 분할 B 는 0.48 그대로예요(전혀 도움 안 됨).\n'
+       '트리는 이렇게 **모든 특성 × 가능한 기준값**을 시험해 가장 좋은 분할을 골라요.'),
+     TIP('숫자 특성의 기준값 후보는 보통 정렬한 값들의 **인접한 두 값의 중간**이에요. 예: 1, 3, 4 → 2.0, 3.5')])
+
+L.output('두 분할의 가중 Gini 를 비교하는 코드예요. 출력은?', '''\
+def gini(c):
+    n = sum(c)
+    return 1 - sum((k / n) ** 2 for k in c)
+left, right = [4, 0], [1, 3]
+n = 8
+w = 4 / n * gini(left) + 4 / n * gini(right)
+print(gini(left), round(gini(right), 3), round(w, 4))''',
+    '왼쪽은 순수(0), 오른쪽 `1 - 1/16 - 9/16 = 0.375`, 가중 평균 `0.5×0 + 0.5×0.375 = 0.1875`.\n\n```\n{out}\n```')
+
+L.explain('깊이와 과적합',
+    [T('깊이 제한 없이(`max_depth=None`) 키우면 트리는 **모든 리프가 순수해질 때까지** 나눠요.\n'
+       '그러면 학습 데이터의 잡음까지 규칙으로 외워 **학습 정확도 1.0** 이 나오기 쉽지만 테스트에서는 떨어져요.'),
+     REVEAL_RUN('유방암 데이터: 깊이별 학습/테스트 정확도', '''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+for d in [1, 3, None]:
+    t = DecisionTreeClassifier(max_depth=d, random_state=0).fit(X_tr, y_tr)
+    print(d, round(t.score(X_tr, y_tr), 3), round(t.score(X_te, y_te), 3))''', '깊이 1 은 너무 단순(과소적합 쪽), None 은 학습 1.0 인데 테스트는 깊이 3 보다 낮아요(과적합).')],
+    [T('트리가 너무 자라지 않게 막는 설정(사전 가지치기)이에요. 모두 교차검증으로 골라요.'),
+     FLIP(['max_depth', '트리의 최대 깊이 — 작을수록 단순'], ['min_samples_split', '노드를 나누려면 필요한 최소 데이터 수'],
+          ['min_samples_leaf', '리프에 남아야 하는 최소 데이터 수'], ['max_leaf_nodes', '리프 개수의 최댓값']),
+     CODE('''from sklearn.tree import DecisionTreeClassifier
+tree = DecisionTreeClassifier(criterion="gini", max_depth=3, random_state=0)
+tree.fit(X_train, y_train)
+print(tree.feature_importances_)   # 특성 중요도''', '결정트리 코드', run_=False, expect_error=True)])
+
+L.bucket('설정 변화가 트리를 어떻게 바꾸는지 분류하세요.', ['더 복잡해짐(과적합 위험 ↑)', '더 단순해짐(과소적합 위험 ↑)'],
+    [['max_depth 를 2 → 10', 1], ['min_samples_leaf 를 1 → 20', 2], ['max_depth=None 으로 두기', 1],
+     ['max_depth 를 8 → 2', 2], ['min_samples_split 을 2 → 50', 2]],
+    '깊이를 키우면 복잡해지고, "최소 개수" 조건을 키우면 덜 나눠서 단순해져요.')
+
+L.practice('[기출유사] 노드의 Gini 불순도',
+'''결정트리 한 노드에 들어 있는 데이터의 클래스 이름들이 한 줄에 공백으로 주어져요. 이 노드의 Gini 불순도를 구하세요.
+
+**[조건]**
+- `Gini = 1 - Σ pᵢ²` (pᵢ = 클래스 i 의 개수 / 전체 개수)
+- 클래스는 몇 종류든 될 수 있어요. 딕셔너리로 개수를 세요.
+- 첫째 줄: 클래스 이름을 **사전순**으로 `이름:개수` 공백으로 이어 출력
+- 둘째 줄: `Gini 값` — `f"{v:.3f}"`
+
+{ex}
+
+{ex2}''',
+'''labels = input().split()
+cnt = {}
+# 개수를 세고 Gini 를 출력하세요
+''',
+'''labels = input().split()
+cnt = {}
+for c in labels:
+    cnt[c] = cnt.get(c, 0) + 1          # 클래스별 개수
+n = len(labels)
+g = 1 - sum((k / n) ** 2 for k in cnt.values())
+print(" ".join(f"{c}:{cnt[c]}" for c in sorted(cnt)))
+print("Gini", f"{g:.3f}")''',
+    ['합격 합격 불합격 합격', '사과 배 귤 사과 배 귤'], ['A', 'O O O O O', 'x y'],
+    ['`cnt[c] = cnt.get(c, 0) + 1` 로 세요.', '`1 - sum((k / n) ** 2 for k in cnt.values())`',
+     '사전순 출력: `for c in sorted(cnt)`'],
+    '3클래스 균등이면 `1 - 3×(1/3)² = 0.667` 이에요. 클래스가 k 개면 최댓값은 `1 - 1/k` 라서 2클래스일 때만 최댓값이 0.5 예요.')
+
+L.practice('[기출유사] 가장 좋은 기준값 찾기',
+'''숫자 특성 하나로 결정트리의 첫 분할을 찾으려 해요. 첫째 줄에 특성값(정수), 둘째 줄에 같은 순서로 클래스(0/1)가 주어져요.
+
+**[조건]**
+- 기준값 후보: 서로 다른 특성값을 오름차순 정렬했을 때 **인접한 두 값의 평균**
+- 기준값 t 로 `특성값 <= t` 는 왼쪽, 나머지는 오른쪽으로 나눠요.
+- 가중 Gini `(n왼/n)×Gini(왼) + (n오/n)×Gini(오)` 가 **가장 작은** t 를 골라요. 같으면 **작은 t**.
+- `기준값 t 가중Gini g` 형식으로 출력. t 는 `f"{t:.1f}"`, g 는 `f"{g:.3f}"`
+- 서로 다른 특성값은 2개 이상이에요.
+
+{ex}
+
+{ex2}''',
+'''x = list(map(int, input().split()))
+y = list(map(int, input().split()))
+def gini(labels):
+    # 리스트의 Gini 를 돌려주세요
+    pass
+''',
+'''x = list(map(int, input().split()))
+y = list(map(int, input().split()))
+def gini(labels):
+    n = len(labels)
+    p1 = sum(labels) / n                 # 클래스 1 의 비율
+    return 1 - p1 ** 2 - (1 - p1) ** 2
+vals = sorted(set(x))
+n = len(x)
+best_t, best_g = None, 2
+for a, b in zip(vals, vals[1:]):
+    t = (a + b) / 2                       # 인접한 두 값의 중간
+    left = [c for v, c in zip(x, y) if v <= t]
+    right = [c for v, c in zip(x, y) if v > t]
+    g = len(left) / n * gini(left) + len(right) / n * gini(right)
+    if g < best_g - 1e-12:                # 더 작을 때만 → 동점이면 작은 t 유지
+        best_t, best_g = t, g
+print("기준값", f"{best_t:.1f}", "가중Gini", f"{best_g:.3f}")''',
+    ['1 2 3 4 5 6\n0 0 0 1 1 1', '5 1 3 8 6\n1 0 0 1 0'],
+    ['1 2\n0 1', '1 2 3 4\n0 1 0 1', '10 10 20 30 30 40\n1 1 0 0 1 0'],
+    ['후보: `vals = sorted(set(x))`, `zip(vals, vals[1:])` 로 인접 쌍', '왼쪽/오른쪽 클래스 리스트를 컴프리헨션으로 나눠요.',
+     '`g < best_g` 일 때만 바꾸면 동점에서 먼저 본(작은) t 가 남아요.'],
+    '결정트리가 숫자 특성에서 하는 일이 바로 이거예요. 실제 트리는 모든 특성에 대해 이 과정을 해서 가장 좋은 (특성, 기준값)을 골라요.')
+
+L.essay('결정트리에서 어떤 노드의 Gini 불순도가 0 이라는 것의 의미와, 깊이 제한 없이 모든 리프를 Gini 0 으로 만들 때의 문제점을 서술하세요.',
+    'Gini 불순도가 0 이면 그 노드의 데이터가 모두 같은 클래스라는 뜻으로, 완전히 순수해 더 나눌 필요가 없다. 하지만 깊이 제한 없이 모든 리프를 순수하게 만들면 학습 데이터의 잡음과 예외까지 규칙으로 외워 학습 정확도는 매우 높지만 새로운 데이터에서는 성능이 떨어지는 과적합이 일어난다. 그래서 max_depth, min_samples_leaf 등으로 트리 성장을 제한한다.',
+    ['Gini 0 = 모든 데이터가 같은 클래스(순수)', '더 나눌 필요가 없다', '모두 순수하게 만들면 잡음까지 외운다', '과적합 → max_depth 등으로 제한'])
+
+# =====================================================================
+L = C.lesson('π-09 앙상블과 SVM: 여럿이 함께, 넓은 길로', 35,
+'''- **앙상블** = 여러 모델의 예측을 모아(투표·평균) 하나보다 좋은 예측을 만들어요.
+- **배깅**: 부트스트랩(복원 추출) 표본마다 모델을 **따로(병렬)** 학습 → 투표/평균. 주로 **분산 ↓**
+- **랜덤포레스트** = 트리 배깅 + 분할마다 **특성 일부만 무작위로** 후보 → 트리끼리 덜 닮게
+- **부스팅**: 앞 모델이 틀린 것을 다음 모델이 보완하며 **순서대로** 학습(AdaBoost, Gradient Boosting). 주로 **편향 ↓**
+- **SVM**: 경계와 가장 가까운 점(서포트 벡터) 사이 **마진을 최대화**. C 큼 → 오류 덜 허용·마진 좁음(과적합 위험), C 작음 → 마진 넓음''')
+
+L.review('🔁 지난 시간 복습',
+    [T('결정트리는 가중 Gini 가 가장 작은 분할을 고르고, 깊이 제한이 없으면 과적합되기 쉬웠어요.'),
+     REVEAL('클래스 [4, 4] 노드와 [8, 0] 노드의 Gini 는?', '[4, 4] → `1 - 0.25 - 0.25 = 0.5` (2클래스 최대), [8, 0] → **0** (순수)')])
+L.output('복습: 출력은?', 'c = [6, 2]\nn = sum(c)\nprint(1 - sum((k / n) ** 2 for k in c))',
+    '`1 - (6/8)² - (2/8)² = 1 - 0.5625 - 0.0625 = {out}`', review=True)
+
+L.explain('앙상블: 여러 모델의 투표',
+    [T('혼자 푸는 것보다 여러 명이 풀고 **다수결**을 하면 실수가 줄어들 때가 많아요. 단, 모델들이 **서로 다른 실수**를 해야 효과가 커요.\n\n'
+       '- **하드 보팅**: 각 모델의 예측 클래스로 다수결\n- **소프트 보팅**: 각 모델의 **확률을 평균**해 가장 큰 클래스'),
+     CODE('''m1 = [1, 1, 0, 0, 1]
+m2 = [1, 0, 1, 0, 1]
+m3 = [0, 1, 1, 0, 0]
+vote = [1 if a + b + c >= 2 else 0 for a, b, c in zip(m1, m2, m3)]
+print(vote)''', '하드 보팅')],
+    [T('앙상블을 만드는 두 가지 큰 방법이 **배깅**과 **부스팅**이에요.'),
+     CMP(side('배깅 (Bagging)', '- 학습 데이터에서 **복원 추출**한 표본(부트스트랩)을 여러 개 만듦\n- 표본마다 모델을 **독립적으로(병렬)** 학습\n- 투표/평균으로 합침\n- 주로 **분산을 줄여** 과적합 완화\n- 예: 랜덤포레스트'),
+         side('부스팅 (Boosting)', '- 모델을 **하나씩 순서대로** 학습\n- 앞 모델이 **틀린 데이터에 집중**해 다음 모델 학습\n- 약한 모델 여러 개를 더해 강한 모델로\n- 주로 **편향을 줄임** (너무 많이 하면 과적합 가능)\n- 예: AdaBoost, Gradient Boosting'))])
+
+L.output('소프트 보팅 결과는? (세 모델이 낸 클래스 1 확률)', '''\
+p = [0.9, 0.4, 0.45]
+avg = sum(p) / len(p)
+hard = 1 if sum(1 for v in p if v >= 0.5) >= 2 else 0
+print(round(avg, 3), 1 if avg >= 0.5 else 0, hard)''',
+    '평균 확률은 0.583 → 소프트 보팅은 1. 하지만 0.5 이상인 모델이 하나뿐이라 하드 보팅은 0. 방법에 따라 결과가 다를 수 있어요.\n\n```\n{out}\n```')
+
+L.explain('랜덤포레스트',
+    [T('**랜덤포레스트**는 결정트리 여러 그루(sklearn 기본 `n_estimators=100`)를 배깅으로 만들어요.\n'
+       '여기에 하나 더: 노드를 나눌 때마다 **특성 일부만 무작위로** 후보로 써요.\n'
+       '그래서 트리들이 서로 덜 닮고, 평균을 내면 하나의 깊은 트리보다 **덜 흔들려요(분산 ↓)**.'),
+     REVEAL_RUN('트리 한 그루 vs 랜덤포레스트 (유방암 데이터)', '''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+tree = DecisionTreeClassifier(random_state=0).fit(X_tr, y_tr)
+rf = RandomForestClassifier(n_estimators=100, random_state=0).fit(X_tr, y_tr)
+print("트리", round(tree.score(X_te, y_te), 3))
+print("랜덤포레스트", round(rf.score(X_te, y_te), 3))''', '이 분할에서는 랜덤포레스트의 테스트 정확도가 더 높아요. (항상 그렇다고 보장되는 건 아니에요.)')],
+    [T('부스팅의 대표 두 가지도 구분해 두세요.'),
+     FLIP(['AdaBoost', '틀린 데이터의 **가중치를 키워** 다음 모델이 그 데이터에 더 집중'],
+          ['Gradient Boosting', '앞 모델이 남긴 **오차(잔차)를 다음 모델이 예측**하도록 학습'],
+          ['learning_rate', '부스팅에서 모델 하나가 더하는 몫 — 작으면 천천히, 대신 모델 수가 더 필요'],
+          ['n_estimators', '앙상블에 쓰는 모델(트리) 수']),
+     CODE('''from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier, BaggingClassifier
+rf = RandomForestClassifier(n_estimators=200, max_depth=5, random_state=0)
+gb = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, random_state=0)''', '앙상블 모델 만들기', run_=False)])
+
+L.bucket('설명을 배깅/부스팅으로 분류하세요.', ['배깅(랜덤포레스트 포함)', '부스팅'],
+    [['부트스트랩(복원 추출) 표본을 여러 개 만든다', 1], ['모델을 순서대로 하나씩 학습한다', 2],
+     ['모델들을 병렬로 따로 학습할 수 있다', 1], ['앞 모델이 틀린 데이터에 더 집중한다', 2],
+     ['주로 분산을 줄인다', 1], ['잔차를 다음 모델이 예측한다', 2]],
+    '배깅 = "따로 배워서 투표", 부스팅 = "앞사람 실수를 이어서 고치기". 서술형에서 이 차이를 자주 물어요.')
+
+L.explain('SVM: 마진을 넓게',
+    [T('두 클래스를 가르는 직선은 여러 개일 수 있어요. SVM(서포트 벡터 머신)은 그중 **양쪽 클래스와 가장 멀리 떨어진** 경계를 골라요.\n\n'
+       '- **마진**: 경계와 가장 가까운 데이터 사이의 거리(폭)\n- **서포트 벡터**: 경계에 가장 가까이 있어 경계를 결정하는 점들\n\n'
+       '마진이 넓을수록 새 데이터가 조금 흔들려도 잘 분류할 거라 기대해요.'),
+     KEY('경계를 정하는 건 **서포트 벡터뿐**이에요. 경계에서 먼 점은 조금 움직여도 경계가 바뀌지 않아요.')],
+    [T('실제 데이터는 깔끔하게 안 나뉘어서 **일부 오류를 허용**해요(소프트 마진). 얼마나 허용할지 정하는 게 **C** 예요.'),
+     CMP(side('C 가 작을 때', '오류를 **많이 허용** → 마진 **넓음**\n\n경계가 단순·부드러움\n→ 너무 작으면 **과소적합**'),
+         side('C 가 클 때', '오류를 **거의 허용 안 함** → 마진 **좁음**\n\n학습 데이터에 딱 맞춤\n→ 너무 크면 **과적합**')),
+     REVEAL_RUN('C 를 바꿔 보면 (스케일링 + SVC)', '''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.svm import SVC
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+for C in [0.01, 1, 100]:
+    m = make_pipeline(StandardScaler(), SVC(C=C)).fit(X_tr, y_tr)
+    print(C, round(m.score(X_tr, y_tr), 3), round(m.score(X_te, y_te), 3))''', '(C, 학습 정확도, 테스트 정확도). C=0.01 은 둘 다 낮고(과소적합), C=100 은 학습 1.0 인데 테스트는 C=1 보다 낮아요.')],
+    [T('직선으로 못 나누는 데이터는 **커널 트릭**으로 데이터를 더 높은 차원에 놓은 것처럼 계산해 곡선 경계를 만들어요.\n'
+       'sklearn `SVC()` 의 기본 커널은 `"rbf"`, 기본 C 는 1.0 이에요.'),
+     WARN('SVM 은 거리(마진)를 쓰므로 KNN 처럼 **스케일링이 중요**해요. 그래서 `make_pipeline(StandardScaler(), SVC())` 로 묶어 써요.')])
+
+L.choice('SVM 에서 C 를 아주 크게 했을 때의 설명으로 알맞은 것은?',
+    ['오류를 많이 허용해 마진이 넓어진다', '오류를 거의 허용하지 않아 마진이 좁아지고 과적합 위험이 커진다',
+     '서포트 벡터가 사라진다', '커널이 자동으로 선형으로 바뀐다'], 2,
+    'C 는 "오류에 주는 벌점의 크기" 예요. 크면 학습 데이터를 최대한 맞히려 해서 마진이 좁고 과적합되기 쉬워요.')
+
+L.match('용어와 뜻을 이어 보세요.',
+    [['서포트 벡터', '경계에 가장 가까워 경계를 결정하는 점'], ['마진', '경계와 가장 가까운 점 사이의 폭'],
+     ['커널 트릭', '고차원으로 옮긴 것처럼 계산해 곡선 경계를 만듦'], ['부트스트랩', '복원 추출로 만든 표본'],
+     ['소프트 보팅', '모델들의 확률을 평균해 결정']],
+    'SVM 은 개념 서술 위주로 나와요. 마진·서포트 벡터·C 의 뜻을 한 문장씩 쓸 수 있게 해 두세요.')
+
+L.ox('랜덤포레스트는 각 트리를 앞 트리의 오차를 줄이도록 순서대로 학습시킨다.', False,
+     '그건 **부스팅**이에요. 랜덤포레스트는 배깅 방식이라 트리들을 **서로 독립적으로** 학습해요.')
+
+L.practice('[기출유사] 하드 보팅 앙상블 채점',
+'''세 개 이상의 모델이 같은 데이터에 낸 예측(0/1)이 있어요. 첫째 줄에 모델 수 m(홀수), 다음 m 줄에 각 모델의 예측, 마지막 줄에 실제 정답이 공백으로 주어져요.
+
+**[조건]**
+- 모델마다 `모델i 정확도` 를 출력 (i 는 1부터, 정확도는 `f"{v:.2f}"`)
+- 하드 보팅: 데이터마다 1 이라고 한 모델이 **과반**이면 1, 아니면 0
+- 마지막 두 줄: `앙상블 예측: …`(공백으로 이어서), `앙상블 정확도` 값
+
+{ex}
+
+{ex2}''',
+'''m = int(input())
+preds = [list(map(int, input().split())) for _ in range(m)]
+y = list(map(int, input().split()))
+# 모델별 정확도와 앙상블 결과를 출력하세요
+''',
+'''m = int(input())
+preds = [list(map(int, input().split())) for _ in range(m)]
+y = list(map(int, input().split()))
+def acc(p):
+    return sum(1 for a, b in zip(p, y) if a == b) / len(y)
+for i, p in enumerate(preds, 1):
+    print(f"모델{i}", f"{acc(p):.2f}")
+n = len(y)
+vote = []
+for j in range(n):
+    ones = sum(p[j] for p in preds)          # j 번째 데이터에 1 이라 한 모델 수
+    vote.append(1 if ones > m / 2 else 0)    # 과반이면 1
+print("앙상블 예측:", " ".join(map(str, vote)))
+print("앙상블", f"{acc(vote):.2f}")''',
+    ['3\n1 1 0 0 1 0\n1 0 1 0 1 1\n0 1 1 0 1 0\n1 1 1 0 0 0', '3\n1 1 1 1\n1 1 1 1\n0 0 0 0\n0 1 0 1'],
+    ['1\n1 0\n1 1', '5\n1 0 1\n1 0 0\n0 1 1\n0 0 1\n1 1 0\n1 0 1', '3\n0 0 0\n0 0 0\n0 0 0\n1 1 1'],
+    ['`enumerate(preds, 1)` 로 모델 번호를 1부터 매겨요.', '데이터 j 마다 `sum(p[j] for p in preds)` 로 1 의 개수를 세요.',
+     '과반: `ones > m / 2`'],
+    '첫 예시에서 세 모델은 각각 0.67, 0.50, 0.67 인데 앙상블은 0.83 으로 가장 높아요. 모델들이 **서로 다른 실수**를 할수록 다수결이 실수를 덮어 줘요. 두 번째 예시처럼 과반의 모델이 **같은 실수**를 하면 앙상블도 소용없어요.')
+
+L.essay('랜덤포레스트가 결정트리 한 그루보다 과적합에 강한 이유를 **배깅**과 **무작위 특성 선택**을 넣어 서술하세요.',
+    '결정트리 한 그루는 학습 데이터에 따라 구조가 크게 바뀌어 분산이 크고 과적합되기 쉽다. 랜덤포레스트는 부트스트랩(복원 추출)으로 서로 다른 학습 표본을 만들어 여러 트리를 학습시키고(배깅), 각 분할에서 특성의 일부만 무작위로 후보로 사용해 트리들이 서로 덜 닮게 만든다. 이렇게 다양한 트리의 예측을 투표나 평균으로 합치면 개별 트리의 오류가 상쇄되어 분산이 줄고 일반화 성능이 좋아진다.',
+    ['트리 한 그루는 분산이 크다', '부트스트랩 표본으로 여러 트리(배깅)', '분할마다 특성 일부만 무작위 사용', '투표/평균으로 분산 감소'])
+
+L.essay('SVM 의 하이퍼파라미터 C 의 의미를 마진과 연결해 서술하세요.',
+    'C 는 학습 데이터의 분류 오류에 주는 벌점의 크기이다. C 가 크면 오류를 거의 허용하지 않아 마진이 좁아지고 학습 데이터에 딱 맞는 경계가 만들어져 과적합 위험이 커진다. C 가 작으면 오류를 더 허용하는 대신 마진이 넓어져 경계가 단순해지며, 너무 작으면 과소적합될 수 있다.',
+    ['C = 오류에 대한 벌점', 'C 큼 → 마진 좁음, 과적합 위험', 'C 작음 → 마진 넓음, 오류 허용', '너무 작으면 과소적합'])
+
+# =====================================================================
+L = C.lesson('π-10 데이터 다듬기: 인코딩과 다중공선성', 30,
+'''- 모델은 숫자만 받아요. 범주형(색, 지역)은 **인코딩**이 필요해요.
+- **레이블 인코딩**(0, 1, 2…): 순서가 없는 범주에 쓰면 **가짜 순서·크기**가 생겨요. 순서 있는 범주(S<M<L)엔 괜찮아요.
+- **원-핫 인코딩**: 범주마다 0/1 열. 범주가 많으면 열이 폭발. `drop_first` 로 한 열을 빼면 더미 변수 함정 방지.
+- **다중공선성**: 특성끼리 강하게 상관 → 선형회귀 계수가 불안정·해석 어려움. 상관계수·VIF 로 확인, 특성 제거·규제·차원 축소로 대처.''')
+
+L.review('🔁 지난 시간 복습',
+    [T('배깅은 따로 배워 투표(분산 ↓), 부스팅은 틀린 걸 이어서 보완(편향 ↓), SVM 은 마진 최대화였어요.'),
+     REVEAL('SVM 에서 C 를 작게 하면 마진은?', '오류를 더 허용하므로 마진이 **넓어져요**. 너무 작으면 과소적합!')])
+L.match('복습: 모델과 특징을 이어 보세요.',
+    [['랜덤포레스트', '트리 배깅 + 무작위 특성'], ['Gradient Boosting', '잔차를 이어서 학습'],
+     ['SVM', '마진 최대화'], ['KNN', '가까운 k 개의 다수결']],
+    '모델마다 "한 줄 정의"를 외워 두면 서술형 첫 문장이 쉬워져요.', review=True)
+
+L.explain('범주형 데이터를 숫자로',
+    [T('"빨강/초록/파랑" 같은 글자는 모델에 바로 넣을 수 없어요. 숫자로 바꾸는 방법이 두 가지예요.'),
+     CMP(side('레이블 인코딩', '`빨강→0, 초록→1, 파랑→2`\n\n열 하나로 간단.\n하지만 "파랑(2)이 빨강(0)보다 크다", "초록은 빨강과 파랑의 평균" 같은 **없는 순서·크기**가 생겨요.', tone='bad'),
+         side('원-핫 인코딩', '`빨강→[1,0,0]`, `초록→[0,1,0]`, `파랑→[0,0,1]`\n\n범주끼리 **대등**하게 표현.\n대신 범주 수만큼 열이 늘어요.', tone='good'))],
+    [T('그래서 **순서가 없는 범주**(색, 혈액형, 지역)는 원-핫, **순서가 있는 범주**(S<M<L, 학년)는 순서대로 숫자를 매기는 게 자연스러워요.\n'
+       '결정트리 계열은 레이블 인코딩에 덜 민감하지만, 선형 모델·KNN 은 숫자 크기를 그대로 쓰니 조심해야 해요.'),
+     CODE('''import pandas as pd
+df = pd.DataFrame({"color": ["red", "blue", "green", "blue"], "size": [3, 5, 2, 4]})
+print(pd.get_dummies(df, columns=["color"], dtype=int))''', 'pandas get_dummies', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''import pandas as pd
+df = pd.DataFrame({"color": ["red", "blue", "green", "blue"], "size": [3, 5, 2, 4]})
+print(pd.get_dummies(df, columns=["color"], dtype=int))''', '범주 이름이 **사전순**으로 열이 돼요(blue, green, red).'),
+     TIP('`dtype=int` 를 빼면 최신 pandas 는 0/1 대신 True/False 로 보여 줘요. sklearn 에서는 `OneHotEncoder` 를 써요.')])
+
+L.bucket('어떤 인코딩이 더 알맞을까요?', ['원-핫 인코딩', '순서대로 숫자 매기기'],
+    [['혈액형 (A, B, O, AB)', 1], ['티셔츠 크기 (S, M, L, XL)', 2], ['거주 지역 (광주, 서울, 부산)', 1],
+     ['만족도 (낮음, 보통, 높음)', 2], ['좋아하는 과목', 1]],
+    '"크다/작다" 를 말할 수 있으면 순서형, 말할 수 없으면 원-핫이에요.')
+
+L.explain('원-핫의 주의점: 열 폭발과 더미 변수 함정',
+    [T('범주가 1000 종류면 열이 1000 개 생겨요. 데이터는 대부분 0 인 넓은 표가 되고 **차원의 저주**가 심해져요.\n'
+       '드문 범주를 "기타"로 묶는 등 범주 수를 줄이는 방법을 써요.'),
+     WARN('원-핫 열을 모두 쓰면 `열들의 합 = 1` 이 항상 성립해요. 한 열은 나머지로 **완전히 계산**되니(완전한 다중공선성) 절편이 있는 선형회귀에서 문제가 돼요(**더미 변수 함정**). `drop_first=True` 로 한 열을 빼요.')],
+    [CODE('''import pandas as pd
+df = pd.DataFrame({"color": ["red", "blue", "green", "blue"]})
+print(pd.get_dummies(df, drop_first=True, dtype=int).columns.tolist())''', 'drop_first', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''import pandas as pd
+df = pd.DataFrame({"color": ["red", "blue", "green", "blue"]})
+print(pd.get_dummies(df, drop_first=True, dtype=int).columns.tolist())''', '첫 범주(blue)가 빠졌어요. 두 열이 모두 0 이면 blue 라는 뜻이에요.')])
+
+L.output('원-핫 인코딩 후 열 개수를 구하는 코드예요. 출력은?', '''\
+import pandas as pd
+df = pd.DataFrame({"city": ["광주", "서울", "부산", "광주", "대구"],
+                   "age": [17, 18, 17, 16, 18]})
+a = pd.get_dummies(df, columns=["city"])
+b = pd.get_dummies(df, columns=["city"], drop_first=True)
+print(a.shape[1], b.shape[1])''',
+    '도시는 4종류 → age 1열 + 4열 = 5열, drop_first 면 1 + 3 = 4열.\n\n```\n{out}\n```')
+
+L.explain('다중공선성',
+    [T('**다중공선성**은 특성끼리 **강하게 상관**되어 있는 상태예요. 예: "키(cm)" 와 "키(inch)", "공부시간" 과 "문제 푼 수".\n'
+       '선형회귀에서 이런 특성이 함께 있으면 한 특성의 효과를 다른 특성이 대신할 수 있어서\n\n'
+       '- 계수(w)가 데이터 조금만 바뀌어도 **크게 흔들리고**\n- 부호가 뒤집히는 등 **해석이 어려워져요**.\n\n'
+       '예측 정확도 자체는 크게 안 나빠질 수도 있지만, "어떤 특성이 중요한가" 를 믿기 어려워요.'),
+     KEY('확인: **상관계수 행렬** `df.corr()` (절댓값이 1 에 가까운 쌍), **VIF**(분산팽창계수 — 흔히 10, 엄격하게는 5 이상을 경고 기준으로 써요).')],
+    [T('상관계수(피어슨 r)는 -1 ~ 1 사이예요. 1 이면 완전한 양의 직선 관계, -1 이면 음의 직선 관계, 0 이면 직선 관계가 없어요.\n\n'
+       '`r = Σ(x-x̄)(y-ȳ) / √(Σ(x-x̄)² × Σ(y-ȳ)²)`'),
+     CODE('''x = [1, 2, 3, 4, 5]
+y = [2, 4, 5, 4, 5]
+mx, my = sum(x) / len(x), sum(y) / len(y)
+cov = sum((a - mx) * (b - my) for a, b in zip(x, y))
+sx = sum((a - mx) ** 2 for a in x) ** 0.5
+sy = sum((b - my) ** 2 for b in y) ** 0.5
+print(round(cov / (sx * sy), 3))''', '상관계수 직접 계산'),
+     TIP('대처: 상관이 큰 특성 중 하나 제거, 두 특성을 합친 새 특성 만들기, 차원 축소(PCA), **규제(Ridge)** 사용.')])
+
+L.choice('다중공선성이 심한 선형회귀 모델에서 나타나기 쉬운 현상은?',
+    ['학습이 아예 불가능해진다', '회귀 계수가 불안정해 해석이 어려워진다', '반드시 R² 가 0 이 된다', '모든 특성의 계수가 0 이 된다'], 2,
+    '다중공선성의 대표 증상은 **계수가 불안정**하고 해석이 어려워지는 거예요. 예측 성능은 크게 안 떨어질 수도 있어요.')
+
+L.ox('상관계수가 0 이면 두 변수 사이에는 어떤 관계도 없다.', False,
+     '피어슨 상관계수는 **직선 관계**만 재요. `y = x²` 처럼 곡선 관계가 있어도 r 이 0 에 가까울 수 있어요.')
+
+L.practice('[기출유사] 원-핫 인코딩 직접 하기',
+'''설문 응답(범주)이 한 줄에 공백으로 주어져요. 원-핫 인코딩 결과를 출력하세요.
+
+**[조건]**
+- 범주(열) 순서는 서로 다른 값을 **사전순** 정렬한 순서예요.
+- 첫째 줄: `열:` 뒤에 범주들을 공백으로 이어 출력
+- 다음 줄부터 응답마다 `응답 -> 0 1 0` 처럼 출력 (해당 범주 자리만 1)
+- pandas 없이 만드세요.
+
+{ex}
+
+{ex2}''',
+'''data = input().split()
+cats = sorted(set(data))
+# 원-핫 결과를 출력하세요
+''',
+'''data = input().split()
+cats = sorted(set(data))                  # 열 순서 = 사전순
+print("열:", " ".join(cats))
+for v in data:
+    row = ["1" if c == v else "0" for c in cats]   # 자기 범주만 1
+    print(v, "->", " ".join(row))''',
+    ['red blue green blue', 'B O A AB O'], ['x', 'cat cat cat', 'c b a'],
+    ['열 목록은 이미 `cats` 에 있어요.', '응답 v 마다 `["1" if c == v else "0" for c in cats]`',
+     '`print(v, "->", " ".join(row))`'],
+    '첫 예시는 pandas `get_dummies` 결과(blue, green, red 열)와 같아요. 각 행의 합이 항상 1 이라는 점이 더미 변수 함정의 원인이에요.')
+
+L.practice('[기출유사] 상관계수로 다중공선성 점검',
+'''두 특성의 값이 각각 한 줄씩 주어져요. 피어슨 상관계수를 구하고 다중공선성 여부를 판단하세요.
+
+**[조건]**
+- `r = Σ(x-x̄)(y-ȳ) / √(Σ(x-x̄)² × Σ(y-ȳ)²)`
+- 첫째 줄: `r 값` — `f"{r:.3f}"`
+- 둘째 줄: 이 문제에서는 `|r| >= 0.8` 이면 `다중공선성 의심`, 아니면 `괜찮음`
+- 두 특성 모두 값이 전부 같지는 않아요.
+
+{ex}
+
+{ex2}''',
+'''x = list(map(float, input().split()))
+y = list(map(float, input().split()))
+# 상관계수를 계산하세요
+''',
+'''x = list(map(float, input().split()))
+y = list(map(float, input().split()))
+n = len(x)
+mx, my = sum(x) / n, sum(y) / n
+cov = sum((a - mx) * (b - my) for a, b in zip(x, y))
+sx = sum((a - mx) ** 2 for a in x) ** 0.5
+sy = sum((b - my) ** 2 for b in y) ** 0.5
+r = cov / (sx * sy)
+print("r", f"{r:.3f}")
+print("다중공선성 의심" if abs(r) >= 0.8 else "괜찮음")''',
+    ['150 160 170 180\n59 63 67 71', '1 2 3 4 5\n2 4 5 4 5'], ['1 2 3\n3 2 1', '10 20 30 40 50\n12 25 31 38 55', '-2 -1 0 1 2\n4 1 0 1 4'],
+    ['평균 `mx`, `my` 를 먼저 구해요.', '분자 `cov`, 분모는 두 제곱합의 곱의 제곱근이에요.', '판정은 `abs(r) >= 0.8`'],
+    '음의 상관(-1)도 절댓값이 크면 다중공선성이에요. 마지막 숨은 테스트(`y = x²`)는 r = 0 이지만 관계가 없는 게 아니라 **곡선** 관계예요.')
+
+L.essay('순서가 없는 범주형 특성(예: 지역)에 레이블 인코딩(0, 1, 2 …)을 쓰면 어떤 문제가 생기는지, 대신 어떤 방법을 쓰는지 서술하세요.',
+    '레이블 인코딩은 범주에 0, 1, 2 같은 숫자를 붙이므로 실제로 없는 순서와 크기 관계가 생긴다. 선형 모델이나 KNN 은 숫자의 크기와 차이를 그대로 사용하기 때문에 "2번 지역이 0번 지역보다 크다", "1번은 0번과 2번의 중간" 처럼 잘못 학습할 수 있다. 따라서 순서가 없는 범주는 범주마다 0/1 열을 만드는 원-핫 인코딩을 사용한다.',
+    ['없는 순서·크기가 생긴다', '선형 모델·KNN 이 숫자 크기를 그대로 사용', '잘못된 관계를 학습', '원-핫 인코딩 사용'])
+
+# =====================================================================
+L = C.lesson('π-11 큰 그림: 편향-분산, One-vs-Rest, 코랩 총정리', 35,
+'''- **편향** 큼 = 모델이 너무 단순 → 학습·테스트 둘 다 나쁨(과소적합)
+- **분산** 큼 = 데이터에 너무 민감 → 학습 좋고 테스트 나쁨(과적합)
+- 복잡도를 올리면 편향 ↓ 분산 ↑ → **테스트 오차가 가장 작은 중간**을 교차검증으로 찾기
+- 복잡도 손잡이: KNN k ↓, 트리 max_depth ↑, SVM/로지스틱 C ↑ → 더 복잡
+- **One-vs-Rest**: 클래스 K 개 → "이 클래스 vs 나머지" 이진 분류기 K 개 → 점수가 가장 큰 클래스''')
+
+L.review('🔁 지난 시간 복습',
+    [T('범주형은 원-핫(순서 없음) 또는 순서형 숫자, 다중공선성은 특성끼리 강한 상관으로 계수가 불안정해지는 문제였어요.'),
+     REVEAL('범주가 4종류인 열을 `drop_first=True` 로 원-핫하면 열이 몇 개?', '4 - 1 = **3개**')])
+L.ox('복습: 피어슨 상관계수가 -0.95 인 두 특성은 다중공선성을 의심할 만하다.', True,
+    '부호와 상관없이 **절댓값이 1 에 가까우면** 강한 직선 관계예요.', review=True)
+
+L.explain('편향-분산 트레이드오프',
+    [T('모델의 오차는 크게 두 원인으로 나눠 생각해요.\n\n'
+       '- **편향(bias)**: 모델이 너무 단순해서 진짜 패턴을 못 따라감 → 어떤 데이터로 학습해도 **늘 비슷하게 틀림**\n'
+       '- **분산(variance)**: 모델이 너무 예민해서 학습 데이터가 조금만 바뀌어도 **결과가 크게 달라짐**'),
+     CMP(side('편향 ↑ (과소적합)', '직선으로 곡선 데이터 맞추기\n깊이 1 트리, k = 전체인 KNN\n\n학습 점수 **낮음**, 테스트 점수 **낮음**'),
+         side('분산 ↑ (과적합)', '잡음까지 외우는 모델\n깊이 무제한 트리, k = 1 KNN\n\n학습 점수 **높음**, 테스트 점수 **낮음**'))],
+    [T('모델을 복잡하게 만들면 편향은 줄지만 분산이 늘어요. 둘을 **동시에 최소로** 만들기 어려워서 "트레이드오프"라고 해요.\n'
+       '그래서 복잡도를 바꿔 가며 **교차검증 점수가 가장 좋은 지점**을 골라요.'),
+     TABS(('KNN', 'k 를 **줄이면** 더 복잡(분산 ↑), 늘리면 단순(편향 ↑)'),
+          ('결정트리', 'max_depth 를 **늘리면** 더 복잡'),
+          ('SVM', 'C 를 **키우면** 오류를 덜 허용 → 더 복잡'),
+          ('로지스틱 회귀', 'sklearn 의 C 는 **규제 강도의 역수**. C 를 키우면 규제가 약해져 더 복잡'),
+          ('앙상블', '배깅·랜덤포레스트는 주로 **분산 ↓**, 부스팅은 주로 **편향 ↓**')),
+     EXAM('"학습 0.99, 테스트 0.75 → 무엇이 문제이고 어떻게 고치나?" 형태가 단골이에요. 답: 과적합(분산 큼) → 모델 단순화(k ↑, depth ↓, C ↓), 데이터 늘리기, 앙상블(배깅) 등.')])
+
+L.match('바꾼 설정과 결과를 이어 보세요.',
+    [['KNN 의 k 를 1 로', '분산 ↑ (과적합 쪽)'], ['트리 max_depth 를 1 로', '편향 ↑ (과소적합 쪽)'],
+     ['랜덤포레스트로 트리 여러 개 평균', '분산 ↓'], ['부스팅으로 약한 모델을 이어 붙임', '편향 ↓']],
+    '"복잡하게 = 편향 ↓ 분산 ↑", "단순하게 = 편향 ↑ 분산 ↓" 만 기억하면 나머지는 따라 나와요.')
+
+L.choice('학습 정확도 0.62, 테스트 정확도 0.60 인 모델을 개선하는 방법으로 가장 알맞은 것은?',
+    ['KNN 의 k 를 더 크게 한다', '트리의 max_depth 를 더 키우거나 더 복잡한 모델을 쓴다',
+     'SVM 의 C 를 더 작게 한다', '학습 데이터 일부를 버린다'], 2,
+    '둘 다 낮으니 **과소적합(편향 큼)** 이에요. 모델을 더 복잡하게 해야 해요. 나머지 선택지는 모델을 더 단순하게 만들어요.')
+
+L.explain('One-vs-Rest: 여러 클래스 분류',
+    [T('로지스틱 회귀·SVM 은 원래 **이진 분류**용이에요. 클래스가 3개(붓꽃 setosa / versicolor / virginica)라면?\n'
+       '**One-vs-Rest(OvR)** 는 클래스마다 "이 클래스 vs 나머지 전부" 이진 분류기를 하나씩 만들어요.'),
+     STEPS(('분류기 1', 'setosa vs (versicolor + virginica)'), ('분류기 2', 'versicolor vs 나머지'),
+           ('분류기 3', 'virginica vs 나머지'), ('예측', '새 데이터를 세 분류기에 모두 넣고 **점수(확률)가 가장 큰** 클래스로 결정'))],
+    [T('클래스가 K 개면 분류기도 **K 개**예요. sklearn 에서는 `OneVsRestClassifier` 로 감싸서 명시적으로 쓸 수 있어요.'),
+     CODE('''from sklearn.datasets import load_iris
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.linear_model import LogisticRegression
+X, y = load_iris(return_X_y=True)
+ovr = OneVsRestClassifier(LogisticRegression(max_iter=1000))
+ovr.fit(X, y)
+print(len(ovr.estimators_))
+print(ovr.predict(X[[0, 50, 100]]))''', 'OneVsRestClassifier', run_=False),
+     REVEAL_RUN('실행 결과 보기', '''from sklearn.datasets import load_iris
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.linear_model import LogisticRegression
+X, y = load_iris(return_X_y=True)
+ovr = OneVsRestClassifier(LogisticRegression(max_iter=1000))
+ovr.fit(X, y)
+print(len(ovr.estimators_))
+print(ovr.predict(X[[0, 50, 100]]))''', '클래스 3개 → 이진 분류기 3개. 0, 50, 100번 꽃은 각각 다른 품종이에요.'),
+     TIP('비슷한 방법으로 클래스 **두 개씩** 짝지어 분류기를 만드는 One-vs-One(OvO)도 있어요. K 개 클래스면 K(K-1)/2 개.')])
+
+L.short('클래스가 5개인 문제를 One-vs-Rest 로 풀 때 필요한 이진 분류기 수는? (숫자만)', '5',
+    'OvR 은 클래스마다 하나 → 5개. (참고: OvO 라면 5×4/2 = 10개)', check_code='print(5)')
+
+L.explain('코랩 코드 총정리',
+    [T('시험의 코드 빈칸은 대부분 이 흐름 위에 있어요. 모델 이름만 바꿔 끼우면 돼요.'),
+     CODE('''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+pipe = make_pipeline(StandardScaler(), LogisticRegression())
+grid = GridSearchCV(pipe, {"logisticregression__C": [0.01, 0.1, 1, 10]}, cv=5)
+grid.fit(X_tr, y_tr)
+pred = grid.predict(X_te)
+proba = grid.predict_proba(X_te)[:, 1]
+print(grid.best_params_)
+print(confusion_matrix(y_te, pred))
+print(round(f1_score(y_te, pred), 3), round(roc_auc_score(y_te, proba), 3))''', '분류 전체 흐름', run_=False)],
+    [REVEAL_RUN('실행 결과 보기', '''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+pipe = make_pipeline(StandardScaler(), LogisticRegression())
+grid = GridSearchCV(pipe, {"logisticregression__C": [0.01, 0.1, 1, 10]}, cv=5)
+grid.fit(X_tr, y_tr)
+pred = grid.predict(X_te)
+proba = grid.predict_proba(X_te)[:, 1]
+print(grid.best_params_)
+print(confusion_matrix(y_te, pred))
+print(round(f1_score(y_te, pred), 3), round(roc_auc_score(y_te, proba), 3))''', '최적 C, 혼동행렬 `[[TN, FP], [FN, TP]]`, F1 과 AUC 예요.'),
+     KEY('나누기 → (Pipeline: 스케일링 + 모델) → GridSearchCV 로 교차검증 튜닝 → **테스트는 마지막에 한 번** 평가. 이 순서를 서술할 수 있으면 코드 빈칸도 쉽게 풀려요.')])
+
+L.order('위 흐름을 순서대로 놓으세요.',
+    ['X, y = load_breast_cancer(return_X_y=True)', 'X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y)',
+     'pipe = make_pipeline(StandardScaler(), LogisticRegression())', 'grid = GridSearchCV(pipe, params, cv=5)',
+     'grid.fit(X_tr, y_tr)', 'pred = grid.predict(X_te)', 'print(f1_score(y_te, pred))'],
+    '데이터 → 나누기 → 파이프라인 → 그리드 서치 → 학습(학습 데이터만!) → 예측 → 평가.')
+
+L.fill('결정트리의 깊이를 교차검증으로 고르고 테스트 혼동행렬을 출력하는 코드의 빈칸을 채우세요.', '''\
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import confusion_matrix
+X, y = load_iris(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+grid = ___(DecisionTreeClassifier(random_state=0), {"max_depth": [1, 2, 3, 4]}, cv=5)
+grid.fit(X_tr, y_tr)
+cm = confusion_matrix(___, grid.predict(X_te))
+print(cm.shape)''', [['GridSearchCV'], ['y_te']],
+    '교차검증 튜닝은 `GridSearchCV`, 혼동행렬의 첫 인자는 **실제값** `y_te`. 클래스가 3개라 3×3 행렬이에요.', expect='(3, 3)')
+
+L.bucket('모델을 **더 복잡하게**(분산 ↑) 만드는 변화와 **더 단순하게**(편향 ↑) 만드는 변화로 나누세요.', ['더 복잡하게', '더 단순하게'],
+    [['KNN k: 15 → 3', 1], ['SVM C: 10 → 0.1', 2], ['트리 max_depth: 3 → 12', 1],
+     ['로지스틱 C: 0.01 → 100', 1], ['트리 min_samples_leaf: 1 → 30', 2], ['KNN k: 1 → 21', 2]],
+    'KNN 만 방향이 반대(k 가 작을수록 복잡)라는 점을 특히 조심하세요.')
+
+L.practice('[기출유사] One-vs-Rest 로 품종 고르기',
+'''붓꽃 세 품종에 대해 각각 "이 품종 vs 나머지" 로지스틱 분류기가 있어요. 첫째 줄에 품종 이름 3개, 둘째 줄에 데이터 수 n, 다음 n 줄에 세 분류기가 낸 **z 값** 3개가 주어져요.
+
+**[조건]**
+- 각 z 를 시그모이드 `1 / (1 + e^(-z))` 로 확률로 바꿔요. (`math.exp`)
+- 데이터마다 `확률1 확률2 확률3 -> 품종` 형식으로 출력. 확률은 `f"{p:.2f}"`
+- 확률이 가장 큰 품종을 고르고, 같으면 **앞의 품종**을 골라요.
+
+{ex}
+
+{ex2}''',
+'''import math
+names = input().split()
+n = int(input())
+# 데이터마다 품종을 고르세요
+''',
+'''import math
+names = input().split()
+n = int(input())
+for _ in range(n):
+    z = list(map(float, input().split()))
+    p = [1 / (1 + math.exp(-v)) for v in z]       # 분류기마다 확률
+    best = 0
+    for i in range(1, len(p)):
+        if p[i] > p[best]:                        # 더 클 때만 → 동점이면 앞 품종
+            best = i
+    print(" ".join(f"{v:.2f}" for v in p), "->", names[best])''',
+    ['setosa versicolor virginica\n2\n3 -1 -4\n-2 0.5 1.2', 'A B C\n1\n0 0 -1'],
+    ['A B C\n1\n-5 -3 -4', 'x y z\n2\n0 0 0\n1 2 3', 'red green blue\n1\n-1 4 4'],
+    ['확률 리스트: `[1 / (1 + math.exp(-v)) for v in z]`', '최댓값 위치를 직접 찾을 때 `>` 를 쓰면 동점에서 앞이 남아요.',
+     '`" ".join(f"{v:.2f}" for v in p)` 로 확률을 한 줄로'],
+    'OvR 의 확률은 분류기마다 따로 계산해서 **합이 1 이 아닐 수 있어요**. 그래도 가장 큰 점수의 클래스를 고르면 돼요. 모든 z 가 음수여도(숨은 테스트 1) 그중 가장 큰 것을 골라요.')
+
+L.practice('[기출유사] 과적합 진단표',
+'''결정트리의 깊이별 학습/테스트 정확도(%)가 주어져요. 첫째 줄에 개수 n, 다음 n 줄에 `깊이 학습% 테스트%` (정수)가 주어져요.
+
+**[조건]** (이 문제의 판정 규칙)
+- 학습% 가 70 미만이면 `과소적합`
+- 그렇지 않고 `학습% - 테스트% >= 10` 이면 `과적합`
+- 나머지는 `적당`
+- 줄마다 `깊이 판정` 을 출력하고, 마지막 줄에 `추천 깊이: d` (테스트% 가 가장 높은 깊이, 같으면 **얕은** 깊이)
+- 깊이는 오름차순으로 주어져요.
+
+{ex}
+
+{ex2}''',
+'''n = int(input())
+best_d, best_te = 0, -1
+# 깊이별 판정을 출력하세요
+''',
+'''n = int(input())
+best_d, best_te = 0, -1
+for _ in range(n):
+    d, tr, te = map(int, input().split())
+    if tr < 70:
+        state = "과소적합"
+    elif tr - te >= 10:
+        state = "과적합"
+    else:
+        state = "적당"
+    print(d, state)
+    if te > best_te:              # 오름차순 입력이라 동점이면 얕은 깊이가 남음
+        best_d, best_te = d, te
+print("추천 깊이:", best_d)''',
+    ['4\n1 65 63\n3 92 90\n5 97 88\n10 100 84', '3\n2 88 85\n4 95 87\n6 99 87'],
+    ['1\n1 50 50', '2\n1 70 60\n2 69 69', '3\n1 80 75\n2 90 81\n3 91 81'],
+    ['`if / elif / else` 순서가 조건 순서와 같아야 해요(과소적합 먼저).', '`tr - te >= 10` 은 정수끼리라 정확히 비교돼요.',
+     '추천 깊이는 `te > best_te` 일 때만 바꿔요.'],
+    '깊이가 커질수록 학습% 는 계속 오르지만 테스트% 는 어느 지점부터 떨어져요. 그 꼭짓점이 편향-분산 트레이드오프의 "적당한 복잡도" 예요.')
+
+L.essay('편향-분산 트레이드오프를 설명하고, 결정트리의 max_depth 를 예로 들어 서술하세요.',
+    '편향은 모델이 너무 단순해 데이터의 패턴을 제대로 잡지 못해 생기는 오차이고, 분산은 모델이 학습 데이터의 작은 변화나 잡음에 너무 민감해 생기는 오차이다. 모델을 복잡하게 하면 편향은 줄지만 분산이 커지고, 단순하게 하면 그 반대가 되어 둘을 동시에 줄이기 어렵다. 결정트리에서 max_depth 가 너무 작으면 편향이 커 과소적합되고, 너무 크면 분산이 커 과적합된다. 따라서 교차검증으로 테스트(검증) 성능이 가장 좋은 깊이를 고른다.',
+    ['편향 = 너무 단순해서 생기는 오차', '분산 = 데이터에 너무 민감해서 생기는 오차', '복잡도 ↑ → 편향 ↓ 분산 ↑', 'max_depth 작음 → 과소적합, 큼 → 과적합', '교차검증으로 적절한 값 선택'])
+
+if __name__ == '__main__':
+    C.save(sys.argv[1] if len(sys.argv) > 1 else '/tmp/pi.json')
