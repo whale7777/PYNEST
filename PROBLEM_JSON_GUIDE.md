@@ -150,7 +150,7 @@
 - `hidden`: `false` 면 학생에게 보이는 예제, `true` 면 숨김 케이스.
 - 선택 `mode`: `"nums"`(숫자만 비교, 소수 오차 문제에 유용) / `"contains"`(포함) / `"nospace"`(공백 무시). 보통은 쓰지 않아요.
 - 규칙: 예제(보이는 케이스)는 본문 `io` 예시와 같게, 숨김 케이스는 경계값 포함 5~15개.
-- 파이썬 코드는 브라우저(Pyodide)에서 **3초 안에** 돌아가요. 너무 큰 입력은 시간 초과가 나니 입력 크기를 작게 잡아요. 파일이 너무 크지 않게(문제집 하나 약 4MB 이하) 해요.
+- 파이썬 코드는 브라우저(Pyodide)에서 **3초 안에** 돌아가요. (`numpy`·`pandas`·`sklearn`·`scipy`·`matplotlib` 를 import 하면 패키지 불러오는 시간은 빼고 **10초**까지 줘요. V5.10.1) 너무 큰 입력은 시간 초과가 나니 입력 크기를 작게 잡아요. 파일이 너무 크지 않게(문제집 하나 약 4MB 이하) 해요.
 - 답이 하나로 정해지는 문제만 내요 (여러 정답이 가능한 문제는 채점이 안 돼요).
 
 ## 4. 정답식 `answers` (입력·출력이 없는 문제)
@@ -225,3 +225,23 @@ Diamond 100점: 고급 자료구조·비트마스크 / Ruby 250점: 대회 중�
 ````
 
 > 한 번에 300문제는 AI가 한 답에 못 담아요. 난이도별·분야별로 20~30문제씩 나눠서 요청한 뒤 `chapters` 를 하나로 합치거나, 코드를 실행할 수 있는 AI(Claude 코드 실행 등)에게 "정답 코드로 테스트 출력까지 생성·검증"하게 하세요.
+
+# 📦 라이브러리 자동 import — `libs` (V5.10.2)
+
+파일 맨 위 또는 문제마다 `"libs"` 를 적으면, 채점·실행 전에 자동으로 import 돼요. 학생 코드에 `import` 가 없어도 `np`, `pd` 를 쓸 수 있어요. (문제 안의 `libs` 가 파일 맨 위 `libs` 보다 우선해요. 빈 배열 `[]` 이면 자동 import 없음)
+
+```json
+{ "format": "pynest-problemset-v1", "title": "넘파이 기초", "libs": ["numpy"],
+  "problems": [ { "difficulty": "Beginner", "body": "...", "libs": ["numpy", "pandas"], "tests": [ ... ] } ] }
+```
+
+| 이름 | 자동으로 들어가는 코드 |
+|---|---|
+| `numpy` | `import numpy as np` |
+| `pandas` | `import pandas as pd` |
+| `matplotlib` | `import matplotlib.pyplot as plt` (그림은 화면에 안 떠요) |
+| `sklearn` (또는 `scikit-learn`) | `import sklearn` |
+| `scipy` | `import scipy` |
+
+- 문제 편집 화면의 태그 칸에 `lib:numpy` 라고 적어도 같아요 (태그로는 안 보이고 📦 로 표시돼요).
+- 시험(exam)에는 아직 적용되지 않아요.

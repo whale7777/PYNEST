@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.9.0';
+  const APP_VERSION = '5.10.2';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -1231,7 +1231,7 @@
         chapter: chapter || null, section: section || null,
         difficulty: forceElite ? 'ELITE' : normDiff(p.difficulty),
         label: p.label || null, points: Number.isFinite(pts) ? pts : null,
-        tags: Array.isArray(p.tags) ? p.tags.map(String) : [],
+        tags: [...(Array.isArray(p.tags) ? p.tags.map(String) : []).filter((t) => !LIB_TAG.test(t)), ...normLibs(p.libs !== undefined ? p.libs : d.libs).map((n) => 'lib:' + n)],
         source: p.source || null, body, check_point: p.check || p.check_point || null,
         tests: normTests(p.tests), answers: normAnswers(p.answers), position: seq * 1000,
       });
@@ -1256,7 +1256,7 @@
 
   function exportSet(set, list, notes) {
     const L = mergeFlow(layoutEx(list.map((e) => ({ ...e }))), notes);
-    const prob = (e) => ({ difficulty: e.difficulty, label: e.label || '', points: e.points, tags: e.tags || [], source: e.source || '', body: e.body, check: e.check_point || '', tests: e.tests || [], answers: e.answers || [] });
+    const prob = (e) => ({ difficulty: e.difficulty, label: e.label || '', points: e.points, tags: plainTags(e.tags), ...(libsOfTags(e.tags).length ? { libs: libsOfTags(e.tags) } : {}), source: e.source || '', body: e.body, check: e.check_point || '', tests: e.tests || [], answers: e.answers || [] });
     const text = (n) => ({ type: 'text', body: n.body });
     const flowOut = (f) => f.map((x) => (x.note ? text(x.note) : prob(x.ex)));
     const chapters = L.chapters.map((ch) => {
@@ -1541,7 +1541,7 @@
     const next = order[idx + 1];
     const tests = e.tests || [];
     const answers = e.answers || [];
-    const tags = (e.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
+    const tags = libChips(e.tags) + plainTags(e.tags).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
     const samples = tests.filter((t) => !t.hidden);
     const hasIo = /^```\s*(io|out)\b/m.test(String(e.body || ''));
     const cp = (t) => String(t == null ? '' : t).replace(/\n$/, '');
@@ -1838,7 +1838,7 @@
       const vers = subsBy[e.id] || [];
       const last = vers[vers.length - 1];
       const hasC = vers.some((s) => (s.submission_comments || []).length);
-      const tags = (e.tags || []).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
+      const tags = libChips(e.tags) + plainTags(e.tags).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
       return `<article class="ex ${e.difficulty === 'ELITE' ? 'elite' : dxCls(e.difficulty)}"${dxStyle(e.difficulty)} id="ex-${e.id}" data-kind="ex" data-id="${e.id}" data-zone="${e.difficulty === 'ELITE' ? 'elite' : 'normal'}" data-hws="${(hwOf[e.id] || []).map((h) => h.id).join(',')}">
         <header class="ex-head">
           <a class="ex-no" href="#/p/${e.id}" title="이 문제만 크게 보기">${dispNo(e)}</a>
@@ -2191,7 +2191,7 @@
             if (!getCode().trim()) res = { status: 'WA', passed: 0, total: tests.length, cases: tests.map((t) => ({ ok: false, st: 'WA', mode: t.mode || '', hidden: !!t.hidden, input: t.input || '', expected: t.output || '', got: '', err: '' })) };
             else {
               showJ(`<span class="muted">${prep}</span>`);
-              res = await gradeAll(getCode(), tests, (i, n) => showJ(`<span class="muted">⏳ 채점 중… ${i + 1} / ${n}</span>`));
+              res = await gradeAll(getCode(), tests, (i, n) => showJ(`<span class="muted">⏳ 채점 중… ${i + 1} / ${n}</span>`), libsOfTags(ex.tags));
             }
           }
           return { res, parts, judge: summarize(res, parts) };
@@ -2202,7 +2202,7 @@
           if (!getCode().trim()) return toast('코드를 입력하세요', true);
           lock(true);
           showJ(`<span class="muted">${prep}</span>`);
-          const r = await runOnce(getCode(), ($('.stdin', p) || { value: '' }).value.replace(/\n?$/, '\n'));
+          const r = await runOnce(getCode(), ($('.stdin', p) || { value: '' }).value.replace(/\n?$/, '\n'), 3000, (ph, pk) => { if (ph === 'load') showJ(`<span class="muted">📦 ${esc(pkgLabel(pk))} 불러오는 중… (처음 한 번은 몇십 초 걸릴 수 있어요)</span>`); else showJ(`<span class="muted">${prep}</span>`); }, libsOfTags(ex.tags));
           showJ(renderRun(r));
           lock(false);
         };
@@ -2298,22 +2298,84 @@
     '    finally:',
     '        sys.stdout, sys.stdin, sys.stderr = so, si, se',
     '    return json.dumps({"ok": err is None, "out": out.getvalue()[:20000], "err": err})',
+    // 데이터 패키지(numpy·pandas·scikit-learn …) 지원 (V5.10.1)
+    // 코드를 실행하지 않고 import 문만 읽어서, 어떤 모듈이 필요한지 알려줘요.
+    'import os',
+    'os.environ["MPLBACKEND"] = "Agg"',
+    'PKG_TOP = ("numpy", "pandas", "scipy", "sklearn", "matplotlib")',
+    'def judge_prep(code, pre="[]"):',
+    '    import ast',
+    '    srcs = [code]',
+    '    try:',
+    '        srcs += [b.get("c", "") for b in json.loads(pre or "[]")]',
+    '    except Exception:',
+    '        pass',
+    '    mods = []',
+    '    for s in srcs:',
+    '        try:',
+    '            tree = ast.parse(s)',
+    '        except Exception:',
+    '            continue',
+    '        for n in ast.walk(tree):',
+    '            if isinstance(n, ast.Import):',
+    '                names = [a.name for a in n.names]',
+    '            elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:',
+    '                names = [n.module] + [n.module + "." + a.name for a in n.names if a.name != "*"]',
+    '            else:',
+    '                continue',
+    '            for nm in names:',
+    '                if nm.split(".")[0] in PKG_TOP and nm not in mods:',
+    '                    mods.append(nm)',
+    '    return json.dumps(mods)',
+    // 패키지를 미리 import 해 둬요 → 처음 import 하는 시간이 채점 시간 제한에 들어가지 않아요.
+    'def judge_warm(mods):',
+    '    import importlib, warnings',
+    '    se = sys.stderr',
+    '    sys.stderr = io.StringIO()',
+    '    try:',
+    '        with warnings.catch_warnings():',
+    '            warnings.simplefilter("ignore")',
+    '            for m in json.loads(mods):',
+    '                try:',
+    '                    importlib.import_module(m)',
+    '                except Exception:',
+    '                    pass',
+    '    finally:',
+    '        sys.stderr = se',
   ].join('\n');
   const WORKER_SRC = `importScripts(${JSON.stringify(PY_URL + 'pyodide.js')});
 const PY = ${JSON.stringify(PY_BOOT)};
+let py = null;
 let run = null;
+let prep = null;
+let warm = null;
 (async () => {
   try {
-    const py = await loadPyodide({ indexURL: ${JSON.stringify(PY_URL)} });
+    py = await loadPyodide({ indexURL: ${JSON.stringify(PY_URL)} });
     py.runPython(PY);
     run = py.globals.get('judge_run');
+    prep = py.globals.get('judge_prep');
+    warm = py.globals.get('judge_warm');
     postMessage({ ready: true });
   } catch (e) { postMessage({ fatal: String(e) }); }
 })();
-onmessage = (ev) => {
+onmessage = async (ev) => {
   const d = ev.data;
-  try { postMessage(Object.assign({ id: d.id }, JSON.parse(run(d.code, d.input, d.pre || '[]')))); }
-  catch (e) { postMessage({ id: d.id, ok: false, out: '', err: String(e) }); }
+  try {
+    // numpy · pandas · scikit-learn 같은 패키지를 쓰는 코드면, 실행 전에 먼저 불러와요.
+    let mods = [];
+    try { mods = JSON.parse(prep(d.code, d.pre || '[]')); } catch (e) { mods = []; }
+    if (mods.length) {
+      const tops = Array.from(new Set(mods.map((m) => m.split('.')[0])));
+      postMessage({ id: d.id, phase: 'load', pkgs: tops });
+      try {
+        await py.loadPackagesFromImports(mods.map((m) => 'import ' + m).join('\\n'), { messageCallback: () => {}, errorCallback: () => {} });
+        warm(JSON.stringify(mods));
+      } catch (e) { /* 실패하면 아래 실행에서 오류로 알려줘요 */ }
+      postMessage({ id: d.id, phase: 'run', pkgs: tops });
+    }
+    postMessage(Object.assign({ id: d.id }, JSON.parse(run(d.code, d.input, d.pre || '[]'))));
+  } catch (e) { postMessage({ id: d.id, ok: false, out: '', err: String(e) }); }
 };`;
   let jw = null;
   let jseq = 0;
@@ -2398,26 +2460,72 @@ onmessage = (ev) => {
   }
 
   // 코드를 한 번 실행 → {status: OK | RE | TLE | LOAD, out, err}
-  async function runOnce(code, input, limit = 3000) {
+  // numpy·pandas·scikit-learn 등을 쓰는 코드는 패키지를 불러오는 시간(최대 3분)은 제한에서 빼고,
+  // 실행 제한은 파이썬이 느린 브라우저 환경을 감안해 10초까지 늘려 줘요. onPhase('load'|'run', 패키지 목록) 로 진행을 알 수 있어요.
+  // 문제·학습 JSON 의 "libs": ["numpy","pandas"] 를 설정해 두면 코드를 돌리기 전에 자동으로 import 돼요. (V5.10.1)
+  //   numpy → import numpy as np · pandas → import pandas as pd · matplotlib → import matplotlib.pyplot as plt · sklearn / scipy → import sklearn / scipy
+  const LIB_DEFS = {
+    numpy: 'import numpy as np', pandas: 'import pandas as pd', scipy: 'import scipy', sklearn: 'import sklearn', matplotlib: 'import matplotlib.pyplot as plt',
+  };
+  const LIB_ALIAS = { np: 'numpy', pd: 'pandas', plt: 'matplotlib', pyplot: 'matplotlib', 'scikit-learn': 'sklearn', scikit_learn: 'sklearn', sk: 'sklearn', 'scikitlearn': 'sklearn' };
+  function normLibs(v) {
+    const arr = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[,\s]+/) : [];
+    const out = [];
+    arr.forEach((x) => {
+      const k = String(x || '').trim().toLowerCase();
+      const n = LIB_ALIAS[k] || k;
+      if (LIB_DEFS[n] && !out.includes(n)) out.push(n);
+    });
+    return out;
+  }
+  const libsCode = (libs) => normLibs(libs).map((n) => LIB_DEFS[n]).join('\n');
+  // 문제의 태그 중 "lib:numpy" 꼴은 라이브러리 설정이에요 (태그 칸에 직접 써도 돼요)
+  const LIB_TAG = /^lib:/i;
+  const libsOfTags = (tags) => normLibs((tags || []).filter((t) => LIB_TAG.test(String(t))).map((t) => String(t).slice(4)));
+  const plainTags = (tags) => (tags || []).filter((t) => !LIB_TAG.test(String(t)));
+  const libChips = (tags) => { const l = libsOfTags(tags); return l.length ? `<span class="chip" title="이 문제는 코드를 돌리기 전에 자동으로 import 돼요">📦 ${esc(l.join(' · '))}</span>` : ''; };
+  const withLibsPre = (libs) => {
+    const c = libsCode(libs);
+    if (!c) return PRE_JSON;
+    let base = [];
+    try { base = JSON.parse(PRE_JSON); } catch (e) { base = []; }
+    return JSON.stringify([{ n: '📦 라이브러리 자동 import', c }, ...base]);
+  };
+  const PKG_LOAD_MS = 180000;
+  const PKG_RUN_MS = 10000;
+  const pkgLabel = (pk) => (pk || []).map((x) => (x === 'sklearn' ? 'scikit-learn' : x)).join(' · ');
+  async function runOnce(code, input, limit = 3000, onPhase, libs) {
     let w;
     try { w = await jworker(); } catch (e) { return { status: 'LOAD', out: '', err: String(e.message || e) }; }
     code = relaxInput(code);
     return new Promise((resolve) => {
       const id = ++jseq;
+      let timer = null;
+      let loading = false;
+      let lim = limit;
+      const fail = () => {
+        w.removeEventListener('message', on);
+        w.terminate();
+        jw = null;
+        resolve(loading ? { status: 'LOAD', out: '', err: '패키지를 불러오는 데 너무 오래 걸려요' } : { status: 'TLE', out: '', sec: lim / 1000 });
+      };
+      const arm = (ms) => { clearTimeout(timer); timer = setTimeout(fail, ms); };
       const on = (ev) => {
         if (ev.data.id !== id) return;
+        if (ev.data.phase) {
+          loading = ev.data.phase === 'load';
+          lim = loading ? PKG_LOAD_MS : Math.max(limit, PKG_RUN_MS);
+          arm(lim);
+          if (onPhase) { try { onPhase(ev.data.phase, ev.data.pkgs || []); } catch (e) { /* 표시 오류는 무시 */ } }
+          return;
+        }
         clearTimeout(timer);
         w.removeEventListener('message', on);
         resolve(ev.data.ok ? { status: 'OK', out: ev.data.out } : { status: 'RE', out: ev.data.out, err: ev.data.err });
       };
-      const timer = setTimeout(() => {
-        w.removeEventListener('message', on);
-        w.terminate();
-        jw = null;
-        resolve({ status: 'TLE', out: '' });
-      }, limit);
+      arm(limit);
       w.addEventListener('message', on);
-      w.postMessage({ id, code, input, pre: PRE_JSON });
+      w.postMessage({ id, code, input, pre: withLibsPre(libs) });
     });
   }
 
@@ -2436,14 +2544,14 @@ onmessage = (ev) => {
     return normOut(got) === normOut(exp);
   }
 
-  async function gradeAll(code, tests, onStep) {
+  async function gradeAll(code, tests, onStep, libs) {
     const cases = [];
     let passed = 0;
     let status = 'AC';
     for (let i = 0; i < tests.length; i += 1) {
       if (onStep) onStep(i, tests.length);
       const t = tests[i];
-      const r = await runOnce(code, t.input || '');
+      const r = await runOnce(code, t.input || '', 3000, null, libs);
       if (r.status === 'LOAD') throw new Error(r.err);
       const st = r.status === 'OK' ? (cmpOut(t.mode, r.out, t.output) ? 'AC' : 'WA') : r.status;
       cases.push({ ok: st === 'AC', st, mode: t.mode || '', hidden: !!t.hidden, input: t.input || '', expected: t.output || '', got: r.out || '', err: r.err || '' });
@@ -2456,7 +2564,7 @@ onmessage = (ev) => {
     return { status, passed, total: tests.length, cases };
   }
 
-  const ST_TEXT = { WA: '틀렸어요', RE: '실행 오류', TLE: '시간 초과 (3초)', SKIP: '실행 안 함' };
+  const ST_TEXT = { WA: '틀렸어요', RE: '실행 오류', TLE: '시간 초과 (3초 · numpy 등 패키지를 쓰면 10초)', SKIP: '실행 안 함' };
   const judgeBadge = (j) => {
     if (!j) return '';
     if (j.teacher) return j.teacher === 'ok' ? '<span class="badge ok">✅ 선생님 확인 · 통과</span>' : '<span class="badge bad">❌ 선생님 확인 · 오답</span>';
@@ -2467,7 +2575,7 @@ onmessage = (ev) => {
 
   function renderRun(r) {
     if (r.status === 'LOAD') return `<div class="jsum bad">⚠️ 파이썬 실행 도구를 불러오지 못했어요.<br><span class="small">인터넷 연결을 확인해 보세요. (${esc(r.err)})</span></div>`;
-    if (r.status === 'TLE') return '<div class="jsum bad">⏱ 시간 초과 (3초) — 무한 반복이 아닌지 확인해 보세요.</div>';
+    if (r.status === 'TLE') return `<div class="jsum bad">⏱ 시간 초과 (${r.sec || 3}초) — 무한 반복이 아닌지 확인해 보세요.</div>`;
     return `<div class="muted small">출력</div><pre class="jout"><code>${esc(r.out) || '(출력 없음)'}</code></pre>${r.status === 'RE' ? `<div class="jsum bad">❌ ${esc(r.err)}</div>` : ''}`;
   }
 
@@ -3201,7 +3309,7 @@ onmessage = (ev) => {
           <label>출처 (선택)<input type="text" id="fSrc" placeholder="예: 백준 2557번" value="${esc(cur.source || '')}"></label>
         </div>
         ${RK_READY ? `<label>🏆 랭킹 점수 (선택) <span class="muted small">— 비워 두면 난이도 점수를 써요</span><input type="number" id="fRank" min="0" placeholder="${diffPts(cur.difficulty)}" value="${cur.rank_points ?? ''}"></label>` : ''}
-        <label>태그 (쉼표로 구분, 선택)<input type="text" id="fTags" placeholder="예: 50자 이내, abs() 사용 금지" value="${esc((cur.tags || []).join(', '))}"></label>
+        <label>태그 (쉼표로 구분, 선택)<input type="text" id="fTags" placeholder="예: 50자 이내, lib:numpy (라이브러리 자동 import)" value="${esc((cur.tags || []).join(', '))}"></label>
         <div class="grid2">
           <label>챕터<input type="text" id="fCh" list="dlCh" value="${esc(cur.chapter || '')}"></label>
           <label>섹션<input type="text" id="fSec" list="dlSec" value="${esc(cur.section || '')}"></label>
@@ -3251,7 +3359,7 @@ onmessage = (ev) => {
       btn.textContent = '⏳ 실행 중…';
       for (const t of tests) {
         if (t.output) continue;
-        const r = await runOnce(ref, t.input);
+        const r = await runOnce(ref, t.input, 3000, null, libsOfTags(q('#fTags').value.split(',').map((x) => x.trim())));
         if (r.status !== 'OK') { toast(r.status === 'LOAD' ? '실행 도구를 불러오지 못했어요' : `정답 코드 실행 실패: ${r.err || r.status}`, true); break; }
         t.output = r.out.replace(/\s+$/, '');
       }
@@ -3453,7 +3561,7 @@ onmessage = (ev) => {
       if (tests.length) {
         if (!u.code.trim()) res = { status: 'WA', passed: 0, total: tests.length, cases: [] };
         else {
-          try { res = await gradeAll(u.code, tests); }
+          try { res = await gradeAll(u.code, tests, null, libsOfTags(ex.tags)); }
           catch (e) { if (statusEl) statusEl.innerHTML = `<span class="bad-t">⚠️ 파이썬 실행 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러주세요. (${esc(e.message || e)})</span>`; return out; }
         }
       }
@@ -4081,6 +4189,12 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
 
   /* ----- JSON 읽기 ----- */
   function normLearnStep(s, at) {
+    const o = normLearnStep0(s, at);
+    const libs = normLibs(s.libs);
+    if (libs.length) o.libs = libs;
+    return o;
+  }
+  function normLearnStep0(s, at) {
     const bad = (m) => { throw new Error(`${at}: ${m}`); };
     if (!s || typeof s !== 'object') bad('단계가 객체({ })가 아니에요');
     let type = String(s.type || '').toLowerCase();
@@ -4160,7 +4274,7 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
     if (rp !== null && (!Number.isInteger(rp) || rp < 0 || rp > 100000)) throw new Error(`${at}("${title}")의 rank_points 는 0 이상의 정수예요`);
     return {
       title, rank_points: rp, summary: learnTxt(l.summary ?? '').trim(), minutes: Number.isFinite(m) && m > 0 ? Math.round(m) : null,
-      steps: l.steps.map((s, k) => normLearnStep(s, `"${title}" ${k + 1}번째 단계`)),
+      steps: l.steps.map((s, k) => normLearnStep(s && typeof s === 'object' && s.libs === undefined && l.libs !== undefined ? { ...s, libs: l.libs } : s, `"${title}" ${k + 1}번째 단계`)),
     };
   }
   function parseLearnJson(text) {
@@ -4168,7 +4282,8 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
     try { d = JSON.parse(text); } catch (e) { throw new Error('JSON 형식 오류예요 (쉼표·따옴표를 확인해 보세요)'); }
     if (!d || typeof d !== 'object') throw new Error('올바른 학습 파일이 아니에요');
     if (d.format && !['pynest-learn-v1', 'pynest-learn-v2'].includes(d.format)) throw new Error('지원하지 않는 형식이에요: ' + d.format);
-    const lessons = (Array.isArray(d.lessons) ? d.lessons : d.title && d.steps ? [d] : []).map(normLearnLesson);
+    const topLibs = d.course && typeof d.course === 'object' && d.course.libs !== undefined ? d.course.libs : d.libs; // 코스(또는 파일) 전체 libs → 레슨 → 단계로 내려가요
+    const lessons = (Array.isArray(d.lessons) ? d.lessons : d.title && d.steps ? [d] : []).map((l, i) => normLearnLesson(l && typeof l === 'object' && l.libs === undefined && topLibs !== undefined ? { ...l, libs: topLibs } : l, i));
     if (!lessons.length) throw new Error('레슨(lessons)이 하나도 없어요');
     const c = d.course && typeof d.course === 'object' ? d.course : null;
     return {
@@ -4209,6 +4324,7 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
   const lrLoad = (k) => { let v = null; try { v = sessionStorage.getItem(k); } catch (e) { /* 무시 */ } if (v == null) { try { v = localStorage.getItem('pn_lr_' + k); } catch (e) { /* 무시 */ } } return v; };
 
   // 실행해 볼 수 있는 코드 칸 (설명 단계용·실습용 공통). opts: {key, rows, stdin}
+  let LR_LIBS = []; // 지금 보는 학습 단계의 libs (코드 칸 ▶ 실행에 적용)
   function lrCodeBox(root, initial, opts = {}) {
     const ta = $('textarea.lr-code', root);
     ta.value = initial;
@@ -4222,7 +4338,7 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
       run.disabled = true;
       out.hidden = false;
       out.innerHTML = '<span class="muted">⏳ 파이썬을 준비하는 중… (처음 한 번은 몇 초 걸려요)</span>';
-      const r = await runOnce(ta.value, (stdin ? stdin.value : '').replace(/\n?$/, '\n'));
+      const r = await runOnce(ta.value, (stdin ? stdin.value : '').replace(/\n?$/, '\n'), 3000, (ph, pk) => { out.innerHTML = ph === 'load' ? `<span class="muted">📦 ${esc(pkgLabel(pk))} 불러오는 중… (처음 한 번은 몇십 초 걸릴 수 있어요)</span>` : '<span class="muted">⏳ 실행 중…</span>'; }, LR_LIBS);
       out.innerHTML = renderRun(r);
       run.disabled = false;
     };
@@ -4736,6 +4852,7 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
         cur = Math.max(0, Math.min(i, n - 1));
         P.cur = cur;
         const st = steps[cur];
+        LR_LIBS = st.libs || [];
         const done = P.done[cur];
         const label = st.review ? '🔁 복습' : { explain: '📖 개념', quiz: '❓ 확인 문제', practice: '💻 실습' }[st.type];
         lxCur = null;
@@ -4815,7 +4932,7 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
           out.hidden = false;
           out.innerHTML = '<span class="muted">⏳ 파이썬을 준비하는 중… (처음 한 번은 몇 초 걸려요)</span>';
           try {
-            const res = await gradeAll(code, st.tests, (i2, n2) => { out.innerHTML = `<span class="muted">⏳ 채점 중… ${i2 + 1} / ${n2}</span>`; });
+            const res = await gradeAll(code, st.tests, (i2, n2) => { out.innerHTML = `<span class="muted">⏳ 채점 중… ${i2 + 1} / ${n2}</span>`; }, st.libs);
             out.innerHTML = renderGrade(res, null, [], false);
             if (res.status === 'AC') {
               if (!P.done[k]) await markDone(k, { xp: Math.max(10, XP_PRACTICE - 5 * used), t: tries, h: used });
@@ -5719,7 +5836,7 @@ print("\\x01LX" + __j.dumps({"f": __fr, "e": __err}, ensure_ascii=False))
         if (busy) return;
         if (!ta.value.trim()) return toast('코드를 입력하세요', true);
         lock(true); showOut('<span class="muted">⏳ 실행 중…</span>');
-        const r = await runOnce(ta.value, ($('#exIn', box).value || '').replace(/\n?$/, '\n'));
+        const r = await runOnce(ta.value, ($('#exIn', box).value || '').replace(/\n?$/, '\n'), 3000, (ph, pk) => { showOut(ph === 'load' ? `<span class="muted">📦 ${esc(pkgLabel(pk))} 불러오는 중…</span>` : '<span class="muted">⏳ 실행 중…</span>'); });
         showOut(renderRun(r)); lock(false);
         if (view === 'code') out.scrollIntoView({ block: 'nearest' });
       };

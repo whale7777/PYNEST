@@ -214,3 +214,18 @@
 ## D. v2 AI 프롬프트 추가 지침 (v1 프롬프트 뒤에 붙이세요)
 
 > 형식은 pynest-learn-v2. 개념 설명은 `body` 한 덩어리로 쓰지 말고 `parts` 로 3~6개 묶음으로 쪼개고, 묶음마다 글 3~6줄 + 도구(callout/compare/trace/reveal/index/slice 등) 1개를 넣어라. 모든 레슨의 첫 단계는 지난 레슨 복습(`review`) + 짧은 확인 문제. 개념 하나가 끝날 때마다 quiz 를 두고 ox/choice 만 반복하지 말고 match·order·output·spot·bucket 을 섞어라. 각 레슨 끝에는 practice 와 essay(시험 서술형 대비)를 넣어라. 모든 코드의 출력은 직접 실행해서 확인한 값만 써라.
+
+# 📦 라이브러리 자동 import — `libs` (V5.10.2)
+
+`libs` 를 적으면 그 단계의 ▶ 실행, 실습 채점에서 코드를 돌리기 전에 자동으로 import 돼요. 학생 코드에 `import` 가 없어도 `np`, `pd` 를 쓸 수 있어요.
+적는 자리는 **course(코스 전체) → 레슨 → 단계** 순서이고, 안쪽에 적은 것이 우선해요. (빈 배열 `[]` 이면 자동 import 없음)
+
+```json
+{ "format": "pynest-learn-v2",
+  "course": { "title": "데이터 분석 첫걸음", "libs": ["numpy", "pandas"] },
+  "lessons": [ { "title": "배열 만들기", "libs": ["numpy"], "steps": [
+    { "type": "explain", "code": "print(np.arange(5))" },
+    { "type": "practice", "libs": ["numpy"], "body": "...", "tests": [ ... ] } ] } ] }
+```
+
+사용할 수 있는 이름: `numpy`(np) · `pandas`(pd) · `matplotlib`(plt) · `sklearn`(scikit-learn) · `scipy`. 코드에 직접 `import` 를 써도 그대로 돼요.
