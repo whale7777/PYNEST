@@ -67,7 +67,7 @@
   const tierTag = () => (myTier() === 'student' ? '' : ` · ${TIER_NAME[myTier()]}`);
 
   /* ---------- V3.1.0 : 티어 · 뱃지 · 이름(별명) · 난이도 ---------- */
-  const APP_VERSION = '5.7.0';
+  const APP_VERSION = '5.8.0';
   // 안드로이드 앱(APK) 직접 내려받기 — 구글 드라이브 파일 ID (바꾸려면 이 ID만 고치세요)
   const APK_ID = '11135n6qMtN7vxzVPNH57R1Feo0A-XVly';
   const APK_LATEST = '1.3.1'; // 드라이브에 올린 최신 앱(APK) 버전
@@ -5065,7 +5065,8 @@ onmessage = (ev) => {
     const box = $('#exBox', v);
     let cur = null; let timer = 0; let roomApi = null; let ending = false;
     const alive = () => document.body.contains(box);
-    const stop = () => { clearInterval(timer); document.body.classList.remove('exam-on'); };
+    let liveT = 0; let liveRv = null;
+    const stop = () => { clearInterval(timer); clearInterval(liveT); document.body.classList.remove('exam-on'); };
     const staffView = can('content');
     const adm = staffView && !PV; // 미리보기에서는 학생처럼 구간이 잠겨요
     const xRpc = (n, a) => (PV ? Promise.resolve({ data: n === 'exam_part_close' ? 'ok' : { status: 'ok' } }) : sb.rpc(n, a));
@@ -5094,12 +5095,35 @@ onmessage = (ev) => {
       box.innerHTML = `${head()}<div class="card center ex-wait">
         <div class="muted">응시 마감까지 남은 시간</div><div class="ex-big" data-cd="close">--</div>
         ${adm ? `<a class="primary btn" href="#/exam/${E.id}/preview">👀 미리보기로 확인하기</a><div class="muted small">선생님은 직접 응시할 수 없어요</div>` : `<button class="primary" id="exEnter" type="button">▶ 시험 시작하기 (${E.duration_min}분)</button>`}
-        <ul class="ex-rules muted small"><li>시작 버튼을 누르는 순간부터 <b>${E.duration_min}분</b> 타이머가 돌아가요. 중간에 나가거나 새로고침해도 시간은 계속 가요.</li><li>응시는 <b>한 번</b>만 할 수 있어요. 준비가 됐을 때 시작하세요.</li><li>응시 마감 시각 전에 시작해야 해요. 마감 전에 시작하면 제한 시간은 끝까지 다 쓸 수 있어요.</li><li>코드 문제는 자동 채점이에요. 제출은 여러 번 해도 되고, 문제마다 가장 높은 점수가 반영돼요.</li><li>✍️ 서술형 문제는 선생님이 직접 채점해요. 순위는 모든 응시가 끝난 뒤에 나와요.</li></ul></div>`;
+        <ul class="ex-rules muted small"><li>시작 버튼을 누르는 순간부터 <b>${E.duration_min}분</b> 타이머가 돌아가요. 중간에 나가거나 새로고침해도 시간은 계속 가요.</li><li>응시는 <b>한 번</b>만 할 수 있어요. 준비가 됐을 때 시작하세요.</li><li>응시 마감 시각 전에 시작해야 해요. 마감 전에 시작하면 제한 시간은 끝까지 다 쓸 수 있어요.</li><li>코드 문제는 자동 채점이에요. 제출은 여러 번 해도 되고, 문제마다 가장 높은 점수가 반영돼요.</li><li>✍️ 서술형 문제는 선생님이 직접 채점해요. 순위는 아래에서 실시간으로 볼 수 있고, 최종 순위와 보상은 모든 응시가 끝난 뒤에 확정돼요.</li></ul></div>${liveSlots}`;
       bindEnter();
+      startLive(false);
     };
+    // 🏆 실시간 순위 + 📄 내 답안 (자유 응시: 내 시간이 끝난 뒤 · 응시 기간 중 순위 구경)
+    const rkRows = (b) => (b.rows || []).map((r) => `<div class="row ex-rrow${r.me ? ' me' : ''}"><div class="row-main"><span class="ex-rk">${r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</span> ${r.hidden && !r.me ? '<span class="muted">🔒 비공개</span>' : `<b>${esc(r.name || '')}</b>${r.hidden ? ' <span class="muted small">(나만 보여요)</span>' : ''}`}</div><div><b>${r.score}</b><span class="muted small">점 · ${r.solved}문제</span></div></div>`).join('') || '<p class="muted center pad">아직 순위에 오른 사람이 없어요.</p>';
+    const rvItem = (r, i) => { const p = (E.problems || []).find((x) => x.id === r.problem_id) || {}; return `<details class="ex-rv"><summary><b>${i + 1}. ${esc(r.title || '문제')}</b> <span class="muted small">${r.kind === 'essay' ? '✍️ ' : r.kind === 'short' ? '📝 ' : r.kind === 'mc' ? '🔘 ' : r.kind === 'fix' ? '🛠 ' : ''}내 점수 ${r.graded === false ? '채점 전' : r.score} / ${r.points}</span></summary>${p.body ? `<div class="ex-body">${renderContent(p.body, true)}</div>` : ''}${r.code ? `<div class="muted small">${r.kind === 'essay' ? '내 답안' : r.kind === 'short' ? '내 최고 점수 답안' : '내 최고 점수 코드'}</div><pre><code>${esc(r.kind === 'mc' ? (() => { try { return '선택한 보기: ' + JSON.parse(r.code).map((x) => Number(x) + 1).join(', ') + '번'; } catch (e) { return r.code; } })() : r.kind === 'short' ? (() => { try { return JSON.parse(r.code).map((x, k) => `(${k + 1}) ${x}`).join('\n'); } catch (e) { return r.code; } })() : r.code)}</code></pre>` : '<p class="muted small">제출한 코드가 없어요.</p>'}</details>`; };
+    const fillLive = async (withRv) => {
+      const [bd, rv] = await Promise.all([sb.rpc('exam_board', { p_id: E.id }), withRv ? sb.rpc('exam_review', { p_id: E.id }) : Promise.resolve(null)]);
+      if (withRv && rv && Array.isArray(rv.data)) liveRv = rv.data;
+      const bEl = $('#exLiveBoard', box); const rEl = $('#exLiveRv', box);
+      if (!bEl) return;
+      const b = bd && bd.data;
+      if (b && b.ready) {
+        const me = (b.rows || []).find((r) => r.me);
+        bEl.innerHTML = `<div class="card list"><h3 style="padding:14px 18px 0;margin:0">🏆 실시간 순위 <span class="muted small">${b.provisional ? '· 서술형 채점 중이라 임시' : '· 진행 중'} · ${b.n}명</span></h3>${me ? `<p class="muted small" style="padding:0 18px">내 순위 <b>${me.rank}위</b> · ${me.score}점 (15초마다 새로고침)</p>` : '<p class="muted small" style="padding:0 18px">15초마다 새로고침돼요.</p>'}${rkRows(b)}</div>`;
+      } else { bEl.innerHTML = '<div class="card center muted pad">순위를 불러오는 중이에요…</div>'; }
+      if (rEl && withRv) rEl.innerHTML = liveRv && liveRv.length ? `<div class="card"><h3>📄 내 답안</h3>${exFree(E) && Date.now() < Date.parse(E.end_at) ? '<p class="muted small">전체 응시가 끝나면 문제 본문도 함께 열려요.</p>' : ''}${liveRv.map(rvItem).join('')}</div>` : '';
+    };
+    const startLive = (withRv) => {
+      clearInterval(liveT);
+      fillLive(withRv);
+      liveT = setInterval(() => { if (!alive()) { clearInterval(liveT); return; } fillLive(false); }, 15000);
+    };
+    const liveSlots = '<div id="exLiveBoard"></div><div id="exLiveRv"></div>';
     const drawWait = () => {
       document.body.classList.remove('exam-on');
-      box.innerHTML = `${head()}<div class="card center ex-wait"><div class="ex-ok">✅ 응시를 마쳤어요!</div><div class="muted">모든 응시가 끝나는 <b>${fmt(E.end_at)}</b> 이후에 순위와 문제 해설이 나와요.</div><div class="ex-big" data-cd="all">--</div><a class="ghost btn" href="#/exam">📝 시험 목록</a></div>`;
+      box.innerHTML = `${head()}<div class="card center ex-wait"><div class="ex-ok">✅ 응시를 마쳤어요!</div><div class="muted">모든 응시가 끝나는 <b>${fmt(E.end_at)}</b> 이후에 최종 순위와 문제 해설이 나와요. 그 전에도 아래에서 지금까지의 순위와 내 답안을 볼 수 있어요.</div><div class="ex-big" data-cd="all">--</div><a class="ghost btn" href="#/exam">📝 시험 목록</a></div>${liveSlots}`;
+      startLive(true);
     };
     const bindEnter = () => {
       const b = $('#exEnter', box);
@@ -5360,7 +5384,7 @@ onmessage = (ev) => {
       const meHtml = me ? `<div class="card center ex-me"><div class="muted">내 결과</div><div class="ex-big">${me.rank}위 <span class="muted small">/ ${b.n}명</span></div><div><b>${me.score}점</b> · 푼 문제 ${me.solved}개</div><div class="muted small">🎁 ${esc(exRewardText(E.reward))}</div>
         <label class="inline" style="justify-content:center;margin-top:8px"><input type="checkbox" id="exPub" ${E.public === false ? '' : 'checked'}> 내 이름과 점수를 순위표에 공개</label></div>` : `<div class="card center muted pad">${adm ? '관리자 보기예요.' : '순위가 없어요 (제출한 기록이 없어요).'}</div>`;
       const rows = (b.rows || []).map((r) => `<div class="row ex-rrow${r.me ? ' me' : ''}"><div class="row-main"><span class="ex-rk">${r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</span> ${r.hidden && !r.me ? '<span class="muted">🔒 비공개</span>' : `<b>${esc(r.name || '')}</b>${r.hidden ? ' <span class="muted small">(나만 보여요)</span>' : ''}`}</div><div><b>${r.score}</b><span class="muted small">점 · ${r.solved}문제</span></div></div>`).join('') || '<p class="muted center pad">참가자가 없어요.</p>';
-      box.innerHTML = `${head()}${meHtml}<div class="card list"><h3 style="padding:14px 18px 0;margin:0">🏆 순위표</h3>${rows}</div>
+      box.innerHTML = `${head()}${meHtml}<div class="card list"><h3 style="padding:14px 18px 0;margin:0">🏆 순위표${b.provisional ? ' <span class="muted small">· 서술형 채점 중이라 임시 순위예요</span>' : ''}</h3>${rows}</div>
         ${rv.length ? `<div class="card"><h3>📄 문제와 내 풀이</h3>${rv.map((r, i) => { const p = (E.problems || []).find((x) => x.id === r.problem_id) || {}; return `<details class="ex-rv"><summary><b>${i + 1}. ${esc(r.title || '문제')}</b> <span class="muted small">${r.kind === 'essay' ? '✍️ ' : r.kind === 'short' ? '📝 ' : r.kind === 'mc' ? '🔘 ' : r.kind === 'fix' ? '🛠 ' : ''}내 점수 ${r.graded === false ? '채점 전' : r.score} / ${r.points}</span></summary><div class="ex-body">${renderContent(p.body || '', true)}</div>${r.code ? `<div class="muted small">${r.kind === 'essay' ? '내 답안' : r.kind === 'short' ? '내 최고 점수 답안' : '내 최고 점수 코드'}</div><pre><code>${esc(r.kind === 'mc' ? (() => { try { return '선택한 보기: ' + JSON.parse(r.code).map((x) => Number(x) + 1).join(', ') + '번'; } catch (e) { return r.code; } })() : r.kind === 'short' ? (() => { try { return JSON.parse(r.code).map((x, k) => `(${k + 1}) ${x}`).join('\n'); } catch (e) { return r.code; } })() : r.code)}</code></pre>` : '<p class="muted small">제출한 코드가 없어요.</p>'}</details>`; }).join('')}</div>` : ''}`;
       const pub = $('#exPub', box);
       if (pub) pub.onchange = async () => {
@@ -5374,6 +5398,7 @@ onmessage = (ev) => {
       const ph = exPhase(E);
       if (ph !== cur || force) {
         const prev = cur;
+        clearInterval(liveT);
         cur = ph;
         if (prev === 'live' && (ph === 'over' || ph === 'wait') && roomApi && !ending) {
           ending = true;
@@ -6854,6 +6879,7 @@ onmessage = (ev) => {
     if (p.staff) {
       return [`<div class="card pad center"><h2>${esc(p.name)}</h2><p><span class="badge">${p.staff === 'owner' ? '선생님' : ROLE_NAME[p.staff] || esc(p.staff)}</span></p></div>`];
     }
+    const canMgr = uid !== me.id && (can('members') || can('content') || isAdmin());
     const k = tierOf(p.score);
     const pct = k.hi == null ? 100 : Math.max(0, Math.min(100, Math.round(((p.score - k.lo) / (k.hi - k.lo)) * 100)));
     const next = k.hi == null ? '최고 단계예요! 👑' : `다음 <b>${esc(tierOf(k.hi).name)}</b> 까지 ${k.hi - p.score}점`;
@@ -6885,7 +6911,156 @@ onmessage = (ev) => {
         ${ex.bio ? `<p class="prof-bio">${nlBr(ex.bio)}</p>` : ''}
         <div class="form-actions">${uid === me.id ? '<a class="ghost btnlike" href="#/settings/prof">✨ 프로필·캐릭터 꾸미기</a>' : '<a class="primary btnlike" href="#/settings/dm/' + uid + '">💬 메시지 보내기</a>'}</div>
       </div>
-      <h3>최근 푼 문제</h3><div class="card list">${recent}</div>`];
+      <h3>최근 푼 문제</h3><div class="card list">${recent}</div>
+      ${canMgr ? '<h3>🛠️ 관리자 설정</h3><div id="pfAdm" class="card pad"><p class="muted small">불러오는 중…</p></div>' : ''}`,
+    canMgr ? (v) => bindProfileAdmin(v, uid, p) : undefined];
+  }
+
+  // 회원 프로필 → 관리자 설정 (계정 · 점수/포인트/배지/아이템 · 시험). 눌러서 펼치는 묶음으로 보여요.
+  async function bindProfileAdmin(v, uid, p) {
+    const box = $('#pfAdm', v);
+    if (!box) return;
+    const adm = isAdmin();
+    const [prRes, tierRes, bdRes, itRes, walRes, exRes] = await Promise.all([
+      sb.from('profiles').select('id,username,status,role').eq('id', uid).maybeSingle(),
+      can('members') ? Promise.resolve(sb.rpc('student_tier_list')).catch(() => ({})) : Promise.resolve({}),
+      adm ? sb.from('badge_defs').select('id,name,icon').order('position').order('id') : Promise.resolve({}),
+      adm ? sb.from('avatar_items').select('id,name,slot').eq('status', 'active').order('name') : Promise.resolve({}),
+      adm ? Promise.resolve(sb.rpc('admin_user_wallet', { p_uid: uid })).catch(() => ({})) : Promise.resolve({}),
+      can('content') ? Promise.resolve(sb.rpc('admin_user_exams', { p_uid: uid })).catch(() => ({})) : Promise.resolve({}),
+    ]);
+    const pr = prRes && prRes.data;
+    if (!pr) { box.innerHTML = '<p class="muted small">회원 정보를 불러오지 못했어요.</p>'; return; }
+    const uname = pr.username;
+    const myTierName = ((tierRes && tierRes.data) || []).find((t) => t.uname === uname);
+    let curTier = (myTierName && myTierName.tier) || 'student';
+    const badges = (bdRes && bdRes.data) || [];
+    const items = (itRes && itRes.data) || [];
+    let wal = walRes && walRes.data;
+    let exams = (exRes && exRes.data) || [];
+    let exSel = exams.length ? exams[0].id : null;
+    const ST = { approved: '승인됨', pending: '승인 대기', rejected: '사용 중지' };
+    const MSG = { forbidden: '권한이 없어요', invalid: '값이 올바르지 않아요', nouser: '학생을 찾을 수 없어요', settled: '정산이 끝난 시험이에요', ok: '적용했어요' };
+
+    const walHtml = () => (wal ? `<b>🏆 ${Number(wal.score || 0).toLocaleString()}점 · 💎 ${wal.balance} · 🛡️ ${wal.shields}</b><br><span class="muted small">${(wal.adjust || []).slice(0, 3).map((a) => `점수 ${a.delta > 0 ? '+' : ''}${a.delta} (${esc(a.note || '-')})`).join(' · ') || '점수 조정 기록 없음'}</span>` : '<span class="muted small">불러오지 못했어요</span>');
+    const kindName = (e) => (e.kind === 'free' ? '🗓 자유 응시' : '⏰ 정기');
+    const exPanel = () => {
+      const e = exams.find((x) => x.id === exSel);
+      if (!e) return '<p class="muted small">시험이 없어요.</p>';
+      return `<div class="muted small" style="margin:8px 0">${kindName(e)} · ${e.status === 'open' ? '공개' : '비공개'}${e.settled ? ' · 정산 완료' : ''}<br>
+        ${e.entered ? `입장 ${fmt(e.joined_at)} · 제출 ${e.n_subs}회 · 현재 <b>${e.score}점</b>${e.final_rank ? ` · 확정 ${e.final_rank}위` : ''}${e.n_essay ? ` · 서술형 채점 ${e.n_graded}/${e.n_essay}` : ''}` : '아직 응시하지 않았어요'}</div>
+        <div class="form-actions" style="flex-wrap:wrap;gap:6px">
+          <button class="ghost" id="pfExAns" type="button" ${e.entered ? '' : 'disabled'}>📄 답안·채점 보기</button>
+          <button class="ghost danger" id="pfExReset" type="button" ${e.entered && !e.settled ? '' : 'disabled'} title="${e.settled ? '정산이 끝난 시험은 초기화할 수 없어요' : ''}">🔄 응시 초기화 (답안 삭제 · 재응시 허용)</button>
+          <button class="ghost" id="pfExCfg" type="button">⚙️ 시험 설정 열기</button>
+        </div><div id="pfExDetail"></div>`;
+    };
+    const draw = () => {
+      const tierBtns = can('members') ? ['student', 'solver', 'listener'].map((t) => `<button class="${curTier === t ? 'primary' : 'ghost'}" data-pftier="${t}" title="${esc(TIER_DESC[t])}" type="button">${TIER_NAME[t]}</button>`).join(' ') : '';
+      box.innerHTML = `
+      ${can('members') ? `<details open><summary><b>👤 계정</b> <span class="muted small">${esc(uname)} · ${ST[pr.status] || esc(pr.status)} · ${TIER_NAME[curTier]}</span></summary>
+        <div style="margin:10px 0"><div class="muted small">상태</div>
+          <button class="${pr.status === 'approved' ? 'ghost' : 'primary'}" data-pfst="approved" type="button">승인</button> <button class="ghost" data-pfst="rejected" type="button">사용 중지</button>
+          ${can('reset_pw') ? ' <button class="ghost" id="pfPw" type="button">🔑 비밀번호 초기화</button>' : ''}</div>
+        <div style="margin:10px 0"><div class="muted small">학생 등급 — STUDENT 모든 기능 · SOLVER 문제만 · LISTENER 강의·라이브만</div>${tierBtns}</div>
+        <div style="margin:10px 0"><div class="muted small">별명 (비우면 삭제)</div><div class="form-actions" style="gap:6px"><input type="text" id="pfNick" maxlength="20" value="${esc(p.name || '')}" style="flex:1"><button class="ghost" id="pfNickGo" type="button">저장</button></div></div>
+      </details>` : ''}
+      ${adm ? `<details><summary><b>💎 점수 · 포인트 · 배지 · 아이템</b></summary>
+        <div id="pfWal" style="margin:10px 0">${walHtml()}</div>
+        <form id="pfScore" class="form-actions" style="gap:6px;flex-wrap:wrap"><b>🏆 랭킹 점수</b><input type="number" id="pfScoreV" placeholder="+100 / -50" required style="width:110px"><input type="text" id="pfScoreN" maxlength="100" placeholder="사유 (학생에게 알림)" style="flex:1;min-width:120px"><button class="primary">적용</button></form>
+        <form id="pfPy" class="form-actions" style="gap:6px;flex-wrap:wrap;margin-top:8px"><b>💎 파이포인트</b><input type="number" id="pfPyV" placeholder="+50 / -20" required style="width:110px"><input type="text" id="pfPyN" maxlength="100" placeholder="사유" style="flex:1;min-width:120px"><button class="primary">적용</button></form>
+        <form id="pfBd" class="form-actions" style="gap:6px;flex-wrap:wrap;margin-top:8px"><b>🎖️ 배지</b><select id="pfBdSel" style="flex:1;min-width:140px">${badges.map((b) => `<option value="${esc(b.id)}">${esc(b.icon)} ${esc(b.name)}</option>`).join('')}</select><button class="primary" data-on="1">지급</button><button class="ghost" data-on="0">회수</button></form>
+        <form id="pfIt" class="form-actions" style="gap:6px;flex-wrap:wrap;margin-top:8px"><b>🎁 아이템</b><select id="pfItSel" style="flex:1;min-width:140px">${items.map((i) => `<option value="${esc(i.id)}">${esc(i.name)} (${esc(i.slot)})</option>`).join('')}</select><button class="primary">지급</button></form>
+      </details>` : ''}
+      ${can('content') ? `<details><summary><b>📝 시험</b> <span class="muted small">${exams.length}개</span></summary>
+        ${exams.length ? `<label style="margin-top:10px">시험 선택<select id="pfExSel">${exams.map((e) => `<option value="${e.id}" ${e.id === exSel ? 'selected' : ''}>${esc(e.title)} · ${kindName(e)}${e.entered ? '' : ' · 미응시'}</option>`).join('')}</select></label><div id="pfExBody">${exPanel()}</div>` : '<p class="muted small">시험이 없어요.</p>'}
+      </details>` : ''}`;
+      bind();
+    };
+    const reloadExams = async () => { const { data } = await sb.rpc('admin_user_exams', { p_uid: uid }); exams = data || exams; };
+    const bindEx = () => {
+      const e = exams.find((x) => x.id === exSel);
+      if (!e) return;
+      const ans = $('#pfExAns', box); const rs = $('#pfExReset', box); const cfg = $('#pfExCfg', box);
+      if (cfg) cfg.onclick = () => { adminTab = 'exam'; location.hash = '#/admin'; };
+      if (rs) rs.onclick = async () => {
+        if (!confirm(`${p.name} 학생의 「${e.title}」 답안·채점·입장 기록을 모두 지우고 다시 응시할 수 있게 할까요?\n지운 답안은 되돌릴 수 없어요.`)) return;
+        const { data, error } = await sb.rpc('exam_reset_student', { p_id: e.id, p_user: uid });
+        if (error) return toast('처리하지 못했어요: ' + error.message, true);
+        if (data !== 'ok') return toast(MSG[data] || '처리하지 못했어요', true);
+        toast('초기화했어요. 이제 다시 응시할 수 있어요');
+        await reloadExams(); $('#pfExBody', box).innerHTML = exPanel(); bindEx();
+      };
+      if (ans) ans.onclick = async () => {
+        const det = $('#pfExDetail', box);
+        det.innerHTML = '<p class="muted small">불러오는 중…</p>';
+        const { data, error } = await sb.rpc('admin_user_exam_detail', { p_exam: e.id, p_uid: uid });
+        if (error || !data) { det.innerHTML = '<p class="muted small">불러오지 못했어요.</p>'; return; }
+        const show = (r) => {
+          if (r.answer == null) return '(제출 안 함)';
+          if (r.kind === 'mc') { try { return '선택한 보기: ' + JSON.parse(r.answer).map((x) => Number(x) + 1).join(', ') + '번'; } catch (er) { return r.answer; } }
+          if (r.kind === 'short') { try { return JSON.parse(r.answer).map((x, k) => `(${k + 1}) ${x}`).join('\n'); } catch (er) { return r.answer; } }
+          return r.answer;
+        };
+        det.innerHTML = `<div style="max-height:60vh;overflow:auto;margin-top:8px">${data.map((r, i) => `<details class="ex-rv"><summary><b>${i + 1}. ${esc(r.title || '문제')}</b> <span class="muted small">${r.kind === 'essay' ? '✍️ 서술형 · ' + (r.grade == null ? '채점 전' : r.grade) : (r.auto == null ? '미제출' : r.auto)} / ${r.points}</span></summary>
+          <pre style="white-space:pre-wrap;margin:6px 0">${esc(show(r))}</pre>
+          ${r.kind === 'essay' ? `<label class="inline">점수 <input type="number" min="0" max="${r.points}" data-pfg="${r.id}" value="${r.grade == null ? '' : r.grade}" style="width:80px" ${e.settled ? 'disabled' : ''}> <span class="muted small">/ ${r.points} (칸을 벗어나면 저장)</span></label>` : `<div class="muted small">자동 채점 ${r.auto == null ? '-' : r.auto}점${r.total ? ` · 마지막 제출 ${r.passed}/${r.total} 통과` : ''}</div>`}</details>`).join('')}</div>`;
+        det.querySelectorAll('[data-pfg]').forEach((inp) => (inp.onchange = async () => {
+          const val = inp.value === '' ? null : parseInt(inp.value, 10);
+          if (val == null) return toast('점수를 입력하세요', true);
+          const { data: r2, error: er } = await sb.rpc('exam_grade', { p_problem: Number(inp.dataset.pfg), p_user: uid, p_score: val });
+          if (er) return toast('저장하지 못했어요: ' + er.message, true);
+          const m = { forbidden: '권한이 없어요', settled: '이미 정산됐어요', score: `0~${inp.max} 사이로 써요`, nouser: '서술형 문제가 아니에요' };
+          if (r2 !== 'ok') return toast(m[r2] || '저장하지 못했어요', true);
+          toast('점수를 저장했어요');
+          await reloadExams();
+        }));
+      };
+    };
+    function bind() {
+      const refreshWal = async () => { const { data } = await sb.rpc('admin_user_wallet', { p_uid: uid }); wal = data || wal; const w = $('#pfWal', box); if (w) w.innerHTML = walHtml(); try { await loadDir(); } catch (er) { /* 무시 */ } };
+      box.querySelectorAll('[data-pfst]').forEach((b) => (b.onclick = async () => {
+        const { error } = await sb.from('profiles').update({ status: b.dataset.pfst }).eq('id', uid);
+        if (error) return toast('처리하지 못했어요', true);
+        pr.status = b.dataset.pfst; toast(pr.status === 'approved' ? '승인했어요' : '사용 중지했어요'); draw();
+      }));
+      const pw = $('#pfPw', box);
+      if (pw) pw.onclick = async () => {
+        const np = prompt(`${uname} 의 새 비밀번호를 입력하세요 (6자 이상)`);
+        if (!np) return;
+        if (np.length < 6) return toast('6자 이상으로 입력하세요', true);
+        const { error } = await sb.rpc('admin_reset_password', { target_username: uname, new_password: np });
+        toast(error ? '초기화 실패: ' + error.message : '비밀번호를 바꿨어요. 학생에게 알려주세요', !!error);
+      };
+      box.querySelectorAll('[data-pftier]').forEach((b) => (b.onclick = async () => {
+        const { data, error } = await sb.rpc('student_set_tier', { p_username: uname, p_tier: b.dataset.pftier });
+        if (error) return toast('처리하지 못했어요: ' + error.message, true);
+        if (data !== 'ok') return toast({ not_found: '가입된 ID가 아니에요', is_staff: '직원 계정에는 등급이 없어요', invalid: '등급이 올바르지 않아요' }[data] || '처리하지 못했어요', true);
+        curTier = b.dataset.pftier; toast(`${TIER_NAME[curTier]} 로 바꿨어요`); draw();
+      }));
+      const nk = $('#pfNickGo', box);
+      if (nk) nk.onclick = async () => {
+        const nick = $('#pfNick', box).value;
+        const { data, error } = await sb.rpc('nickname_set', { p_username: uname, p_nick: nick });
+        if (error) return toast('처리하지 못했어요: ' + error.message, true);
+        if (data !== 'ok') return toast({ not_found: '가입된 ID가 아니에요', invalid: '별명은 20자까지예요', taken: '이미 쓰고 있는 별명(또는 다른 사람의 ID)이에요' }[data] || '처리하지 못했어요', true);
+        toast(nick.trim() ? '별명을 저장했어요' : '별명을 지웠어요'); try { await loadDir(); } catch (er) { /* 무시 */ }
+      };
+      const run = async (rpc, args, form) => {
+        const { data, error } = await sb.rpc(rpc, args);
+        if (error) return toast('처리하지 못했어요: ' + error.message, true);
+        toast(MSG[data] || String(data), data !== 'ok');
+        if (data === 'ok') { if (form) form.reset(); refreshWal(); }
+      };
+      const f1 = $('#pfScore', box); if (f1) f1.onsubmit = (ev) => { ev.preventDefault(); run('admin_adjust_score', { p_uid: uid, p_delta: parseInt($('#pfScoreV', box).value, 10), p_note: $('#pfScoreN', box).value }, ev.target); };
+      const f2 = $('#pfPy', box); if (f2) f2.onsubmit = (ev) => { ev.preventDefault(); run('admin_grant_py', { p_uid: uid, p_delta: parseInt($('#pfPyV', box).value, 10), p_note: $('#pfPyN', box).value }, ev.target); };
+      const f3 = $('#pfBd', box); if (f3) f3.onsubmit = (ev) => { ev.preventDefault(); run('badge_award', { p_uid: uid, p_id: $('#pfBdSel', box).value, p_on: !!(ev.submitter && ev.submitter.dataset.on === '1') }); };
+      const f4 = $('#pfIt', box); if (f4) f4.onsubmit = (ev) => { ev.preventDefault(); run('item_give_admin', { p_uid: uid, p_item: $('#pfItSel', box).value }); };
+      const sel = $('#pfExSel', box);
+      if (sel) sel.onchange = () => { exSel = Number(sel.value); $('#pfExBody', box).innerHTML = exPanel(); bindEx(); };
+      bindEx();
+    }
+    draw();
   }
 
   /* ---------- 관리자 ---------- */
