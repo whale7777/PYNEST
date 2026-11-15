@@ -4020,7 +4020,7 @@
   {
    "title": "γ-13 numpy 기초: 배열 · shape · 통계 · 조건 개수",
    "minutes": 25,
-   "summary": "- `import numpy as np` → `np.array([...])` 로 배열. **같은 자료형**만 담고, 연산이 **칸마다(원소별)** 일어나요.\n- `a.shape` 모양(행, 열), `a.sum()`, `a.mean()`, `a.max()`, `a.min()`\n- `np.ones(n)`·`np.zeros(n)` (실수 1.·0.), `np.arange(n)` (0~n-1), `.reshape(행, 열)` — 칸 수가 맞아야 해요.\n- `a > 0` 은 True/False 배열 → `(a > 0).sum()` 이 **조건에 맞는 개수**, `a[a > 0]` 은 그 값들.\n- ⚠️ 이 사이트에선 numpy 가 실행되지 않아요. 코드를 읽고 **결과를 예측**하는 연습을 해요.",
+   "summary": "- `import numpy as np` → `np.array([...])` 로 배열. **같은 자료형**만 담고, 연산이 **칸마다(원소별)** 일어나요.\n- `a.shape` 모양(행, 열), `a.sum()`, `a.mean()`, `a.max()`, `a.min()`\n- `np.ones(n)`·`np.zeros(n)` (실수 1.·0.), `np.arange(n)` (0~n-1), `.reshape(행, 열)` — 칸 수가 맞아야 해요.\n- `a > 0` 은 True/False 배열 → `(a > 0).sum()` 이 **조건에 맞는 개수**, `a[a > 0]` 은 그 값들.\n- 이 사이트에서 numpy 코드를 **▶ 실행**할 수 있어요. 먼저 결과를 예측하고, 실행해서 맞는지 확인해요.",
    "steps": [
     {
      "type": "review",
@@ -4075,13 +4075,12 @@
       [
        {
         "type": "text",
-        "body": "직접 확인해 봐요. (사이트에서는 numpy 가 없어 ▶ 실행이 안 돼요 — 결과는 아래 정답 보기에서!)"
+        "body": "직접 확인해 봐요. 결과를 먼저 머릿속으로 예측한 뒤 **▶ 실행**으로 맞춰 보세요. (정답 보기로도 확인할 수 있어요)"
        },
        {
         "type": "code",
         "code": "import numpy as np\na = np.array([1, 2, 3])\nprint(a * 2)\nprint(a + 10)\nprint(type(a))",
-        "title": "numpy 첫걸음",
-        "run": false
+        "title": "numpy 첫걸음"
        },
        {
         "type": "reveal",
@@ -4112,8 +4111,7 @@
        {
         "type": "code",
         "code": "import numpy as np\na = np.array([[90, 80, 70],\n              [60, 85, 95]])\nprint(a)\nprint(a.shape, a.ndim, a.size)\nprint(a[1, 2], a[0])",
-        "title": "2차원 배열",
-        "run": false
+        "title": "2차원 배열"
        },
        {
         "type": "reveal",
@@ -4130,8 +4128,7 @@
        {
         "type": "code",
         "code": "import numpy as np\na = np.array([[90, 80, 70],\n              [60, 85, 95]])\nprint(a.sum(), a.max(), a.min())\nprint(a.mean())\nprint(a.max(axis=1))   # 행마다 최댓값",
-        "title": "통계 메서드",
-        "run": false
+        "title": "통계 메서드"
        },
        {
         "type": "callout",
@@ -4161,8 +4158,7 @@
        {
         "type": "code",
         "code": "import numpy as np\nprint(np.ones(3))\nprint(np.ones((2, 2), dtype=int))\nprint(np.arange(1, 7).reshape(2, 3))",
-        "title": "배열 만들기",
-        "run": false
+        "title": "배열 만들기"
        },
        {
         "type": "reveal",
@@ -4204,8 +4200,7 @@
        {
         "type": "code",
         "code": "import numpy as np\nhp = np.array([30, -5, 0, 12, -1])\nprint(hp > 0)\nprint((hp <= 0).sum())\nprint(hp[hp > 0])\nprint(hp[hp > 0].sum())",
-        "title": "조건 개수",
-        "run": false
+        "title": "조건 개수"
        },
        {
         "type": "reveal",
@@ -4222,7 +4217,7 @@
        {
         "type": "callout",
         "style": "exam",
-        "body": "순수 파이썬이라면 `sum(1 for x in a if x <= 0)` 을, numpy 는 `(a <= 0).sum()` 한 줄로 해요. 둘 다 쓸 수 있게!"
+        "body": "순수 파이썬이라면 `sum(1 for x in a if x <= 0)` 을, numpy 는 `(a <= 0).sum()` 한 줄로 해요. 둘 다 쓸 수 있게! 실습에서는 진짜 numpy 로 풀어 봐요."
        }
       ]
      ]
@@ -4291,9 +4286,9 @@
     },
     {
      "type": "practice",
-     "title": "[기출유사] 몬스터 체력판 (numpy 없이)",
-     "body": "numpy 의 `ones` · `arange().reshape()` · 배열 빼기를 **리스트로 흉내** 내는 문제예요. (이 사이트는 numpy 가 실행되지 않아요)\n한 줄에 `R C H` 가 주어져요. R행 C열 몬스터의 체력은 모두 H 이고, 칸마다 받은 피해는 `arange(R*C).reshape(R, C)` 처럼 **0, 1, 2, … 를 왼쪽 위부터 차례로** 채운 값이에요.\n\n**[조건]**\n- 남은 체력 = 체력 − 피해 를 칸마다 계산해 **2차원 리스트**에 저장해요.\n- 행마다 값을 공백으로 이어 출력해요.\n- 다음 줄 `합계: 값`, 마지막 줄 `쓰러짐: 개수` (남은 체력이 **0 이하**인 칸 수)\n\n**[실행예시 1]**\n\n입력\n```\n2 3 4\n```\n출력\n```\n4 3 2\n1 0 -1\n합계: 9\n쓰러짐: 2\n```\n\n**[실행예시 2]**\n\n입력\n```\n3 3 5\n```\n출력\n```\n5 4 3\n2 1 0\n-1 -2 -3\n합계: 9\n쓰러짐: 4\n```",
-     "starter": "r, c, h = map(int, input().split())\nboard = []\n# 2차원 리스트를 만들어 출력하세요\n",
+     "title": "[기출유사] 몬스터 체력판 (numpy)",
+     "body": "numpy 의 `ones` · `arange().reshape()` · 배열 빼기를 **진짜 numpy 로** 써 보는 문제예요.\n한 줄에 `R C H` 가 주어져요. R행 C열 몬스터의 체력은 모두 H 이고, 칸마다 받은 피해는 **0, 1, 2, … 를 왼쪽 위부터 차례로** 채운 값이에요.\n\n**[조건]**\n- `import numpy as np` 를 쓰고, 체력은 `np.ones((R, C), dtype=int) * H`, 피해는 `np.arange(R * C).reshape(R, C)` 로 만들어요.\n- 남은 체력 = 체력 배열 − 피해 배열 (배열끼리 **한 번에** 빼기)\n- 행마다 값을 공백으로 이어 출력해요. (배열을 그대로 print 하지 말고 `tolist()` 로 바꿔 출력)\n- 다음 줄 `합계: 값`, 마지막 줄 `쓰러짐: 개수` (남은 체력이 **0 이하**인 칸 수, `(배열 <= 0).sum()`)\n\n**[실행예시 1]**\n\n입력\n```\n2 3 4\n```\n출력\n```\n4 3 2\n1 0 -1\n합계: 9\n쓰러짐: 2\n```\n\n**[실행예시 2]**\n\n입력\n```\n3 3 5\n```\n출력\n```\n5 4 3\n2 1 0\n-1 -2 -3\n합계: 9\n쓰러짐: 4\n```",
+     "starter": "import numpy as np\n\nr, c, h = map(int, input().split())\n# hp, dmg 배열을 만들고 빼서 출력하세요\n",
      "tests": [
       {
        "input": "2 3 4\n",
@@ -4320,18 +4315,21 @@
       }
      ],
      "hints": [
-      "(i, j) 칸의 피해는 `i * c + j` 예요. arange 를 reshape 한 것과 같은 값이에요.",
-      "이중 for 로 `row.append(h - dmg)`, 바깥에서 `board.append(row)`",
-      "0 이하 개수: `sum(1 for v in flat if v <= 0)` — numpy 라면 `(left <= 0).sum()`"
+      "체력: `hp = np.ones((r, c), dtype=int) * h` — `dtype=int` 가 없으면 `4.0` 처럼 실수로 나와요.",
+      "피해: `dmg = np.arange(r * c).reshape(r, c)`, 남은 체력: `left = hp - dmg`",
+      "출력: `for row in left.tolist(): print(\" \".join(map(str, row)))`, 개수는 `int((left <= 0).sum())`"
      ],
-     "solution": "r, c, h = map(int, input().split())\nboard = []\nfor i in range(r):\n    row = []\n    for j in range(c):\n        dmg = i * c + j            # arange(r*c).reshape(r, c) 의 (i, j) 값\n        row.append(h - dmg)        # 칸마다 빼기\n    board.append(row)\nfor row in board:\n    print(\" \".join(map(str, row)))\nflat = [v for row in board for v in row]     # 한 줄로 펼치기\nprint(\"합계:\", sum(flat))\nprint(\"쓰러짐:\", sum(1 for v in flat if v <= 0))   # (board <= 0).sum() 과 같음",
-     "explanation": "numpy 로는 `left = np.ones((r, c), dtype=int) * h - np.arange(r * c).reshape(r, c)` 한 줄이에요. 리스트로 직접 만들어 보면 reshape 가 \"왼쪽 위부터 행 순서로 채운다\" 는 뜻을 확실히 알 수 있어요."
+     "solution": "import numpy as np\n\nr, c, h = map(int, input().split())\nhp = np.ones((r, c), dtype=int) * h          # 모든 칸이 h 인 r×c 배열\ndmg = np.arange(r * c).reshape(r, c)         # 0, 1, 2, ... 를 행 순서로 채움\nleft = hp - dmg                              # 칸마다 빼기 (원소별 연산)\nfor row in left.tolist():                    # 배열 → 2차원 리스트\n    print(\" \".join(map(str, row)))\nprint(\"합계:\", int(left.sum()))              # 전체 합\nprint(\"쓰러짐:\", int((left <= 0).sum()))     # True 를 1 로 세어 개수",
+     "explanation": "`np.ones` 의 기본 자료형은 실수라 `dtype=int` 가 중요해요. `(left <= 0)` 은 True/False 배열이고 `.sum()` 은 True 를 1 로 세어 개수가 돼요. 순수 파이썬으로 하려면 `(i, j)` 칸의 피해가 `i * c + j` 라는 걸 이용해 이중 for 로 만들면 돼요 — reshape 가 \"왼쪽 위부터 행 순서로 채운다\" 는 뜻이에요.",
+     "libs": [
+      "numpy"
+     ]
     },
     {
      "type": "practice",
-     "title": "[기출유사] 성적 배열 통계 (numpy 없이)",
-     "body": "첫 줄에 `행 열`(학생 수, 과목 수), 다음 줄들에 점수표가 주어져요. numpy 의 `shape`, `mean()`, `max()`, 조건 개수를 리스트로 구해 보세요.\n\n**[조건]**\n- 첫째 줄: `shape: (행, 열)` — 튜플을 그대로 print 한 모양\n- 둘째 줄: `평균: 값` (전체 평균, `round(…, 2)`)\n- 셋째 줄: `최고: 값`\n- 넷째 줄: `평균 이상: 개수` (전체 평균 **이상**인 점수의 칸 수)\n- 다섯째 줄: `학생별 최고: a b c` (행마다 최댓값 — numpy 의 `max(axis=1)`)\n\n**[실행예시 1]**\n\n입력\n```\n2 3\n90 80 70\n60 85 95\n```\n출력\n```\nshape: (2, 3)\n평균: 80.0\n최고: 95\n평균 이상: 4\n학생별 최고: 90 95\n```\n\n**[실행예시 2]**\n\n입력\n```\n3 2\n10 20\n30 40\n50 60\n```\n출력\n```\nshape: (3, 2)\n평균: 35.0\n최고: 60\n평균 이상: 3\n학생별 최고: 20 40 60\n```",
-     "starter": "r, c = map(int, input().split())\nscores = [list(map(int, input().split())) for _ in range(r)]\n# 통계를 출력하세요\n",
+     "title": "[기출유사] 성적 배열 통계 (numpy)",
+     "body": "첫 줄에 `행 열`(학생 수, 과목 수), 다음 줄들에 점수표가 주어져요. 점수표를 **numpy 배열**로 만들어 `shape`, `mean()`, `max()`, 조건 개수를 구해 보세요.\n\n**[조건]**\n- `import numpy as np` 를 쓰고 `a = np.array(점수표)` 로 2차원 배열을 만들어요.\n- 첫째 줄: `shape: (행, 열)` — `a.shape` 를 그대로 print 한 모양\n- 둘째 줄: `평균: 값` (`a.mean()` 을 `round(float(…), 2)`)\n- 셋째 줄: `최고: 값` (`a.max()`)\n- 넷째 줄: `평균 이상: 개수` (전체 평균 **이상**인 칸 수, `(a >= a.mean()).sum()`)\n- 다섯째 줄: `학생별 최고: a b c` (행마다 최댓값 — `a.max(axis=1)`)\n\n**[실행예시 1]**\n\n입력\n```\n2 3\n90 80 70\n60 85 95\n```\n출력\n```\nshape: (2, 3)\n평균: 80.0\n최고: 95\n평균 이상: 4\n학생별 최고: 90 95\n```\n\n**[실행예시 2]**\n\n입력\n```\n3 2\n10 20\n30 40\n50 60\n```\n출력\n```\nshape: (3, 2)\n평균: 35.0\n최고: 60\n평균 이상: 3\n학생별 최고: 20 40 60\n```",
+     "starter": "import numpy as np\n\nr, c = map(int, input().split())\nscores = [list(map(int, input().split())) for _ in range(r)]\n# a = np.array(scores) 로 만들고 통계를 출력하세요\n",
      "tests": [
       {
        "input": "2 3\n90 80 70\n60 85 95\n",
@@ -4358,12 +4356,15 @@
       }
      ],
      "hints": [
-      "2차원 리스트를 `flat = [v for row in scores for v in row]` 로 펼치면 전체 통계가 쉬워요.",
-      "평균은 반올림하기 **전** 값 avg 로 \"평균 이상\" 을 세요.",
-      "행마다 최댓값: `\" \".join(str(max(row)) for row in scores)`"
+      "`a = np.array(scores)` 하면 `a.shape` 가 바로 `(r, c)` 예요.",
+      "평균 이상은 반올림 **전** 값으로: `(a >= a.mean()).sum()`. 출력은 `int(...)` 로 감싸요.",
+      "행마다 최댓값: `a.max(axis=1).tolist()` 를 `\" \".join(map(str, ...))`"
      ],
-     "solution": "r, c = map(int, input().split())\nscores = [list(map(int, input().split())) for _ in range(r)]\nflat = [v for row in scores for v in row]        # 전체 칸을 한 줄로\navg = sum(flat) / len(flat)                       # a.mean()\nprint(\"shape:\", (r, c))                           # a.shape\nprint(\"평균:\", round(avg, 2))\nprint(\"최고:\", max(flat))                         # a.max()\nprint(\"평균 이상:\", sum(1 for v in flat if v >= avg))   # (a >= a.mean()).sum()\nprint(\"학생별 최고:\", \" \".join(str(max(row)) for row in scores))   # a.max(axis=1)",
-     "explanation": "numpy 로는 `a.shape`, `a.mean()`, `a.max()`, `(a >= a.mean()).sum()`, `a.max(axis=1)` 이에요. 이름과 뜻을 짝지어 기억하면 numpy 출력 추론 문제도 쉽게 풀려요."
+     "solution": "import numpy as np\n\nr, c = map(int, input().split())\nscores = [list(map(int, input().split())) for _ in range(r)]\na = np.array(scores)                                  # 2차원 배열\nprint(\"shape:\", a.shape)                              # (행, 열) 튜플\nprint(\"평균:\", round(float(a.mean()), 2))             # 전체 평균\nprint(\"최고:\", int(a.max()))                          # 전체 최댓값\nprint(\"평균 이상:\", int((a >= a.mean()).sum()))       # 조건을 만족하는 칸 수\nprint(\"학생별 최고:\", \" \".join(map(str, a.max(axis=1).tolist())))   # 행마다 최댓값",
+     "explanation": "`axis=1` 은 가로(행마다) 계산이라 학생별 최고가 나와요. numpy 값은 `int()`·`float()`·`tolist()` 로 바꿔 찍으면 출력 모양이 깔끔해요. 순수 파이썬이라면 `flat = [v for row in scores for v in row]` 로 펼쳐 `sum(flat) / len(flat)`, `max(flat)`, `sum(1 for v in flat if v >= avg)` 로 같은 값을 구할 수 있어요.",
+     "libs": [
+      "numpy"
+     ]
     },
     {
      "type": "quiz",

@@ -74,12 +74,12 @@
       [
        {
         "type": "text",
-        "body": "이 사이트의 ▶ 실행은 브라우저 안 파이썬이라 **pandas·sklearn·numpy 가 없어요**.\n그래서 그런 코드는 **읽기 전용**으로 보여 주고(결과는 미리 실행해 확인한 값), \n실습은 같은 계산을 **순수 파이썬(리스트·딕셔너리)** 으로 직접 짜요."
+        "body": "이 사이트의 ▶ 실행에서 **numpy·pandas·sklearn·matplotlib 이 그대로 돌아가요**. 코랩에서 쓰던 코드를 직접 실행해 결과를 확인해 보세요.\n(처음 import 할 때는 패키지를 불러오느라 몇 초 걸려요. **seaborn 만은 실행되지 않고**, 그래프 그림은 화면에 뜨지 않아요.)\n실습은 두 가지예요: 공식을 **순수 파이썬**으로 직접 계산해 보는 실습 + 실제 **라이브러리 코드**를 쓰는 [기출유사] 실습."
        },
        {
         "type": "callout",
         "style": "tip",
-        "body": "공식을 직접 코드로 짜 보면 서술형에서 식을 쓸 때 훨씬 덜 헷갈려요. \"StandardScaler 가 하는 일\" 을 리스트로 계산해 본 학생은 식을 잊지 않아요."
+        "body": "공식을 직접 코드로 짜 보면 서술형에서 식을 쓸 때 훨씬 덜 헷갈려요. \"StandardScaler 가 하는 일\" 을 리스트로 계산해 본 뒤 sklearn 결과와 맞춰 보면 식을 잊지 않아요."
        }
       ]
      ]
@@ -293,8 +293,7 @@
        {
         "type": "code",
         "code": "import numpy as np\nm = np.array([[1, 2, 3],\n              [4, 5, 6]])\nprint(m.shape)\nprint(m.sum(axis=0))\nprint(m.sum(axis=1))\nprint(m.mean())",
-        "title": "shape 와 axis (읽기 전용)",
-        "run": false
+        "title": "shape 와 axis"
        },
        {
         "type": "callout",
@@ -307,7 +306,7 @@
     {
      "type": "quiz",
      "kind": "output",
-     "question": "numpy 코드의 출력은? (이 사이트에서는 실행되지 않으니 손으로 예측해요)",
+     "question": "numpy 코드의 출력은? (먼저 손으로 예측한 뒤, 위 예제처럼 ▶ 실행으로 확인해 보세요)",
      "code": "import numpy as np\na = np.array([[2, 4], [6, 8], [1, 3]])\nprint(a.shape)\nprint(a.sum(axis=0))\nprint(a.max())",
      "answer": "(3, 2)\n[ 9 15]\n8",
      "alts": [
@@ -341,8 +340,8 @@
     },
     {
      "type": "practice",
-     "title": "[기출유사] numpy 없이 벡터 연산",
-     "body": "numpy 의 원소별 연산을 **리스트와 반복문으로 직접** 구현해요. 같은 길이의 정수 두 줄이 주어져요.\n\n**[조건]**\n- 첫째 줄: 원소끼리 더한 값 (공백으로 구분)\n- 둘째 줄: 원소끼리 곱한 값 (공백으로 구분)\n- 셋째 줄: 내적 — 원소끼리 곱한 값을 모두 더한 수\n- `zip()` 또는 인덱스 반복을 사용하세요.\n\n**[실행예시 1]**\n\n입력\n```\n1 2 3\n4 5 6\n```\n출력\n```\n5 7 9\n4 10 18\n32\n```\n\n**[실행예시 2]**\n\n입력\n```\n2 -1\n3 7\n```\n출력\n```\n5 6\n6 -7\n-1\n```",
+     "title": "[기출유사] 반복문으로 벡터 연산 (공식 이해용)",
+     "body": "numpy 의 원소별 연산이 속에서 하는 일을 **리스트와 반복문으로 직접** 구현해요. 같은 길이의 정수 두 줄이 주어져요.\n\n**[조건]**\n- 첫째 줄: 원소끼리 더한 값 (공백으로 구분)\n- 둘째 줄: 원소끼리 곱한 값 (공백으로 구분)\n- 셋째 줄: 내적 — 원소끼리 곱한 값을 모두 더한 수\n- `zip()` 또는 인덱스 반복을 사용하세요.\n\n**[실행예시 1]**\n\n입력\n```\n1 2 3\n4 5 6\n```\n출력\n```\n5 7 9\n4 10 18\n32\n```\n\n**[실행예시 2]**\n\n입력\n```\n2 -1\n3 7\n```\n출력\n```\n5 6\n6 -7\n-1\n```",
      "starter": "a = list(map(int, input().split()))\nb = list(map(int, input().split()))\n# 원소별 합, 원소별 곱, 내적을 출력하세요\n",
      "tests": [
       {
@@ -375,7 +374,48 @@
       "내적은 원소별 곱 리스트의 `sum()` 이에요. `print(*리스트)` 는 공백으로 띄워 출력해요."
      ],
      "solution": "a = list(map(int, input().split()))\nb = list(map(int, input().split()))\nadd = [x + y for x, y in zip(a, b)]   # 원소별 합 (np: a + b)\nmul = [x * y for x, y in zip(a, b)]   # 원소별 곱 (np: a * b)\nprint(*add)\nprint(*mul)\nprint(sum(mul))                       # 내적 (np: a @ b)",
-     "explanation": "numpy 로는 `a + b`, `a * b`, `a @ b`(또는 `np.dot(a, b)`) 한 줄씩이에요. 리스트로 직접 짜 보면 numpy 가 \"원소끼리\" 계산한다는 뜻이 분명해져요."
+     "explanation": "numpy 로는 `a + b`, `a * b`, `a @ b`(또는 `np.dot(a, b)`) 한 줄씩이에요. 리스트로 직접 짜 보면 numpy 가 \"원소끼리\" 계산한다는 뜻이 분명해져요. 다음 실습에서 numpy 로 똑같이 풀어 봐요."
+    },
+    {
+     "type": "practice",
+     "title": "[기출유사] numpy 로 벡터 연산",
+     "body": "이번에는 **numpy 배열**로 같은 계산을 해요. 같은 길이의 정수 두 줄이 주어져요.\n\n**[조건]**\n- 두 줄을 `np.array` 로 만들어 `a`, `b` 에 저장해요.\n- 첫째 줄: `a + b`, 둘째 줄: `a * b` — 배열 연산으로 구하고 `print(*배열.tolist())` 처럼 공백 구분으로 출력\n- 셋째 줄: 내적 `a @ b` (정수로)\n- 넷째 줄: `a` 의 평균 `a.mean()` 을 `f\"{값:.2f}\"` 로\n- 반복문 없이 배열 연산만 쓰세요.\n\n**[실행예시 1]**\n\n입력\n```\n1 2 3\n4 5 6\n```\n출력\n```\n5 7 9\n4 10 18\n32\n2.00\n```\n\n**[실행예시 2]**\n\n입력\n```\n2 -1\n3 7\n```\n출력\n```\n5 6\n6 -7\n-1\n0.50\n```",
+     "starter": "import numpy as np\na = np.array(list(map(int, input().split())))\nb = np.array(list(map(int, input().split())))\n# 배열 연산으로 합, 곱, 내적, 평균을 출력하세요\n",
+     "tests": [
+      {
+       "input": "1 2 3\n4 5 6\n",
+       "output": "5 7 9\n4 10 18\n32\n2.00"
+      },
+      {
+       "input": "2 -1\n3 7\n",
+       "output": "5 6\n6 -7\n-1\n0.50"
+      },
+      {
+       "input": "5\n5\n",
+       "output": "10\n25\n25\n5.00",
+       "hidden": true
+      },
+      {
+       "input": "0 0 0\n1 2 3\n",
+       "output": "1 2 3\n0 0 0\n0\n0.00",
+       "hidden": true
+      },
+      {
+       "input": "-2 3 -4 5\n1 1 1 1\n",
+       "output": "-1 4 -3 6\n-2 3 -4 5\n2\n0.50",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`np.array(리스트)` 로 배열을 만들면 `+`·`*` 가 원소끼리 계산돼요.",
+      "`(a + b).tolist()` 로 파이썬 리스트로 바꿔 `print(*...)` 하면 공백 구분으로 찍혀요.",
+      "내적은 `a @ b`. numpy 정수라서 `int(...)` 로 감싸 출력해요. 평균은 `a.mean()`."
+     ],
+     "solution": "import numpy as np\na = np.array(list(map(int, input().split())))\nb = np.array(list(map(int, input().split())))\nprint(*(a + b).tolist())          # 원소끼리 더하기\nprint(*(a * b).tolist())          # 원소끼리 곱하기\nprint(int(a @ b))                 # 내적 (np.dot(a, b) 와 같음)\nprint(f\"{a.mean():.2f}\")          # 평균",
+     "explanation": "앞 실습에서 반복문으로 짠 것과 결과가 똑같죠? numpy 는 `a + b` 한 줄로 원소끼리 계산해요. `tolist()` 로 바꿔 출력하면 배열 표시(`[5 7 9]`) 대신 깔끔한 숫자로 찍을 수 있어요.",
+     "libs": [
+      "numpy"
+     ]
     },
     {
      "type": "quiz",
@@ -1882,8 +1922,7 @@
        {
         "type": "code",
         "code": "import pandas as pd\ndf = pd.DataFrame({\n    'name':  ['지우', '민준', '서연', '하준', '유나', '도윤'],\n    'grade': [1, 2, 2, 1, 2, 1],\n    'hours': [2, 5, 3, 1, 4, 3],\n    'score': [70, 92, 81, 60, 88, 75],\n    'club':  ['로봇', '코딩', '코딩', '로봇', 'AI', '코딩'],\n})\nprint(df.head(3))\nprint(df.shape)",
-        "title": "예제 DataFrame (읽기 전용)",
-        "run": false
+        "title": "예제 DataFrame"
        }
       ],
       [
@@ -1913,7 +1952,7 @@
     {
      "type": "quiz",
      "kind": "output",
-     "question": "예제 표에서 다음 코드의 출력은? (pandas 는 이 사이트에서 실행되지 않으니 예측해요)",
+     "question": "예제 표에서 다음 코드의 출력은? (먼저 예측하고, 위 예제 코드에 이어 써서 ▶ 실행으로 확인해 보세요)",
      "code": "import pandas as pd\ndf = pd.DataFrame({\n    'name':  ['지우', '민준', '서연', '하준', '유나', '도윤'],\n    'grade': [1, 2, 2, 1, 2, 1],\n    'hours': [2, 5, 3, 1, 4, 3],\n    'score': [70, 92, 81, 60, 88, 75],\n    'club':  ['로봇', '코딩', '코딩', '로봇', 'AI', '코딩'],\n})\nprint(df.shape)\nprint(len(df.columns))\nprint(df[\"hours\"].sum())",
      "answer": "(6, 5)\n5\n18",
      "explanation": "6행 5열이라 `(6, 5)`, 열 이름 5개, hours 합 2+5+3+1+4+3 = 18.\n\n```\n(6, 5)\n5\n18\n```"
@@ -2083,8 +2122,7 @@
        {
         "type": "code",
         "code": "import pandas as pd\ndf = pd.DataFrame({\n    'name':  ['지우', '민준', '서연', '하준', '유나', '도윤'],\n    'grade': [1, 2, 2, 1, 2, 1],\n    'hours': [2, 5, 3, 1, 4, 3],\n    'score': [70, 92, 81, 60, 88, 75],\n    'club':  ['로봇', '코딩', '코딩', '로봇', 'AI', '코딩'],\n})\nhigh = df[df[\"score\"] >= 80]\nprint(len(high))\nboth = df[(df[\"grade\"] == 2) & (df[\"hours\"] >= 4)]\nprint(both[\"name\"].tolist())",
-        "title": "조건 필터 (읽기 전용)",
-        "run": false
+        "title": "조건 필터"
        },
        {
         "type": "callout",
@@ -2120,7 +2158,7 @@
     {
      "type": "practice",
      "title": "[기출유사] describe() 직접 만들기",
-     "body": "pandas 없이 `describe()` 의 일부를 직접 계산해요. 한 줄에 정수 점수들이 주어져요(2개 이상).\n\n**[조건]**\n- `count`, `mean`, `std`, `min`, `max` 를 한 줄씩 `이름 값` 으로 출력해요.\n- mean 과 std 는 `f\"{값:.2f}\"` 로 소수 둘째 자리까지 출력해요.\n- std 는 pandas 처럼 **n-1** 로 나눈 표본 표준편차: `std = (Σ(x - 평균)² / (n - 1)) ** 0.5`\n- `statistics` 모듈은 쓰지 말고 반복문으로 계산하세요.\n\n**[실행예시 1]**\n\n입력\n```\n70 92 81 60 88 75\n```\n출력\n```\ncount 6\nmean 77.67\nstd 11.84\nmin 60\nmax 92\n```\n\n**[실행예시 2]**\n\n입력\n```\n3 7\n```\n출력\n```\ncount 2\nmean 5.00\nstd 2.83\nmin 3\nmax 7\n```",
+     "body": "`describe()` 가 속에서 하는 계산 일부를 반복문으로 직접 해 봐요(공식 이해용). 한 줄에 정수 점수들이 주어져요(2개 이상).\n\n**[조건]**\n- `count`, `mean`, `std`, `min`, `max` 를 한 줄씩 `이름 값` 으로 출력해요.\n- mean 과 std 는 `f\"{값:.2f}\"` 로 소수 둘째 자리까지 출력해요.\n- std 는 pandas 처럼 **n-1** 로 나눈 표본 표준편차: `std = (Σ(x - 평균)² / (n - 1)) ** 0.5`\n- `statistics` 모듈은 쓰지 말고 반복문으로 계산하세요.\n\n**[실행예시 1]**\n\n입력\n```\n70 92 81 60 88 75\n```\n출력\n```\ncount 6\nmean 77.67\nstd 11.84\nmin 60\nmax 92\n```\n\n**[실행예시 2]**\n\n입력\n```\n3 7\n```\n출력\n```\ncount 2\nmean 5.00\nstd 2.83\nmin 3\nmax 7\n```",
      "starter": "data = list(map(int, input().split()))\nn = len(data)\n# count, mean, std, min, max 를 출력하세요\n",
      "tests": [
       {
@@ -2153,7 +2191,7 @@
       "`print(\"mean\", f\"{mean:.2f}\")` 처럼 이름과 값을 공백으로 출력해요."
      ],
      "solution": "data = list(map(int, input().split()))\nn = len(data)\nmean = sum(data) / n\nsq = 0\nfor x in data:\n    sq += (x - mean) ** 2          # 편차 제곱의 합\nstd = (sq / (n - 1)) ** 0.5        # 표본 표준편차 (n-1)\nprint(\"count\", n)\nprint(\"mean\", f\"{mean:.2f}\")\nprint(\"std\", f\"{std:.2f}\")\nprint(\"min\", min(data))\nprint(\"max\", max(data))",
-     "explanation": "pandas 의 `std()` 는 기본이 n-1 로 나누는 표본 표준편차예요. 첫 예시(예제 표의 score)의 std 가 describe() 결과 11.84 와 같은지 확인해 보세요."
+     "explanation": "pandas 의 `std()` 는 기본이 n-1 로 나누는 표본 표준편차예요. 첫 예시(예제 표의 score)의 std 가 위 `describe()` 결과 11.84 와 같은지 확인해 보세요. 다음 실습에서는 pandas 로 직접 구해요."
     },
     {
      "type": "practice",
@@ -2192,6 +2230,47 @@
      ],
      "solution": "clubs = input().split()\ncnt = {}\nfor c in clubs:\n    cnt[c] = cnt.get(c, 0) + 1                       # 누적 세기\nitems = sorted(cnt.items(), key=lambda p: (-p[1], p[0]))   # 개수 내림차순, 이름 오름차순\nfor name, k in items:\n    print(name, k)\nprint(len(cnt))",
      "explanation": "`value_counts()` 는 내부적으로 이렇게 **값 → 개수** 를 세고 많은 순서로 정렬해 보여 주는 기능이에요."
+    },
+    {
+     "type": "practice",
+     "title": "[기출유사] pandas 로 성적표 EDA",
+     "body": "학급 성적표를 **pandas DataFrame** 으로 만들어 EDA 결과를 출력해요.\n첫째 줄에 학생 수 n(2 이상), 다음 n줄에 `이름 동아리 점수` 가 주어져요.\n\n**[조건]**\n- 열 이름이 `name`, `club`, `score` 인 DataFrame `df` 를 만들어요 (score 는 정수).\n- 첫째 줄: `df.shape`\n- 둘째 줄: `df[\"score\"].describe()` 의 `mean`, `std`, `50%` 를 `f\"{값:.2f}\"` 로 공백 구분 출력\n- 다음 줄들: `df[\"club\"].value_counts()` 결과를 **동아리 이름 순서**(`sort_index()`)로 한 줄에 `이름 개수`\n- 마지막 줄: 점수가 80 이상인 학생 수 (조건 필터)\n\n**[실행예시 1]**\n\n입력\n```\n6\n지우 로봇 70\n민준 코딩 92\n서연 코딩 81\n하준 로봇 60\n유나 AI 88\n도윤 코딩 75\n```\n출력\n```\n(6, 3)\n77.67 11.84 78.00\nAI 1\n로봇 2\n코딩 3\n3\n```\n\n**[실행예시 2]**\n\n입력\n```\n3\nA 수학 80\nB 수학 79\nC 과학 100\n```\n출력\n```\n(3, 3)\n86.33 11.85 80.00\n과학 1\n수학 2\n2\n```",
+     "starter": "import pandas as pd\nn = int(input())\nrows = [input().split() for _ in range(n)]\ndf = pd.DataFrame(rows, columns=[\"name\", \"club\", \"score\"])\ndf[\"score\"] = df[\"score\"].astype(int)\n# shape, describe 값, value_counts, 80점 이상 학생 수를 출력하세요\n",
+     "tests": [
+      {
+       "input": "6\n지우 로봇 70\n민준 코딩 92\n서연 코딩 81\n하준 로봇 60\n유나 AI 88\n도윤 코딩 75\n",
+       "output": "(6, 3)\n77.67 11.84 78.00\nAI 1\n로봇 2\n코딩 3\n3"
+      },
+      {
+       "input": "3\nA 수학 80\nB 수학 79\nC 과학 100\n",
+       "output": "(3, 3)\n86.33 11.85 80.00\n과학 1\n수학 2\n2"
+      },
+      {
+       "input": "2\n가 독서 50\n나 독서 50\n",
+       "output": "(2, 3)\n50.00 0.00 50.00\n독서 2\n0",
+       "hidden": true
+      },
+      {
+       "input": "4\nP x 0\nQ y 100\nR x 80\nS z 79\n",
+       "output": "(4, 3)\n64.75 44.24 79.50\nx 2\ny 1\nz 1\n2",
+       "hidden": true
+      },
+      {
+       "input": "5\na c 81 \nb b 82\nc a 83\nd b 84\ne c 85\n",
+       "output": "(5, 3)\n83.00 1.58 83.00\na 1\nb 2\nc 2\n5",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`describe()` 결과는 Series 라서 `d[\"mean\"]`, `d[\"std\"]`, `d[\"50%\"]` 처럼 이름으로 꺼내요.",
+      "`df[\"club\"].value_counts().sort_index()` 를 `for 이름, 개수 in vc.items():` 로 돌려요.",
+      "80점 이상은 `df[df[\"score\"] >= 80]` 로 고른 뒤 `len(...)`."
+     ],
+     "solution": "import pandas as pd\nn = int(input())\nrows = [input().split() for _ in range(n)]\ndf = pd.DataFrame(rows, columns=[\"name\", \"club\", \"score\"])\ndf[\"score\"] = df[\"score\"].astype(int)        # 글자 → 정수\nprint(df.shape)                              # (행, 열)\nd = df[\"score\"].describe()                   # count mean std min 25% 50% 75% max\nprint(f\"{d['mean']:.2f} {d['std']:.2f} {d['50%']:.2f}\")\nvc = df[\"club\"].value_counts().sort_index()  # 동아리별 인원, 이름 순\nfor club, k in vc.items():\n    print(club, k)\nprint(len(df[df[\"score\"] >= 80]))            # 조건 필터",
+     "explanation": "첫 예시는 레슨의 예제 표 그대로라 mean 77.67, std 11.84, 50%(중앙값) 78.00 이 나와요. 앞 실습에서 반복문으로 구한 std 와 같죠? 입력으로 받은 값은 글자(str)라서 `astype(int)` 로 바꾸지 않으면 describe 가 숫자 통계를 내지 못해요.",
+     "libs": [
+      "pandas"
+     ]
     },
     {
      "type": "quiz",
@@ -2255,8 +2334,7 @@
        {
         "type": "code",
         "code": "import pandas as pd\nimport numpy as np\ndf = pd.DataFrame({\n    'age':    [16, np.nan, 17, 16, np.nan, 18],\n    'height': [165, 172, np.nan, 158, 180, 175],\n    'city':   ['광주', '서울', '광주', '부산', '서울', '광주'],\n})\nprint(df.isna().sum())\nprint(df.isna().sum().sum())",
-        "title": "결측치가 있는 예제 (읽기 전용)",
-        "run": false
+        "title": "결측치가 있는 예제"
        }
       ],
       [
@@ -2320,13 +2398,12 @@
        {
         "type": "code",
         "code": "import pandas as pd\nimport numpy as np\ndf = pd.DataFrame({\n    'age':    [16, np.nan, 17, 16, np.nan, 18],\n    'height': [165, 172, np.nan, 158, 180, 175],\n    'city':   ['광주', '서울', '광주', '부산', '서울', '광주'],\n})\ndf[\"age\"] = df[\"age\"].fillna(df[\"age\"].mean())          # 평균으로\ndf[\"height\"] = df[\"height\"].fillna(df[\"height\"].median()) # 중앙값으로\nprint(df[\"age\"].tolist())\nprint(df.isna().sum().sum())",
-        "title": "평균·중앙값으로 채우기 (읽기 전용)",
-        "run": false
+        "title": "평균·중앙값으로 채우기"
        },
        {
         "type": "callout",
         "style": "warn",
-        "body": "`df[\"age\"].fillna(값, inplace=True)` 처럼 열을 꺼내서 inplace 로 바꾸는 코드는 최신 pandas(3.x)에서 **원본 df 를 바꾸지 않아요**. `df[\"age\"] = df[\"age\"].fillna(값)` 으로 쓰세요."
+        "body": "`df[\"age\"].fillna(값, inplace=True)` 처럼 열을 꺼내서 inplace 로 바꾸는 코드는 사이트의 pandas 2.2 에서는 경고(FutureWarning)와 함께 바뀌지만, pandas 3.x 부터는 **원본 df 를 바꾸지 않아요**. 항상 `df[\"age\"] = df[\"age\"].fillna(값)` 으로 쓰세요."
        }
       ],
       [
@@ -2446,7 +2523,7 @@
     {
      "type": "practice",
      "title": "[기출유사] 결측치를 평균으로 채우기",
-     "body": "센서 기록이 한 줄에 공백으로 주어져요. 측정 실패한 칸은 `NA` 로 적혀 있어요. pandas 의 `fillna(평균)` 을 직접 구현하세요.\n\n**[조건]**\n- 첫째 줄: 결측(`NA`) 개수\n- 둘째 줄: `NA` 를 뺀 값들의 평균, `f\"{평균:.1f}\"`\n- 셋째 줄: `NA` 를 그 평균(`.1f` 형식)으로 바꾼 전체 기록. 원래 값은 입력 그대로 출력해요.\n- 숫자는 정수이고, `NA` 가 아닌 값이 최소 1개 있어요.\n\n**[실행예시 1]**\n\n입력\n```\n12 NA 15 9 NA\n```\n출력\n```\n2\n12.0\n12 12.0 15 9 12.0\n```\n\n**[실행예시 2]**\n\n입력\n```\n20 21 NA\n```\n출력\n```\n1\n20.5\n20 21 20.5\n```",
+     "body": "센서 기록이 한 줄에 공백으로 주어져요. 측정 실패한 칸은 `NA` 로 적혀 있어요. pandas 의 `fillna(평균)` 이 하는 일을 반복문으로 직접 구현하세요(공식 이해용).\n\n**[조건]**\n- 첫째 줄: 결측(`NA`) 개수\n- 둘째 줄: `NA` 를 뺀 값들의 평균, `f\"{평균:.1f}\"`\n- 셋째 줄: `NA` 를 그 평균(`.1f` 형식)으로 바꾼 전체 기록. 원래 값은 입력 그대로 출력해요.\n- 숫자는 정수이고, `NA` 가 아닌 값이 최소 1개 있어요.\n\n**[실행예시 1]**\n\n입력\n```\n12 NA 15 9 NA\n```\n출력\n```\n2\n12.0\n12 12.0 15 9 12.0\n```\n\n**[실행예시 2]**\n\n입력\n```\n20 21 NA\n```\n출력\n```\n1\n20.5\n20 21 20.5\n```",
      "starter": "tokens = input().split()\n# 결측 개수, 평균, 채운 결과를 출력하세요\n",
      "tests": [
       {
@@ -2518,6 +2595,47 @@
      ],
      "solution": "regions = input().split()\ncols = sorted(set(regions))        # 서로 다른 값, 정렬\nprint(*cols)\nfor r in regions:\n    row = [1 if c == r else 0 for c in cols]   # 내 지역만 1\n    print(*row)\nprint(len(cols))",
      "explanation": "원-핫 표에서는 한 행에 1 이 **딱 하나** 있어요. 값의 종류가 많아지면 열도 그만큼 늘어나요."
+    },
+    {
+     "type": "practice",
+     "title": "[기출유사] pandas 로 결측치 채우고 원-핫 인코딩",
+     "body": "학생 기록을 DataFrame 으로 만들어 전처리해요. 첫째 줄은 나이들(측정 못 한 칸은 `NA`), 둘째 줄은 같은 개수의 지역 이름이에요.\n\n**[조건]**\n- 스타터처럼 `pd.to_numeric(..., errors=\"coerce\")` 로 `NA` 를 결측치(NaN)로 바꿔요.\n- 첫째 줄: 전체 결측치 개수 `df.isna().sum().sum()`\n- 둘째 줄: 결측을 뺀 age 평균 (`f\"{값:.2f}\"`)\n- 셋째 줄: age 결측을 **평균**으로 채운 뒤(`fillna`, 다시 대입!) `df[\"age\"].round(2).tolist()`\n- 넷째 줄: `pd.get_dummies(df, columns=[\"city\"], dtype=int)` 의 열 이름 리스트 `list(...columns)`\n- 다섯째 줄: 원-핫 결과의 `shape`\n- `NA` 가 아닌 나이가 최소 1개 있어요.\n\n**[실행예시 1]**\n\n입력\n```\n16 NA 17 16 NA 18\n광주 서울 광주 부산 서울 광주\n```\n출력\n```\n2\n16.75\n[16.0, 16.75, 17.0, 16.0, 16.75, 18.0]\n['age', 'city_광주', 'city_부산', 'city_서울']\n(6, 4)\n```\n\n**[실행예시 2]**\n\n입력\n```\n15 NA 17\nA B A\n```\n출력\n```\n1\n16.00\n[15.0, 16.0, 17.0]\n['age', 'city_A', 'city_B']\n(3, 3)\n```",
+     "starter": "import pandas as pd\nages = input().split()\ncities = input().split()\ndf = pd.DataFrame({\"age\": ages, \"city\": cities})\ndf[\"age\"] = pd.to_numeric(df[\"age\"], errors=\"coerce\")   # \"NA\" → NaN\n# 결측 개수, 평균, 채운 결과, 원-핫 열 이름과 shape 를 출력하세요\n",
+     "tests": [
+      {
+       "input": "16 NA 17 16 NA 18\n광주 서울 광주 부산 서울 광주\n",
+       "output": "2\n16.75\n[16.0, 16.75, 17.0, 16.0, 16.75, 18.0]\n['age', 'city_광주', 'city_부산', 'city_서울']\n(6, 4)"
+      },
+      {
+       "input": "15 NA 17\nA B A\n",
+       "output": "1\n16.00\n[15.0, 16.0, 17.0]\n['age', 'city_A', 'city_B']\n(3, 3)"
+      },
+      {
+       "input": "NA 20\n서울 서울\n",
+       "output": "1\n20.00\n[20.0, 20.0]\n['age', 'city_서울']\n(2, 2)",
+       "hidden": true
+      },
+      {
+       "input": "10 11 12 13\nx y z w\n",
+       "output": "0\n11.50\n[10, 11, 12, 13]\n['age', 'city_w', 'city_x', 'city_y', 'city_z']\n(4, 5)",
+       "hidden": true
+      },
+      {
+       "input": "NA NA 3 NA\n가 나 가 나\n",
+       "output": "3\n3.00\n[3.0, 3.0, 3.0, 3.0]\n['age', 'city_가', 'city_나']\n(4, 3)",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`df.isna().sum()` 은 열마다, 한 번 더 `.sum()` 하면 전체 개수예요.",
+      "`m = df[\"age\"].mean()` 후 `df[\"age\"] = df[\"age\"].fillna(m)` — 다시 대입을 잊지 마세요.",
+      "`d = pd.get_dummies(df, columns=[\"city\"], dtype=int)` 다음 `list(d.columns)`, `d.shape`."
+     ],
+     "solution": "import pandas as pd\nages = input().split()\ncities = input().split()\ndf = pd.DataFrame({\"age\": ages, \"city\": cities})\ndf[\"age\"] = pd.to_numeric(df[\"age\"], errors=\"coerce\")   # \"NA\" → NaN\nprint(df.isna().sum().sum())                  # 전체 결측 개수\nm = df[\"age\"].mean()                          # 결측은 건너뛰고 평균\nprint(f\"{m:.2f}\")\ndf[\"age\"] = df[\"age\"].fillna(m)               # 다시 대입해야 바뀜\nprint(df[\"age\"].round(2).tolist())\nd = pd.get_dummies(df, columns=[\"city\"], dtype=int)   # 원-핫\nprint(list(d.columns))\nprint(d.shape)",
+     "explanation": "첫 예시는 레슨의 DF_NA 예제와 같은 나이·지역이라 평균 16.75 로 채워져요. 원-핫 열은 원래 열(age) 뒤에 `city_값` 열이 **값 이름 순서**로 붙고, city 열 자체는 사라져서 열 수가 1 + (지역 종류 수) 예요.",
+     "libs": [
+      "pandas"
+     ]
     },
     {
      "type": "quiz",
@@ -2794,7 +2912,7 @@
        "histplot"
       ]
      ],
-     "explanation": "범주의 **개수**는 countplot, 수치의 **분포**는 histplot. (seaborn 은 사이트에서 실행되지 않아요.)"
+     "explanation": "범주의 **개수**는 countplot, 수치의 **분포**는 histplot. (seaborn 은 사이트에서 실행되지 않는 유일한 라이브러리라 이 코드는 읽기만 해요. pandas·matplotlib 코드는 ▶ 실행돼요.)"
     },
     {
      "type": "practice",
@@ -2871,6 +2989,47 @@
      ],
      "solution": "x = list(map(float, input().split()))\ny = list(map(float, input().split()))\nn = len(x)\nmx, my = sum(x) / n, sum(y) / n\nsxy = sum((a - mx) * (b - my) for a, b in zip(x, y))   # 함께 변하는 정도\nsxx = sum((a - mx) ** 2 for a in x)\nsyy = sum((b - my) ** 2 for b in y)\nr = sxy / (sxx * syy) ** 0.5\nprint(f\"{r:.3f}\")\nif r >= 0.7:\n    print(\"강한 양의 상관\")\nelif r <= -0.7:\n    print(\"강한 음의 상관\")\nelse:\n    print(\"약하거나 없음\")",
      "explanation": "첫 예시는 예제 표의 hours·score 라서 0.979 가 나와요. 히든 테스트 중 `-2 -1 0 1 2 / 4 1 0 1 4` 는 U 자 모양이라 관계가 분명한데도 r = 0 이에요. 상관계수는 **직선** 관계만 잰다는 증거예요."
+    },
+    {
+     "type": "practice",
+     "title": "[기출유사] pandas 로 상관계수·이상치 찾기",
+     "body": "그래프를 그리기 전에 숫자로 먼저 확인해요. 첫째 줄은 공부시간(hours), 둘째 줄은 같은 개수의 점수(score)예요(4개 이상, 정수).\n\n**[조건]**\n- 열 이름이 `hours`, `score` 인 DataFrame 을 만들어요.\n- 첫째 줄: `df.corr()` 에서 hours 와 score 의 상관계수, `f\"{값:.3f}\"`\n- 둘째 줄: score 의 Q1, Q3, IQR — `df[\"score\"].quantile(0.25)`, `quantile(0.75)` 를 써서 `f\"{값:.2f}\"` 공백 구분\n- 셋째 줄: score 이상치(`Q1 - 1.5×IQR` 미만 또는 `Q3 + 1.5×IQR` 초과) 값 리스트 `tolist()` — 없으면 `[]`\n- hours 끼리, score 끼리 모두 같은 값만 있지는 않아요.\n\n**[실행예시 1]**\n\n입력\n```\n2 5 3 1 4 3\n70 92 81 60 88 75\n```\n출력\n```\n0.979\n71.25 86.25 15.00\n[]\n```\n\n**[실행예시 2]**\n\n입력\n```\n1 2 3 4 5\n50 55 60 65 10\n```\n출력\n```\n-0.504\n50.00 60.00 10.00\n[10]\n```",
+     "starter": "import pandas as pd\nhours = list(map(int, input().split()))\nscore = list(map(int, input().split()))\ndf = pd.DataFrame({\"hours\": hours, \"score\": score})\n# 상관계수, Q1 Q3 IQR, 이상치 목록을 출력하세요\n",
+     "tests": [
+      {
+       "input": "2 5 3 1 4 3\n70 92 81 60 88 75\n",
+       "output": "0.979\n71.25 86.25 15.00\n[]"
+      },
+      {
+       "input": "1 2 3 4 5\n50 55 60 65 10\n",
+       "output": "-0.504\n50.00 60.00 10.00\n[10]"
+      },
+      {
+       "input": "1 2 3 4\n4 3 2 1\n",
+       "output": "-1.000\n1.75 3.25 1.50\n[]",
+       "hidden": true
+      },
+      {
+       "input": "1 1 2 2\n10 20 10 20\n",
+       "output": "0.000\n10.00 20.00 10.00\n[]",
+       "hidden": true
+      },
+      {
+       "input": "0 1 2 3 4 5 6 7\n60 61 62 63 64 65 66 200\n",
+       "output": "0.611\n61.75 65.25 3.50\n[200]",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`df.corr()` 는 상관행렬(표)이라 `.loc[\"hours\", \"score\"]` 로 한 칸을 꺼내요.",
+      "`quantile(0.25)` 가 Q1, `quantile(0.75)` 가 Q3, IQR = Q3 - Q1.",
+      "두 조건을 `|` 로 묶고 각각 괄호: `df[(df[\"score\"] < low) | (df[\"score\"] > high)]`."
+     ],
+     "solution": "import pandas as pd\nhours = list(map(int, input().split()))\nscore = list(map(int, input().split()))\ndf = pd.DataFrame({\"hours\": hours, \"score\": score})\nr = df.corr().loc[\"hours\", \"score\"]           # 상관행렬에서 한 칸\nprint(f\"{r:.3f}\")\nq1 = df[\"score\"].quantile(0.25)\nq3 = df[\"score\"].quantile(0.75)\niqr = q3 - q1\nprint(f\"{q1:.2f} {q3:.2f} {iqr:.2f}\")\nlow, high = q1 - 1.5 * iqr, q3 + 1.5 * iqr    # 상자 그림 경계\nout = df[(df[\"score\"] < low) | (df[\"score\"] > high)]\nprint(out[\"score\"].tolist())",
+     "explanation": "첫 예시는 예제 표라 r = 0.979, 이상치는 없어요. 둘째 예시는 마지막 점수 10 이 이상치로 잡히고, 그 한 점 때문에 상관계수가 음수로 뒤집혀요. 이상치가 통계값을 크게 흔들 수 있다는 걸 보여 줘요. (`sns.boxplot`·`sns.heatmap` 은 이 숫자들을 그림으로 그린 거예요.)",
+     "libs": [
+      "pandas"
+     ]
     },
     {
      "type": "quiz",
@@ -2968,8 +3127,7 @@
        {
         "type": "code",
         "code": "import pandas as pd\ndf = pd.DataFrame({\n    'name':  ['지우', '민준', '서연', '하준', '유나', '도윤'],\n    'grade': [1, 2, 2, 1, 2, 1],\n    'hours': [2, 5, 3, 1, 4, 3],\n    'score': [70, 92, 81, 60, 88, 75],\n    'club':  ['로봇', '코딩', '코딩', '로봇', 'AI', '코딩'],\n})\nfrom sklearn.model_selection import train_test_split\nX = df[[\"hours\"]]          # 2차원 (대괄호 두 겹)\ny = df[\"score\"]            # 1차원\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5, random_state=42)\nprint(X_train.shape, X_test.shape)\nprint(y_train.shape, y_test.shape)",
-        "title": "train_test_split (읽기 전용)",
-        "run": false
+        "title": "train_test_split"
        },
        {
         "type": "callout",
@@ -3219,6 +3377,90 @@
      ],
      "solution": "train = list(map(int, input().split()))\ntest = list(map(int, input().split()))\nlo, hi = min(train), max(train)               # fit: train 에서만 기준 계산\n\ndef transform(v):\n    return (v - lo) / (hi - lo)               # 같은 기준으로 변환\n\nprint(lo, hi)\nprint(*[f\"{transform(v):.2f}\" for v in train])\nt = [transform(v) for v in test]\nprint(*[f\"{v:.2f}\" for v in t])\nprint(sum(1 for v in t if v < 0 or v > 1))",
      "explanation": "test 에 train 범위 밖의 값이 있으면 0 보다 작거나 1 보다 커져요. 이게 정상이에요. test 로 다시 fit 하면 이 차이가 사라져 마치 0~1 에 딱 맞는 것처럼 보이지만, 실제 새 데이터를 다룰 때와 다른 조건으로 평가하게 돼요."
+    },
+    {
+     "type": "practice",
+     "title": "[기출유사] sklearn 스케일러 3종 비교",
+     "body": "한 특성의 값들이 한 줄에 주어져요(2개 이상, 모두 같지는 않은 정수). 세 스케일러로 `fit_transform` 한 결과를 비교하세요.\n\n**[조건]**\n- 값들을 **2차원 배열**(n행 1열)로 만들어요: `np.array(값들).reshape(-1, 1)`\n- 첫째 줄: `StandardScaler().fit_transform(X)` 결과\n- 둘째 줄: `MinMaxScaler().fit_transform(X)` 결과\n- 셋째 줄: `RobustScaler().fit_transform(X)` 결과\n- 각 줄은 `.ravel()` 로 1차원으로 편 뒤 값마다 `f\"{값:.2f}\"`, 공백 구분\n- 넷째 줄: StandardScaler 가 기억한 평균 `mean_[0]` 과 표준편차 `scale_[0]` (`f\"{값:.2f}\"`)\n\n**[실행예시 1]**\n\n입력\n```\n1 2 3 4\n```\n출력\n```\n-1.34 -0.45 0.45 1.34\n0.00 0.33 0.67 1.00\n-1.00 -0.33 0.33 1.00\n2.50 1.12\n```\n\n**[실행예시 2]**\n\n입력\n```\n-3 0 3 6 9 100\n```\n출력\n```\n-0.61 -0.53 -0.44 -0.36 -0.28 2.22\n0.00 0.03 0.06 0.09 0.12 1.00\n-1.00 -0.60 -0.20 0.20 0.60 12.73\n19.17 36.36\n```",
+     "starter": "import numpy as np\nfrom sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler\nvals = list(map(int, input().split()))\nX = np.array(vals).reshape(-1, 1)\n# 세 스케일러의 fit_transform 결과를 출력하세요\n",
+     "tests": [
+      {
+       "input": "1 2 3 4\n",
+       "output": "-1.34 -0.45 0.45 1.34\n0.00 0.33 0.67 1.00\n-1.00 -0.33 0.33 1.00\n2.50 1.12"
+      },
+      {
+       "input": "-3 0 3 6 9 100\n",
+       "output": "-0.61 -0.53 -0.44 -0.36 -0.28 2.22\n0.00 0.03 0.06 0.09 0.12 1.00\n-1.00 -0.60 -0.20 0.20 0.60 12.73\n19.17 36.36"
+      },
+      {
+       "input": "0 10\n",
+       "output": "-1.00 1.00\n0.00 1.00\n-1.00 1.00\n5.00 5.00",
+       "hidden": true
+      },
+      {
+       "input": "5 5 5 20\n",
+       "output": "-0.58 -0.58 -0.58 1.73\n0.00 0.00 0.00 1.00\n0.00 0.00 0.00 4.00\n8.75 6.50",
+       "hidden": true
+      },
+      {
+       "input": "160 170 180 150 190\n",
+       "output": "-0.71 0.00 0.71 -1.41 1.41\n0.25 0.50 0.75 0.00 1.00\n-0.50 0.00 0.50 -1.00 1.00\n170.00 14.14",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`X = np.array(vals).reshape(-1, 1)` — `-1` 은 \"행 수는 알아서\" 라는 뜻이에요.",
+      "`StandardScaler().fit_transform(X)` 처럼 만들고 바로 fit_transform. 결과는 2차원이라 `.ravel()` 로 펴요.",
+      "fit 한 스케일러는 `mean_`, `scale_` 에 기준을 기억해요. 그래서 StandardScaler 는 변수 `sc` 에 담아 두세요."
+     ],
+     "solution": "import numpy as np\nfrom sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler\nvals = list(map(int, input().split()))\nX = np.array(vals).reshape(-1, 1)             # n행 1열 (스케일러는 2차원을 받음)\n\ndef show(arr):\n    print(*[f\"{v:.2f}\" for v in arr.ravel()])\n\nsc = StandardScaler()\nshow(sc.fit_transform(X))                     # (x - 평균) / 표준편차(n)\nshow(MinMaxScaler().fit_transform(X))         # (x - min) / (max - min)\nshow(RobustScaler().fit_transform(X))         # (x - 중앙값) / IQR\nprint(f\"{sc.mean_[0]:.2f} {sc.scale_[0]:.2f}\")",
+     "explanation": "둘째 예시를 보세요. 이상치 100 때문에 MinMax 값은 0 근처로 몰리고, Robust 는 중앙값·IQR 기준이라 나머지 값들이 고르게 퍼져 있어요. 앞 실습에서 반복문으로 계산한 표준화·MinMax 값과 sklearn 결과가 같은지도 비교해 보세요.",
+     "libs": [
+      "numpy",
+      "sklearn"
+     ]
+    },
+    {
+     "type": "practice",
+     "title": "[기출유사] split 후 train 으로만 fit",
+     "body": "시험 코드의 순서 그대로 **나누기 → train 으로 fit → train·test transform** 을 해요.\n첫째 줄에 특성 값들(정수, 4개 이상), 둘째 줄에 test 비율 `test_size` 가 주어져요.\n\n**[조건]**\n- `X = np.array(값들).reshape(-1, 1)`\n- `X_train, X_test = train_test_split(X, test_size=test_size, random_state=42)`\n- 첫째 줄: `len(X_train) len(X_test)`\n- 둘째 줄: test 원래 값들 (`X_test.ravel().tolist()` 를 공백 구분)\n- `MinMaxScaler` 를 **X_train 으로만 fit** 하고, 셋째 줄: 변환한 test 값들 (`f\"{값:.2f}\"`, 공백 구분)\n- 넷째 줄: 변환한 test 중 0~1 범위를 벗어난 값의 개수\n- train 에 서로 다른 값이 2개 이상 들어가도록 입력이 주어져요.\n\n**[실행예시 1]**\n\n입력\n```\n10 20 30 40 50 60 70 80 90 100\n0.2\n```\n출력\n```\n8 2\n90 20\n0.89 0.11\n0\n```\n\n**[실행예시 2]**\n\n입력\n```\n5 1 9 3 7 2\n0.5\n```\n출력\n```\n3 3\n5 1 2\n0.33 -0.33 -0.17\n2\n```",
+     "starter": "import numpy as np\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import MinMaxScaler\nvals = list(map(int, input().split()))\nts = float(input())\nX = np.array(vals).reshape(-1, 1)\n# 나누고, train 으로만 fit 한 뒤 test 를 transform 하세요\n",
+     "tests": [
+      {
+       "input": "10 20 30 40 50 60 70 80 90 100\n0.2\n",
+       "output": "8 2\n90 20\n0.89 0.11\n0"
+      },
+      {
+       "input": "5 1 9 3 7 2\n0.5\n",
+       "output": "3 3\n5 1 2\n0.33 -0.33 -0.17\n2"
+      },
+      {
+       "input": "1 2 3 4\n0.25\n",
+       "output": "3 1\n2\n0.33\n0",
+       "hidden": true
+      },
+      {
+       "input": "0 100 50 25 75 10 90 200\n0.25\n",
+       "output": "6 2\n100 10\n0.50 0.05\n0",
+       "hidden": true
+      },
+      {
+       "input": "3 8 1 9 4 7 2 6 5 10 11 0\n0.3\n",
+       "output": "8 4\n11 10 3 5\n1.22 1.11 0.33 0.56\n2",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`train_test_split(X, ...)` 에 X 만 주면 `X_train, X_test` 두 개가 나와요. y 까지 주면 네 개예요.",
+      "`scaler.fit(X_train)` 다음 `scaler.transform(X_test)`. test 로 다시 fit 하면 안 돼요!",
+      "범위 밖 개수는 배열 조건 `(t < 0) | (t > 1)` 의 `.sum()` 을 `int()` 로 감싸요."
+     ],
+     "solution": "import numpy as np\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import MinMaxScaler\nvals = list(map(int, input().split()))\nts = float(input())\nX = np.array(vals).reshape(-1, 1)\nX_train, X_test = train_test_split(X, test_size=ts, random_state=42)   # ① 나누기\nprint(len(X_train), len(X_test))\nprint(*X_test.ravel().tolist())\nscaler = MinMaxScaler()\nscaler.fit(X_train)                       # ② train 으로만 fit (min·max 기억)\nt = scaler.transform(X_test).ravel()      # ③ test 는 transform 만\nprint(*[f\"{v:.2f}\" for v in t])\nprint(int(((t < 0) | (t > 1)).sum()))",
+     "explanation": "`random_state=42` 를 고정했기 때문에 누가 실행해도 같은 행이 test 로 뽑혀요. test 값이 train 의 최솟값보다 작거나 최댓값보다 크면 0~1 밖으로 나가는데, 이건 train 기준을 지켰다는 증거라 정상이에요.",
+     "libs": [
+      "numpy",
+      "sklearn"
+     ]
     },
     {
      "type": "quiz",
@@ -3537,6 +3779,48 @@
      "explanation": "MSE 는 \"직선이 데이터에서 얼마나 벗어났나\" 를 하나의 숫자로 만든 것이라, 직선끼리 비교할 수 있게 해 줘요. 실제 학습은 후보를 사람이 주지 않고 경사하강법으로 w, b 를 찾아가요."
     },
     {
+     "type": "practice",
+     "title": "[기출유사] numpy·sklearn 으로 MSE·RMSE·MAE",
+     "body": "가설 `ŷ = wx + b` 로 예측하고, 오차 지표를 **numpy 와 sklearn.metrics** 로 구해요.\n\n**[조건]**\n- 첫째 줄: x 값들, 둘째 줄: 같은 개수의 y 값들 (정수), 셋째 줄: `w b` (실수)\n- x, y 를 `np.array` 로 만들고 `y_hat = w * x + b` 를 **배열 연산 한 줄**로 구해요.\n- 첫째 줄: 예측값들 `f\"{값:.2f}\"` 공백 구분\n- 둘째 줄: numpy 로 구한 MSE `np.mean((y - y_hat) ** 2)`\n- 셋째 줄: `mean_squared_error(y, y_hat)` (sklearn)\n- 넷째 줄: RMSE `np.sqrt(MSE)`, 다섯째 줄: `mean_absolute_error(y, y_hat)`\n- 둘째~다섯째 줄의 값은 모두 `f\"{값:.3f}\"`\n\n**[실행예시 1]**\n\n입력\n```\n1 2 3 4\n60 70 75 85\n8 53\n```\n출력\n```\n61.00 69.00 77.00 85.00\n1.500\n1.500\n1.225\n1.000\n```\n\n**[실행예시 2]**\n\n입력\n```\n1 2 3\n3 5 9\n2 1\n```\n출력\n```\n3.00 5.00 7.00\n1.333\n1.333\n1.155\n0.667\n```",
+     "starter": "import numpy as np\nfrom sklearn.metrics import mean_squared_error, mean_absolute_error\nx = np.array(list(map(int, input().split())))\ny = np.array(list(map(int, input().split())))\nw, b = map(float, input().split())\n# y_hat 과 MSE, RMSE, MAE 를 출력하세요\n",
+     "tests": [
+      {
+       "input": "1 2 3 4\n60 70 75 85\n8 53\n",
+       "output": "61.00 69.00 77.00 85.00\n1.500\n1.500\n1.225\n1.000"
+      },
+      {
+       "input": "1 2 3\n3 5 9\n2 1\n",
+       "output": "3.00 5.00 7.00\n1.333\n1.333\n1.155\n0.667"
+      },
+      {
+       "input": "5\n7\n0 7\n",
+       "output": "7.00\n0.000\n0.000\n0.000\n0.000",
+       "hidden": true
+      },
+      {
+       "input": "1 2 3\n2 4 6\n0 0\n",
+       "output": "0.00 0.00 0.00\n18.667\n18.667\n4.320\n4.000",
+       "hidden": true
+      },
+      {
+       "input": "2 5 3 1 4 3\n70 92 81 60 88 75\n8.2 53.067\n",
+       "output": "69.47 94.07 77.67 61.27 85.87 77.67\n4.822\n4.822\n2.196\n2.000",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`np.array(...)` 로 만든 x 에 `w * x + b` 를 하면 모든 x 의 예측이 한 번에 나와요.",
+      "`np.mean((y - y_hat) ** 2)` 가 MSE. sklearn 은 `mean_squared_error(y, y_hat)` — 정답(y)을 먼저 넣어요.",
+      "RMSE 는 `np.sqrt(mse)`, MAE 는 `mean_absolute_error(y, y_hat)`."
+     ],
+     "solution": "import numpy as np\nfrom sklearn.metrics import mean_squared_error, mean_absolute_error\nx = np.array(list(map(int, input().split())))\ny = np.array(list(map(int, input().split())))\nw, b = map(float, input().split())\ny_hat = w * x + b                          # 가설: 배열 연산으로 한 번에\nprint(*[f\"{v:.2f}\" for v in y_hat])\nmse = np.mean((y - y_hat) ** 2)            # (1/n) Σ (y - ŷ)²\nprint(f\"{mse:.3f}\")\nprint(f\"{mean_squared_error(y, y_hat):.3f}\")   # sklearn 도 같은 값\nprint(f\"{np.sqrt(mse):.3f}\")               # RMSE\nprint(f\"{mean_absolute_error(y, y_hat):.3f}\")  # MAE = 평균 |y - ŷ|",
+     "explanation": "numpy 로 직접 쓴 MSE 와 sklearn 의 `mean_squared_error` 는 항상 같은 값이에요. 앞 실습의 반복문 MSE 와도 같죠. RMSE 는 단위가 점수와 같아져서 \"평균적으로 몇 점쯤 틀리나\" 로 읽을 수 있어요.",
+     "libs": [
+      "numpy",
+      "sklearn"
+     ]
+    },
+    {
      "type": "quiz",
      "kind": "essay",
      "question": "선형회귀의 손실 함수로 오차의 합 대신 **MSE(오차 제곱의 평균)** 를 쓰는 이유를 두 가지 이상 서술하세요.",
@@ -3739,8 +4023,7 @@
        {
         "type": "code",
         "code": "import numpy as np\nx = np.array([2, 5, 3, 1, 4, 3])\ny = np.array([70, 92, 81, 60, 88, 75])\nX = np.column_stack([np.ones(len(x)), x])     # [1, x] 열\ntheta = np.linalg.inv(X.T @ X) @ X.T @ y       # (XᵀX)⁻¹ Xᵀ y\nprint(theta.round(3))                          # [b, w]",
-        "title": "정규방정식 numpy (읽기 전용)",
-        "run": false
+        "title": "정규방정식 numpy"
        },
        {
         "type": "compare",
@@ -3792,8 +4075,7 @@
        {
         "type": "code",
         "code": "import pandas as pd\ndf = pd.DataFrame({\n    'name':  ['지우', '민준', '서연', '하준', '유나', '도윤'],\n    'grade': [1, 2, 2, 1, 2, 1],\n    'hours': [2, 5, 3, 1, 4, 3],\n    'score': [70, 92, 81, 60, 88, 75],\n    'club':  ['로봇', '코딩', '코딩', '로봇', 'AI', '코딩'],\n})\nfrom sklearn.linear_model import LinearRegression\nX = df[[\"hours\"]]               # 2차원!\ny = df[\"score\"]\nmodel = LinearRegression()\nmodel.fit(X, y)\nprint(model.coef_, round(model.intercept_, 3))\nprint(model.predict(pd.DataFrame({\"hours\": [6]})).round(2))\nprint(round(model.score(X, y), 3))      # R²",
-        "title": "LinearRegression (읽기 전용)",
-        "run": false
+        "title": "LinearRegression"
        },
        {
         "type": "callout",
@@ -3948,6 +4230,48 @@
      ],
      "solution": "x = list(map(float, input().split()))\ny = list(map(float, input().split()))\nn = len(x)\nmx, my = sum(x) / n, sum(y) / n\nw = sum((a - mx) * (c - my) for a, c in zip(x, y)) / sum((a - mx) ** 2 for a in x)\nb = my - w * mx                                         # 절편\npred = [w * a + b for a in x]                           # ŷ\nss_res = sum((c - p) ** 2 for c, p in zip(y, pred))     # 모델 오차\nss_tot = sum((c - my) ** 2 for c in y)                  # 평균으로 찍은 오차\nr2 = 1 - ss_res / ss_tot\nprint(f\"{w:.3f}\")\nprint(f\"{b:.3f}\")\nprint(f\"{r2:.3f}\")\nprint(\"설명력 높음\" if r2 >= 0.8 else \"설명력 낮음\")",
      "explanation": "첫 예시는 예제 표 데이터라 sklearn `LinearRegression` 결과(w = 8.2, b ≈ 53.067, R² ≈ 0.959)와 같아요. 두 번째 예시는 점이 정확히 직선 위에 있어 R² = 1 이에요."
+    },
+    {
+     "type": "practice",
+     "title": "[기출유사] LinearRegression 으로 학습·평가",
+     "body": "sklearn `LinearRegression` 으로 회귀선을 학습하고 평가해요.\n\n**[조건]**\n- 첫째 줄: x 값들, 둘째 줄: 같은 개수의 y 값들 (x 끼리 모두 같지는 않아요), 셋째 줄: 예측할 새 x 하나\n- `X = x배열.reshape(-1, 1)` 로 **2차원**으로 만들어 `model.fit(X, y)`\n- 첫째 줄: `coef_[0]`, 둘째 줄: `intercept_` — `f\"{값:.3f}\"`\n- 셋째 줄: `r2_score(y, model.predict(X))` — `f\"{값:.3f}\"`\n- 넷째 줄: 새 x 의 예측값 — `f\"{값:.2f}\"`\n- 다섯째 줄: R² ≥ 0.8 이면 `설명력 높음`, 아니면 `설명력 낮음`\n\n**[실행예시 1]**\n\n입력\n```\n2 5 3 1 4 3\n70 92 81 60 88 75\n6\n```\n출력\n```\n8.200\n53.067\n0.959\n102.27\n설명력 높음\n```\n\n**[실행예시 2]**\n\n입력\n```\n1 2 3 4 5\n3 5 7 9 11\n10\n```\n출력\n```\n2.000\n1.000\n1.000\n21.00\n설명력 높음\n```",
+     "starter": "import numpy as np\nfrom sklearn.linear_model import LinearRegression\nfrom sklearn.metrics import r2_score\nx = np.array(list(map(float, input().split())))\ny = np.array(list(map(float, input().split())))\nnew_x = float(input())\nX = x.reshape(-1, 1)\n# 모델을 학습하고 coef_, intercept_, R², 예측값을 출력하세요\n",
+     "tests": [
+      {
+       "input": "2 5 3 1 4 3\n70 92 81 60 88 75\n6\n",
+       "output": "8.200\n53.067\n0.959\n102.27\n설명력 높음"
+      },
+      {
+       "input": "1 2 3 4 5\n3 5 7 9 11\n10\n",
+       "output": "2.000\n1.000\n1.000\n21.00\n설명력 높음"
+      },
+      {
+       "input": "1 2\n5 1\n3\n",
+       "output": "-4.000\n9.000\n1.000\n-3.00\n설명력 높음",
+       "hidden": true
+      },
+      {
+       "input": "1 2 3 4\n2 1 4 3\n0\n",
+       "output": "0.600\n1.000\n0.360\n1.00\n설명력 낮음",
+       "hidden": true
+      },
+      {
+       "input": "10 20 30 40 50\n15 11 40 22 30\n35\n",
+       "output": "0.410\n11.300\n0.308\n25.65\n설명력 낮음",
+       "hidden": true
+      }
+     ],
+     "hints": [
+      "`X = x.reshape(-1, 1)` 로 2차원을 만들고 `model = LinearRegression()`, `model.fit(X, y)`.",
+      "기울기는 `model.coef_[0]`(배열이라 [0]), 절편은 `model.intercept_`.",
+      "R² 는 `r2_score(y, model.predict(X))`. 새 값 예측은 `model.predict([[new_x]])[0]` — 대괄호 두 겹!"
+     ],
+     "solution": "import numpy as np\nfrom sklearn.linear_model import LinearRegression\nfrom sklearn.metrics import r2_score\nx = np.array(list(map(float, input().split())))\ny = np.array(list(map(float, input().split())))\nnew_x = float(input())\nX = x.reshape(-1, 1)                       # sklearn 의 X 는 2차원 (n행 1열)\nmodel = LinearRegression()\nmodel.fit(X, y)                            # 학습: w, b 를 구함\nprint(f\"{model.coef_[0]:.3f}\")             # w (기울기)\nprint(f\"{model.intercept_:.3f}\")           # b (절편)\nr2 = r2_score(y, model.predict(X))         # model.score(X, y) 와 같음\nprint(f\"{r2:.3f}\")\nprint(f\"{model.predict([[new_x]])[0]:.2f}\")   # 새 입력도 2차원으로\nprint(\"설명력 높음\" if r2 >= 0.8 else \"설명력 낮음\")",
+     "explanation": "첫 예시는 예제 표 데이터라 w = 8.2, b ≈ 53.067, R² ≈ 0.959 로 앞 실습의 공식 계산과 같아요. `LinearRegression` 이 속에서 최소제곱 해(정규방정식과 같은 답)를 구하기 때문이에요. 셋째 히든 테스트처럼 점이 흩어져 있으면 R² 가 낮게 나와요.",
+     "libs": [
+      "numpy",
+      "sklearn"
+     ]
     },
     {
      "type": "quiz",

@@ -2558,7 +2558,7 @@ L = C.lesson('γ-13 numpy 기초: 배열 · shape · 통계 · 조건 개수', 2
 - `a.shape` 모양(행, 열), `a.sum()`, `a.mean()`, `a.max()`, `a.min()`
 - `np.ones(n)`·`np.zeros(n)` (실수 1.·0.), `np.arange(n)` (0~n-1), `.reshape(행, 열)` — 칸 수가 맞아야 해요.
 - `a > 0` 은 True/False 배열 → `(a > 0).sum()` 이 **조건에 맞는 개수**, `a[a > 0]` 은 그 값들.
-- ⚠️ 이 사이트에선 numpy 가 실행되지 않아요. 코드를 읽고 **결과를 예측**하는 연습을 해요.''')
+- 이 사이트에서 numpy 코드를 **▶ 실행**할 수 있어요. 먼저 결과를 예측하고, 실행해서 맞는지 확인해요.''')
 
 L.review('🔁 지난 시간 복습',
     [T('지난 시간: `a + b` 는 `a.__add__(b)`, 새 객체를 return, 범위 제한은 `max(0, min(255, v))`.\n'
@@ -2572,7 +2572,7 @@ L.explain('numpy 배열은 리스트와 무엇이 다를까',
        '배열은 리스트처럼 보이지만 **연산이 칸마다** 일어나요.'),
      CMP(side('리스트', '`[1, 2, 3] * 2` → `[1, 2, 3, 1, 2, 3]` (반복)\n`[1, 2] + [3, 4]` → `[1, 2, 3, 4]` (이어 붙이기)\n`[1, 2] + 1` → TypeError', '', 'bad'),
          side('numpy 배열', '`np.array([1, 2, 3]) * 2` → `[2 4 6]` (칸마다)\n`np.array([1, 2]) + np.array([3, 4])` → `[4 6]`\n`np.array([1, 2]) + 1` → `[2 3]`', '', 'good'))],
-    [T('직접 확인해 봐요. (사이트에서는 numpy 가 없어 ▶ 실행이 안 돼요 — 결과는 아래 정답 보기에서!)'),
+    [T('직접 확인해 봐요. 결과를 먼저 머릿속으로 예측한 뒤 **▶ 실행**으로 맞춰 보세요. (정답 보기로도 확인할 수 있어요)'),
      CODE('import numpy as np\na = np.array([1, 2, 3])\nprint(a * 2)\nprint(a + 10)\nprint(type(a))', 'numpy 첫걸음', run_=False),
      REVEAL_RUN('위 코드의 실행 결과는?', 'import numpy as np\na = np.array([1, 2, 3])\nprint(a * 2)\nprint(a + 10)\nprint(type(a))',
                 '배열을 print 하면 **쉼표 없이** 공백으로 구분해 보여 줘요.')])
@@ -2632,7 +2632,7 @@ L.explain('조건으로 세기와 고르기',
      CODE('import numpy as np\nhp = np.array([30, -5, 0, 12, -1])\nprint(hp > 0)\nprint((hp <= 0).sum())\nprint(hp[hp > 0])\nprint(hp[hp > 0].sum())', '조건 개수', run_=False),
      REVEAL_RUN('실행 결과는?', 'import numpy as np\nhp = np.array([30, -5, 0, 12, -1])\nprint(hp > 0)\nprint((hp <= 0).sum())\nprint(hp[hp > 0])\nprint(hp[hp > 0].sum())')],
     [T('2025년 12점 문항: `ones` 로 체력 배열을 만들고 `arange().reshape()` 로 만든 피해량을 **빼서**, 합계와 **0 이하인 칸의 개수**를 구했어요. 아래 문제로 연습해요.'),
-     EXAM('순수 파이썬이라면 `sum(1 for x in a if x <= 0)` 을, numpy 는 `(a <= 0).sum()` 한 줄로 해요. 둘 다 쓸 수 있게!')])
+     EXAM('순수 파이썬이라면 `sum(1 for x in a if x <= 0)` 을, numpy 는 `(a <= 0).sum()` 한 줄로 해요. 둘 다 쓸 수 있게! 실습에서는 진짜 numpy 로 풀어 봐요.')])
 
 L.output('출력은?', '''\
 import numpy as np
@@ -2651,72 +2651,77 @@ L.bucket('다음 중 결과를 분류하세요. (`a = np.array([1, 2, 3])`)', ['
 L.choice('`np.arange(2, 11, 2)` 의 결과는?', ['[2 4 6 8 10]', '[2 4 6 8]', '[2 3 4 5 6 7 8 9 10]', '[0 2 4 6 8 10]'], 1,
     'range 와 같은 규칙: 2 부터 11 **직전**까지 2 씩 → 2, 4, 6, 8, 10.')
 
-L.practice('[기출유사] 몬스터 체력판 (numpy 없이)',
-'''numpy 의 `ones` · `arange().reshape()` · 배열 빼기를 **리스트로 흉내** 내는 문제예요. (이 사이트는 numpy 가 실행되지 않아요)
-한 줄에 `R C H` 가 주어져요. R행 C열 몬스터의 체력은 모두 H 이고, 칸마다 받은 피해는 `arange(R*C).reshape(R, C)` 처럼 **0, 1, 2, … 를 왼쪽 위부터 차례로** 채운 값이에요.
+L.practice('[기출유사] 몬스터 체력판 (numpy)',
+'''numpy 의 `ones` · `arange().reshape()` · 배열 빼기를 **진짜 numpy 로** 써 보는 문제예요.
+한 줄에 `R C H` 가 주어져요. R행 C열 몬스터의 체력은 모두 H 이고, 칸마다 받은 피해는 **0, 1, 2, … 를 왼쪽 위부터 차례로** 채운 값이에요.
 
 **[조건]**
-- 남은 체력 = 체력 − 피해 를 칸마다 계산해 **2차원 리스트**에 저장해요.
-- 행마다 값을 공백으로 이어 출력해요.
-- 다음 줄 `합계: 값`, 마지막 줄 `쓰러짐: 개수` (남은 체력이 **0 이하**인 칸 수)
+- `import numpy as np` 를 쓰고, 체력은 `np.ones((R, C), dtype=int) * H`, 피해는 `np.arange(R * C).reshape(R, C)` 로 만들어요.
+- 남은 체력 = 체력 배열 − 피해 배열 (배열끼리 **한 번에** 빼기)
+- 행마다 값을 공백으로 이어 출력해요. (배열을 그대로 print 하지 말고 `tolist()` 로 바꿔 출력)
+- 다음 줄 `합계: 값`, 마지막 줄 `쓰러짐: 개수` (남은 체력이 **0 이하**인 칸 수, `(배열 <= 0).sum()`)
 
 {ex}
 
 {ex2}''',
-'''r, c, h = map(int, input().split())
-board = []
-# 2차원 리스트를 만들어 출력하세요
+'''import numpy as np
+
+r, c, h = map(int, input().split())
+# hp, dmg 배열을 만들고 빼서 출력하세요
 ''',
-'''r, c, h = map(int, input().split())
-board = []
-for i in range(r):
-    row = []
-    for j in range(c):
-        dmg = i * c + j            # arange(r*c).reshape(r, c) 의 (i, j) 값
-        row.append(h - dmg)        # 칸마다 빼기
-    board.append(row)
-for row in board:
+'''import numpy as np
+
+r, c, h = map(int, input().split())
+hp = np.ones((r, c), dtype=int) * h          # 모든 칸이 h 인 r×c 배열
+dmg = np.arange(r * c).reshape(r, c)         # 0, 1, 2, ... 를 행 순서로 채움
+left = hp - dmg                              # 칸마다 빼기 (원소별 연산)
+for row in left.tolist():                    # 배열 → 2차원 리스트
     print(" ".join(map(str, row)))
-flat = [v for row in board for v in row]     # 한 줄로 펼치기
-print("합계:", sum(flat))
-print("쓰러짐:", sum(1 for v in flat if v <= 0))   # (board <= 0).sum() 과 같음''',
+print("합계:", int(left.sum()))              # 전체 합
+print("쓰러짐:", int((left <= 0).sum()))     # True 를 1 로 세어 개수''',
     ['2 3 4', '3 3 5'], ['1 1 0', '1 5 2', '4 2 10'],
-    ['(i, j) 칸의 피해는 `i * c + j` 예요. arange 를 reshape 한 것과 같은 값이에요.',
-     '이중 for 로 `row.append(h - dmg)`, 바깥에서 `board.append(row)`',
-     '0 이하 개수: `sum(1 for v in flat if v <= 0)` — numpy 라면 `(left <= 0).sum()`'],
-    'numpy 로는 `left = np.ones((r, c), dtype=int) * h - np.arange(r * c).reshape(r, c)` 한 줄이에요. 리스트로 직접 만들어 보면 reshape 가 "왼쪽 위부터 행 순서로 채운다" 는 뜻을 확실히 알 수 있어요.')
+    ['체력: `hp = np.ones((r, c), dtype=int) * h` — `dtype=int` 가 없으면 `4.0` 처럼 실수로 나와요.',
+     '피해: `dmg = np.arange(r * c).reshape(r, c)`, 남은 체력: `left = hp - dmg`',
+     '출력: `for row in left.tolist(): print(" ".join(map(str, row)))`, 개수는 `int((left <= 0).sum())`'],
+    '`np.ones` 의 기본 자료형은 실수라 `dtype=int` 가 중요해요. `(left <= 0)` 은 True/False 배열이고 `.sum()` 은 True 를 1 로 세어 개수가 돼요. 순수 파이썬으로 하려면 `(i, j)` 칸의 피해가 `i * c + j` 라는 걸 이용해 이중 for 로 만들면 돼요 — reshape 가 "왼쪽 위부터 행 순서로 채운다" 는 뜻이에요.',
+    libs=['numpy'])
 
-L.practice('[기출유사] 성적 배열 통계 (numpy 없이)',
-'''첫 줄에 `행 열`(학생 수, 과목 수), 다음 줄들에 점수표가 주어져요. numpy 의 `shape`, `mean()`, `max()`, 조건 개수를 리스트로 구해 보세요.
+L.practice('[기출유사] 성적 배열 통계 (numpy)',
+'''첫 줄에 `행 열`(학생 수, 과목 수), 다음 줄들에 점수표가 주어져요. 점수표를 **numpy 배열**로 만들어 `shape`, `mean()`, `max()`, 조건 개수를 구해 보세요.
 
 **[조건]**
-- 첫째 줄: `shape: (행, 열)` — 튜플을 그대로 print 한 모양
-- 둘째 줄: `평균: 값` (전체 평균, `round(…, 2)`)
-- 셋째 줄: `최고: 값`
-- 넷째 줄: `평균 이상: 개수` (전체 평균 **이상**인 점수의 칸 수)
-- 다섯째 줄: `학생별 최고: a b c` (행마다 최댓값 — numpy 의 `max(axis=1)`)
+- `import numpy as np` 를 쓰고 `a = np.array(점수표)` 로 2차원 배열을 만들어요.
+- 첫째 줄: `shape: (행, 열)` — `a.shape` 를 그대로 print 한 모양
+- 둘째 줄: `평균: 값` (`a.mean()` 을 `round(float(…), 2)`)
+- 셋째 줄: `최고: 값` (`a.max()`)
+- 넷째 줄: `평균 이상: 개수` (전체 평균 **이상**인 칸 수, `(a >= a.mean()).sum()`)
+- 다섯째 줄: `학생별 최고: a b c` (행마다 최댓값 — `a.max(axis=1)`)
 
 {ex}
 
 {ex2}''',
-'''r, c = map(int, input().split())
+'''import numpy as np
+
+r, c = map(int, input().split())
 scores = [list(map(int, input().split())) for _ in range(r)]
-# 통계를 출력하세요
+# a = np.array(scores) 로 만들고 통계를 출력하세요
 ''',
-'''r, c = map(int, input().split())
+'''import numpy as np
+
+r, c = map(int, input().split())
 scores = [list(map(int, input().split())) for _ in range(r)]
-flat = [v for row in scores for v in row]        # 전체 칸을 한 줄로
-avg = sum(flat) / len(flat)                       # a.mean()
-print("shape:", (r, c))                           # a.shape
-print("평균:", round(avg, 2))
-print("최고:", max(flat))                         # a.max()
-print("평균 이상:", sum(1 for v in flat if v >= avg))   # (a >= a.mean()).sum()
-print("학생별 최고:", " ".join(str(max(row)) for row in scores))   # a.max(axis=1)''',
+a = np.array(scores)                                  # 2차원 배열
+print("shape:", a.shape)                              # (행, 열) 튜플
+print("평균:", round(float(a.mean()), 2))             # 전체 평균
+print("최고:", int(a.max()))                          # 전체 최댓값
+print("평균 이상:", int((a >= a.mean()).sum()))       # 조건을 만족하는 칸 수
+print("학생별 최고:", " ".join(map(str, a.max(axis=1).tolist())))   # 행마다 최댓값''',
     ['2 3\n90 80 70\n60 85 95', '3 2\n10 20\n30 40\n50 60'], ['1 1\n77', '2 2\n0 0\n0 0', '2 4\n1 2 3 4\n100 0 50 49'],
-    ['2차원 리스트를 `flat = [v for row in scores for v in row]` 로 펼치면 전체 통계가 쉬워요.',
-     '평균은 반올림하기 **전** 값 avg 로 "평균 이상" 을 세요.',
-     '행마다 최댓값: `" ".join(str(max(row)) for row in scores)`'],
-    'numpy 로는 `a.shape`, `a.mean()`, `a.max()`, `(a >= a.mean()).sum()`, `a.max(axis=1)` 이에요. 이름과 뜻을 짝지어 기억하면 numpy 출력 추론 문제도 쉽게 풀려요.')
+    ['`a = np.array(scores)` 하면 `a.shape` 가 바로 `(r, c)` 예요.',
+     '평균 이상은 반올림 **전** 값으로: `(a >= a.mean()).sum()`. 출력은 `int(...)` 로 감싸요.',
+     '행마다 최댓값: `a.max(axis=1).tolist()` 를 `" ".join(map(str, ...))`'],
+    '`axis=1` 은 가로(행마다) 계산이라 학생별 최고가 나와요. numpy 값은 `int()`·`float()`·`tolist()` 로 바꿔 찍으면 출력 모양이 깔끔해요. 순수 파이썬이라면 `flat = [v for row in scores for v in row]` 로 펼쳐 `sum(flat) / len(flat)`, `max(flat)`, `sum(1 for v in flat if v >= avg)` 로 같은 값을 구할 수 있어요.',
+    libs=['numpy'])
 
 L.essay('파이썬 리스트 `[1, 2, 3]` 과 numpy 배열 `np.array([1, 2, 3])` 에 각각 `* 2` 를 했을 때 결과가 어떻게 다른지 쓰고, 그 차이가 생기는 이유를 **연산자 오버로딩**과 연결해 서술하세요.',
     '리스트에 * 2 를 하면 리스트 전체가 두 번 반복된 [1, 2, 3, 1, 2, 3] 이 되고, numpy 배열에 * 2 를 하면 각 칸에 2 를 곱한 [2 4 6] 이 된다. * 연산자는 왼쪽 객체의 __mul__ 메서드를 호출하는데, list 클래스의 __mul__ 은 반복하도록, numpy 배열(ndarray) 클래스의 __mul__ 은 원소마다 곱하도록 서로 다르게 정의(오버로딩)되어 있기 때문이다.',

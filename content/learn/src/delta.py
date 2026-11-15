@@ -11,7 +11,7 @@ C = Course('δ', '1학년 2학기 2차고사 범위: 내장함수 직접 구현(
 # =====================================================================
 L = C.lesson('δ-01 시작하기: 2학기 2차 시험 지도 + γ 실력 점검', 20,
 '''- 2학기 2차는 **"내장함수 쓰기/안 쓰기"·이터레이터·제너레이터·파일·예외·numpy** 가 중심이에요.
-- 2025년엔 numpy 만 5문항(약 50점)! 출력 추론으로 대비해요.
+- 2025년엔 numpy 만 5문항(약 50점)! 출력을 먼저 예측하고 ▶ 실행으로 확인하며 대비해요.
 - γ 내용(try/except, with open, 클래스, numpy 기초)은 2차에서 **도구**로 계속 써요.
 - 이 코스는 개념 → 확인 문제 → 기출유사 실습 순서. 다 끝나면 **A.C.E. [δ]** 로 실전!''')
 
@@ -40,7 +40,7 @@ L.explain('이번 시험은 이렇게 나와요',
 
 L.choice('2025년 2학기 2차에서 **가장 많은 문항**이 나온 영역은?',
     ['재귀 함수', 'numpy 배열(where·슬라이싱·정렬)', '거북이 그래픽', '변수 이름 규칙'], 2,
-    '2025년엔 numpy 문항이 5개(약 50점)였어요. 사이트에선 numpy 가 실행되지 않으니 **출력 추론 문제**로 손에 익혀요.')
+    '2025년엔 numpy 문항이 5개(약 50점)였어요. 이 사이트에선 numpy 코드를 ▶ 실행으로 바로 돌려 볼 수 있으니, **출력을 먼저 예측 → 실행해서 확인** 하는 식으로 손에 익혀요.')
 
 L.explain('γ 점검 ① 예외 처리',
     [T('`try` 안에서 오류가 나면 **바로** 맞는 `except` 로 뛰어가요.\n'
@@ -156,16 +156,16 @@ L.explain('γ 점검 ④ __name__ 과 numpy 기초',
        '다른 파일에서 `import` 되면 `__name__` 은 **모듈 이름**(파일 이름)이 돼요. 자세한 건 δ-09 에서!'),
      CODE('print(__name__)', '직접 실행하면?')],
     [T('numpy 배열은 `np.array(리스트)` 로 만들고, `shape`(모양)·`mean()`(평균)·`reshape(행, 열)` 을 썼어요.\n'
-       '이 사이트에선 numpy 가 **실행되지 않아요**. 코드를 읽고 결과를 예측하는 연습을 해요.'),
+       '이 사이트에선 numpy 도 **▶ 실행**돼요. 결과를 먼저 예측해 보고 실행해서 맞혀 보세요.'),
      CODE('''import numpy as np
 a = np.array([1, 2, 3, 4, 5, 6])
 b = a.reshape(2, 3)
 print(b)
 print(b.shape)
-print(b.mean())''', 'numpy 기초 (읽기 전용)', run_=False),
+print(b.mean())''', 'numpy 기초 (▶ 실행해 보세요)', run_=False),
      WARN('`reshape(2, 3)` 은 원소 수가 2×3=6 일 때만 돼요. 원소가 5개면 `ValueError`!')])
 
-L.output('numpy 코드의 출력을 예측하세요. (사이트에선 실행되지 않으니 손으로!)', '''\
+L.output('numpy 코드의 출력을 예측하세요. (시험처럼 먼저 손으로 적어 보고, 위 예제를 ▶ 실행해 비교해도 좋아요)', '''\
 import numpy as np
 a = np.array([2, 4, 6, 8]).reshape(2, 2)
 print(a.shape)
@@ -2067,8 +2067,8 @@ a = np.array([[1, 2, 3, 4],
 print(a[1, 2])
 print(a[1])
 print(a[:, -1])
-print(a[1:, :2])''', '행·열 슬라이싱 (읽기 전용)', run_=False),
-     WARN('이 사이트에선 numpy 가 **실행되지 않아요**. 출력은 아래 문제로 예측해 보세요.')],
+print(a[1:, :2])''', '행·열 슬라이싱 (▶ 실행해 보세요)', run_=False),
+     TIP('numpy 코드도 **▶ 실행**돼요. 먼저 출력을 예측해 적어 보고, 실행해서 맞혀 보세요. 시험장에선 손으로 써야 하니까요!')],
     [T('행 번호를 **리스트로** 주면 원하는 행들만 골라요. `a[[0, 2]]` 는 0번·2번 행.\n'
        '`a[[0, 2], -1]` 은 그 행들의 마지막 열 값이에요.'),
      REVEAL_RUN('`a[[0, 2]]` 와 `a[[0, 2], -1]` 의 결과는?', '''import numpy as np
@@ -2077,7 +2077,7 @@ print(a[[0, 2]])
 print(a[[0, 2], -1])'''),
      EXAM('2025년엔 "특정 행을 고르고 **마지막 열**만 슬라이싱" 하는 문항(6점)이 나왔어요.')])
 
-L.output('출력을 예측하세요. (numpy — 손으로!)', '''\
+L.output('출력을 예측하세요. (시험처럼 손으로 먼저!)', '''\
 import numpy as np
 score = np.array([[80, 90, 70],
                   [60, 75, 95],
@@ -2095,12 +2095,12 @@ L.explain('boolean indexing — 조건으로 고르기',
 a = np.array([3, 8, 1, 6, 9, 2])
 print(a > 5)
 print(a[a > 5])
-print(a[a % 2 == 0])''', 'boolean indexing (읽기 전용)', run_=False)],
+print(a[a % 2 == 0])''', 'boolean indexing (▶ 실행해 보세요)', run_=False)],
     [T('조건 두 개는 `and`·`or` 가 아니라 **`&`·`|`** 를 쓰고, 각 조건을 **괄호**로 감싸요.\n'
        '고른 칸에 값을 넣으면 그 칸만 바뀌어요: `a[a < 3] = 0`.'),
      CMP(side('리스트라면', '컴프리헨션으로', 'a = [3, 8, 1, 6, 9, 2]\nprint([x for x in a if 2 < x < 9])', 'good'),
-         side('numpy 라면', '괄호 + & — 결과는 `[3 8 6]` (읽기 전용)\n```python\na = np.array([3, 8, 1, 6, 9, 2])\nprint(a[(a > 2) & (a < 9)])\n```', '', 'good')),
-     KEY('numpy 의 `a[a > 5]` 는 리스트의 `[x for x in a if x > 5]` 와 같은 일을 해요. 실습은 이 리스트 방식으로 해요.')])
+         side('numpy 라면', '괄호 + & — 결과는 `[3 8 6]`', 'import numpy as np\na = np.array([3, 8, 1, 6, 9, 2])\nprint(a[(a > 2) & (a < 9)])', 'good')),
+     KEY('numpy 의 `a[a > 5]` 는 리스트의 `[x for x in a if x > 5]` 와 같은 일을 해요. 개수는 `(a > 5).sum()` — True 를 1 로 세요. 실습에서 numpy 로 직접 써 봐요.')])
 
 L.output('출력을 예측하세요.', '''\
 import numpy as np
@@ -2129,7 +2129,7 @@ seat = np.array([[1, 0, 1],
 r, c = np.where(seat == 0)
 print(r, c)
 for i, j in zip(r, c):
-    print(int(i) + 1, "행", int(j) + 1, "열 빈자리")''', '빈자리 찾기 (읽기 전용)', run_=False),
+    print(int(i) + 1, "행", int(j) + 1, "열 빈자리")''', '빈자리 찾기 (▶ 실행해 보세요)', run_=False),
      EXAM('2025년 8점: 좌석 배열에서 `np.where` 로 **빈자리 위치**를 찾는 문항.')],
     [T('`np.where(조건, 참일 때 값, 거짓일 때 값)` 처럼 세 개를 주면 칸마다 골라서 **새 배열**을 만들어요.'),
      REVEAL_RUN('점수 60 이상은 1, 미만은 0 으로 바꾸면?', '''import numpy as np
@@ -2158,7 +2158,7 @@ a = np.array([30, 10, 50, 20])
 b = np.sort(a)
 print(b)
 print(b[::-1])
-print(a)''', 'np.sort (읽기 전용)', run_=False)],
+print(a)''', 'np.sort (▶ 실행해 보세요)', run_=False)],
     [T('`np.argsort(a)` 는 값이 아니라 **정렬했을 때 각 자리에 올 원래 인덱스**를 돌려줘요.\n'
        '`a = [30, 10, 50, 20]` 이면 가장 작은 10 은 1번, 다음 20 은 3번 … → `[1 3 0 2]`.\n'
        '이 인덱스로 **다른 배열**(이름)을 같은 순서로 줄 세울 수 있어요.'),
@@ -2168,7 +2168,7 @@ score = np.array([30, 10, 50, 20])
 idx = np.argsort(score)
 print(idx)
 print(names[idx])
-print(names[idx[::-1]])''', 'argsort 로 이름 정렬 (읽기 전용)', run_=False),
+print(names[idx[::-1]])''', 'argsort 로 이름 정렬 (▶ 실행해 보세요)', run_=False),
      EXAM('2025년엔 np.sort 내림차순(6점)과 argsort 로 이름 배열 정렬(15점)이 나왔어요.')])
 
 L.output('출력을 예측하세요.', '''\
@@ -2199,72 +2199,120 @@ idx = np.___(score)___
 print(names[idx])''', [['argsort'], ['[::-1]']],
     '`np.argsort(score)` 는 오름차순 인덱스 `[0 2 1]`, `[::-1]` 로 뒤집으면 `[1 2 0]` → 라, 시, 솔.', expect="['라' '시' '솔']")
 
-L.practice('[기출유사] 공연장 빈자리 찾기 (np.where 를 리스트로)',
+L.practice('[기출유사] 공연장 빈자리 찾기 (np.where)',
 '''공연장 좌석 상태가 주어져요. 첫 줄에 행 수 R, 이어서 R 줄에 좌석 상태(1 = 예약, 0 = 빈자리)가 공백으로 주어져요.
 
-numpy 의 `np.where(seat == 0)` 이 하는 일을 **순수 파이썬 리스트**로 직접 구현하세요. (사이트에선 numpy 가 실행되지 않아요)
+좌석을 **numpy 2차원 배열**로 만들고 `np.where` 로 빈자리를 찾으세요.
 
 **[조건]**
-- 좌석은 리스트의 리스트에 담아요.
-- 빈자리를 **행 우선**(위 행부터, 같은 행은 왼쪽부터)으로 찾아 `행 열` 을 한 줄씩 출력해요. (번호는 **1부터**)
-- 마지막 줄에 `빈자리 ○석` 을 출력해요. 빈자리가 없으면 `빈자리 0석` 만 출력해요.
+- `seat = np.array(리스트의 리스트)` 로 배열을 만들어요.
+- `r, c = np.where(seat == 0)` 으로 빈자리 위치를 구하고, 위치마다 `행 열` 을 한 줄씩 출력해요. (번호는 **1부터**, np.where 가 주는 순서 그대로)
+- 다음 줄에 `빈자리 ○석` 을 출력해요.
+- 마지막 줄에 `맨 뒷줄 빈자리 ○석` — 마지막 행 `seat[-1]` 에서 boolean 조건으로 개수를 세요.
+- 숫자는 `int()` 로 바꿔 출력해요(배열 표시 대신 깔끔한 숫자로).
 
 {ex}
 
 {ex2}''',
-'''r = int(input())
-seat = [list(map(int, input().split())) for _ in range(r)]
-cnt = 0
-# 빈자리 위치를 출력하세요
-print(f"빈자리 {cnt}석")''',
-'''r = int(input())
-seat = [list(map(int, input().split())) for _ in range(r)]   # list of list
-cnt = 0
-for i, row in enumerate(seat):          # 위 행부터
-    for j, v in enumerate(row):         # 왼쪽부터
-        if v == 0:                      # np.where(seat == 0) 과 같은 조건
-            print(i + 1, j + 1)         # 1부터 번호
-            cnt += 1
-print(f"빈자리 {cnt}석")''',
-    ['2\n1 0 1\n0 1 0', '3\n0 0\n1 1\n1 0'], ['1\n1 1 1', '1\n0', '3\n1 1 0 1\n0 1 1 1\n1 1 1 0'],
-    ['`seat = [list(map(int, input().split())) for _ in range(r)]` 는 스타터에 있어요.',
-     '`for i, row in enumerate(seat):` 안에 `for j, v in enumerate(row):`.',
-     '`if v == 0:` 이면 `print(i + 1, j + 1)` 하고 `cnt += 1`.'],
-    'numpy 로는 `r, c = np.where(seat == 0)` 한 줄이에요. np.where 도 행 우선으로 위치를 모으기 때문에 이 이중 for 문과 같은 순서가 나와요.')
+'''import numpy as np
+r = int(input())
+seat = np.array([list(map(int, input().split())) for _ in range(r)])
+# np.where 로 빈자리 위치를 찾아 출력하세요
+''',
+'''import numpy as np
+r = int(input())
+seat = np.array([list(map(int, input().split())) for _ in range(r)])   # 2차원 배열
+rows, cols = np.where(seat == 0)          # 빈자리의 (행 배열, 열 배열), 행 우선 순서
+for i, j in zip(rows, cols):              # 같은 순서끼리 짝지으면 한 칸의 위치
+    print(int(i) + 1, int(j) + 1)         # 1부터 번호
+print(f"빈자리 {len(rows)}석")
+back = int((seat[-1] == 0).sum())         # 마지막 행만 골라 True(=1) 개수 세기
+print(f"맨 뒷줄 빈자리 {back}석")''',
+    ['2\n1 0 1\n0 1 0', '3\n0 0\n1 1\n1 0'], ['1\n1 1 1', '1\n0', '3\n1 1 0 1\n0 1 1 1\n1 1 1 1'],
+    ['`rows, cols = np.where(seat == 0)` — 2차원이면 행 번호 배열과 열 번호 배열 두 개가 나와요.',
+     '`for i, j in zip(rows, cols):` 로 짝지어 `print(int(i) + 1, int(j) + 1)`. 빈자리 수는 `len(rows)`.',
+     '맨 뒷줄은 `seat[-1]`. `(seat[-1] == 0).sum()` 이 True 의 개수예요.'],
+    'np.where 는 **행 우선**(위 행 → 아래 행, 같은 행은 왼쪽 → 오른쪽)으로 위치를 모아요. 그래서 이중 for 문으로 찾은 순서와 같아요. `int()` 로 감싸면 numpy 정수도 보통 숫자처럼 깔끔하게 출력돼요.',
+    libs=['numpy'])
 
-L.practice('[기출유사] 기록순 이름 정렬 (argsort 를 리스트로)',
+L.practice('[기출유사] 기록순 이름 정렬 (np.sort·argsort)',
 '''달리기 기록 측정 결과예요. 첫 줄에 이름들, 둘째 줄에 기록(초, 정수)이 같은 순서로 공백 구분되어 주어져요. 기록은 모두 달라요.
 
-numpy 의 `np.argsort` 가 하는 일을 순수 파이썬으로 구현하세요.
+이름과 기록을 **numpy 배열**로 만들어 `np.sort` 와 `np.argsort` 로 처리하세요.
 
 **[조건]**
-- 1줄: `argsort: …` — 기록 **오름차순**으로 정렬했을 때의 원래 인덱스들 (`sorted(range(n), key=lambda i: …)`)
-- 2줄: `빠른 순: …` — 그 인덱스로 이름을 줄 세운 결과
-- 3줄: `느린 순: …` — 인덱스를 뒤집어(`[::-1]`) 줄 세운 결과
-- 4줄: `상위 3명 평균: ○` — 가장 빠른 3명(3명 미만이면 전원) 기록의 평균, 소수 첫째 자리 `f"{값:.1f}"`
+- 1줄: `기록 내림차순: …` — `np.sort(rec)[::-1]`
+- 2줄: `argsort: …` — `np.argsort(rec)` (기록 오름차순일 때의 원래 인덱스)
+- 3줄: `빠른 순: …` — 그 인덱스로 이름 배열을 줄 세운 결과 `names[idx]`
+- 4줄: `느린 순: …` — 인덱스를 뒤집어(`[::-1]`) 줄 세운 결과
+- 5줄: `상위 3명 평균: ○` — 가장 빠른 3명(3명 미만이면 전원) 기록의 평균, `f"{값:.1f}"`
+- 배열은 `tolist()` 나 `join` 으로 공백 구분해 출력해요.
 
 {ex}
 
 {ex2}''',
-'''names = input().split()
-rec = list(map(int, input().split()))
-n = len(names)
-idx = []   # argsort 결과를 만드세요
+'''import numpy as np
+names = np.array(input().split())
+rec = np.array(list(map(int, input().split())))
+# np.sort 와 np.argsort 를 써서 출력하세요
 ''',
-'''names = input().split()
-rec = list(map(int, input().split()))
-n = len(names)
-idx = sorted(range(n), key=lambda i: rec[i])        # 기록 오름차순 인덱스 (= np.argsort)
-print("argsort:", " ".join(map(str, idx)))
-print("빠른 순:", " ".join(names[i] for i in idx))   # 인덱스로 이름 줄 세우기
-print("느린 순:", " ".join(names[i] for i in idx[::-1]))
-top = [rec[i] for i in idx[:3]]                      # 가장 빠른 3명 (3명 미만이면 전원)
-print(f"상위 3명 평균: {sum(top) / len(top):.1f}")''',
+'''import numpy as np
+names = np.array(input().split())
+rec = np.array(list(map(int, input().split())))
+desc = np.sort(rec)[::-1]                     # 오름차순 정렬 후 뒤집기 = 내림차순
+print("기록 내림차순:", " ".join(map(str, desc.tolist())))
+idx = np.argsort(rec)                         # 기록 오름차순일 때의 원래 인덱스
+print("argsort:", " ".join(map(str, idx.tolist())))
+print("빠른 순:", " ".join(names[idx]))         # 인덱스 배열로 이름 줄 세우기
+print("느린 순:", " ".join(names[idx[::-1]]))
+top = rec[idx[:3]]                            # 가장 빠른 3명 (3명 미만이면 전원)
+print(f"상위 3명 평균: {top.mean():.1f}")''',
     ['A B C D\n42 35 50 38', '하늘 바다 산\n61 58 70'], ['solo\n99', '갑 을\n20 10', 'a b c d e f\n9 3 7 1 8 2'],
-    ['`sorted(range(n), key=lambda i: rec[i])` — 인덱스 0~n-1 을 **기록 기준으로** 정렬해요.',
-     '이름 줄 세우기: `" ".join(names[i] for i in idx)`.',
-     '`idx[:3]` 은 3명 미만이어도 오류 없이 있는 만큼만 잘라요.'],
-    'np.argsort 의 정체는 "인덱스를 값 기준으로 정렬한 것" 이에요. 그래서 `sorted(range(n), key=lambda i: rec[i])` 와 결과가 같아요. 이 인덱스 하나로 이름·기록 등 여러 배열을 같은 순서로 줄 세울 수 있어요.')
+    ['`np.sort(rec)` 는 오름차순 새 배열이에요. 내림차순 옵션이 없으니 `[::-1]` 로 뒤집어요.',
+     '`idx = np.argsort(rec)` 다음 `names[idx]` 처럼 **인덱스 배열을 [ ] 안에** 넣으면 그 순서로 줄을 세워요.',
+     '`rec[idx[:3]]` 로 가장 빠른 3명 기록을 고르고 `.mean()`. 3명 미만이어도 슬라이싱은 오류가 없어요.'],
+    'argsort 는 "값을 정렬했을 때 각 자리에 올 **원래 인덱스**" 예요. 이 인덱스 하나로 이름·기록처럼 짝지어진 여러 배열을 같은 순서로 줄 세울 수 있어요. 순수 파이썬으로는 `sorted(range(n), key=lambda i: rec[i])` 와 같은 결과예요.',
+    libs=['numpy'])
+
+L.practice('[기출유사] 학급 성적표 — 행·열 슬라이싱과 boolean indexing',
+'''학생들의 국어·영어·수학 점수표예요. 첫 줄에 학생 수 N, 이어서 N 줄에 한 학생의 `국어 영어 수학` 점수가 공백으로 주어져요. (학생 번호는 1번부터)
+
+점수표를 **numpy 2차원 배열**로 만들어 처리하세요.
+
+**[조건]**
+- 1줄: `수학 점수: …` — 마지막 열 `score[:, -1]`
+- 2줄: `마지막 학생: …` — 마지막 행 `score[-1]`
+- 3줄: `90점 이상 칸: ○개` — 표 전체에서 90 이상인 칸의 개수 (boolean 조건 + `sum()`)
+- 4줄: `수학 80 이상: …` — 수학이 80 이상인 학생 **번호**를 `np.where` 로 구해 공백 구분. 없으면 `없음`
+- 5줄: `60 미만 점수: …` — 60 미만인 점수 **값**들을 boolean indexing 으로 (행 순서대로). 없으면 `없음`
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+n = int(input())
+score = np.array([list(map(int, input().split())) for _ in range(n)])
+# 슬라이싱과 boolean indexing 으로 출력하세요
+''',
+'''import numpy as np
+n = int(input())
+score = np.array([list(map(int, input().split())) for _ in range(n)])   # N행 3열
+
+def show(arr):                                     # 배열을 공백 구분 글자로, 비면 "없음"
+    return " ".join(map(str, arr.tolist())) if len(arr) > 0 else "없음"
+
+print("수학 점수:", show(score[:, -1]))             # 모든 행의 마지막 열
+print("마지막 학생:", show(score[-1]))              # 마지막 행
+print(f"90점 이상 칸: {int((score >= 90).sum())}개")  # True 를 1 로 세기
+good = np.where(score[:, -1] >= 80)[0] + 1        # 1차원 where → 튜플의 [0], 번호는 +1
+print("수학 80 이상:", show(good))
+print("60 미만 점수:", show(score[score < 60]))     # 조건이 참인 칸의 값만 (행 순서)''',
+    ['3\n80 90 70\n60 75 95\n55 92 88', '2\n100 95 40\n70 65 79'], ['1\n50 50 50', '1\n90 90 90', '4\n59 60 61\n90 89 80\n0 100 79\n85 85 85'],
+    ['열 고르기는 `score[:, 열]`, 행 고르기는 `score[행]`. 마지막은 `-1`.',
+     '`(score >= 90).sum()` 은 True 의 개수예요. `np.where(score[:, -1] >= 80)[0]` 은 수학 80 이상인 **행 번호** 배열(0부터)이니 `+ 1`.',
+     '`score[score < 60]` 은 60 미만인 칸의 값을 행 순서대로 1차원으로 꺼내요. 빈 배열이면 `없음` 을 출력하도록 `len()` 으로 확인해요.'],
+    '같은 조건이라도 `score[조건]` 은 **값**, `np.where(조건)` 은 **위치**를 줘요. 배열에 숫자를 더하면(`+ 1`) 모든 칸에 더해지니 0번부터인 인덱스를 1번부터인 번호로 한 번에 바꿀 수 있어요.',
+    libs=['numpy'])
 
 L.essay('numpy 배열 `a` 에서 `a[a > 3 and a < 8]` 은 오류가 나요. 오류가 나는 **이유**와 올바르게 고친 코드를 서술하세요.',
     '`a > 3` 의 결과는 True/False 하나가 아니라 칸마다 True/False 가 들어 있는 배열이다. and 는 양쪽을 하나의 참/거짓으로 판단해야 하는데 배열은 여러 값이라 참인지 거짓인지 정할 수 없어 ValueError 가 발생한다. 배열의 칸별 논리곱은 & 를 쓰고 연산자 우선순위 때문에 각 조건을 괄호로 감싸 `a[(a > 3) & (a < 8)]` 로 써야 한다.',

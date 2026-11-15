@@ -5,7 +5,8 @@
 """
 import json, os, re, subprocess, sys, tempfile
 
-PY = sys.executable
+PY = os.environ.get('LOTC_PY') or sys.executable  # 사이트 Pyodide 0.26.4 와 같은 버전(numpy 1.26.4·pandas 2.2.0·sklearn 1.4.2, py3.12) 권장
+LIBRE = re.compile(r'^\s*(import|from)\s+(numpy|pandas|sklearn|scipy|matplotlib)\b', re.M)
 ERRORS = []
 
 
@@ -49,6 +50,9 @@ def CODE(code, title='', stdin='', run_=True, expect_error=False, files=None):
     b = {'type': 'code', 'code': code}
     if title: b['title'] = title
     if stdin: b['stdin'] = stdin
+    # V5.10.1: 사이트에서 numpy·pandas·sklearn·scipy·matplotlib 가 돌아가므로, 그 이유로만 막아 둔 코드는 실행 가능하게
+    if not run_ and not expect_error and not files and LIBRE.search(code) and 'seaborn' not in code:
+        run_ = True
     if not run_: b['run'] = False
     return b
 
@@ -234,7 +238,7 @@ class Lesson:
         return self._q('essay', q, '', review, model=model, rubric=rubric)
 
     def practice(self, title, body, starter, solution, inputs, hidden, hints, explanation,
-                 starter_may_pass=False, mode=None):
+                 starter_may_pass=False, mode=None, libs=None, after_last_practice=False):
         """inputs/hidden: 입력 문자열 목록. 출력은 solution 실행으로 생성.
         body 의 {ex} → 첫 공개 테스트 실행예시, {ex2} → 두 번째."""
         tests = []
@@ -266,8 +270,14 @@ class Lesson:
         if '{ex}' in body: body = body.replace('{ex}', ex(vis[0], 1))
         if '{ex2}' in body: body = body.replace('{ex2}', ex(vis[1], 2))
         if '{ex3}' in body: body = body.replace('{ex3}', ex(vis[2], 3))
-        self.steps.append({'type': 'practice', 'title': title, 'body': body, 'starter': starter,
-                           'tests': tests, 'hints': hints, 'solution': solution, 'explanation': explanation})
+        st = {'type': 'practice', 'title': title, 'body': body, 'starter': starter,
+              'tests': tests, 'hints': hints, 'solution': solution, 'explanation': explanation}
+        if libs: st['libs'] = libs
+        if after_last_practice:
+            idx = max([i for i, x in enumerate(self.steps) if x['type'] == 'practice'], default=len(self.steps) - 1)
+            self.steps.insert(idx + 1, st)
+        else:
+            self.steps.append(st)
         return self
 
     def check(self):
@@ -300,6 +310,11 @@ class Course:
                             f'{letter}단계에서는 ({scope_text})의 내용을 담았습니다. '
                             '개념은 L.O.T.C., 실전은 ACE 문제집을 풀어 공부해주세요!')
         self.lessons = []
+
+    def find(self, prefix):
+        for L in self.lessons:
+            if L.title.startswith(prefix): return L
+        raise KeyError(prefix)
 
     def lesson(self, title, minutes, summary):
         L = Lesson(self, title, minutes, summary)

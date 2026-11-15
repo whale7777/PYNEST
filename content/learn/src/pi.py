@@ -29,7 +29,8 @@ L.explain('이번 시험은 이렇게 나와요',
     [T('공부 순서는 이렇게 추천해요.\n\n'
        '1. 레슨 하나를 끝까지(복습 → 개념 → 확인 → 실습 → 서술).\n'
        '2. 손계산 문제는 **식을 먼저 쓰고** 숫자를 넣는 습관.\n'
-       '3. 사이트에서는 sklearn 이 실행되지 않으니, sklearn 코드는 **읽고 흐름을 외우고**, 계산은 순수 파이썬 실습으로 익혀요.'),
+       '3. sklearn 코드는 사이트에서 **▶ 실행**으로 바로 돌려 볼 수 있어요. 먼저 결과를 예측해 보고, 실행해서 확인하고, 숫자를 바꿔 다시 돌려 보세요.\n'
+       '4. 공식은 순수 파이썬 실습으로 원리를 익히고, 레슨마다 있는 **sklearn [기출유사] 실습**으로 코랩 코드에 익숙해져요.'),
      EXAM('서술형은 **핵심어**가 채점 기준이에요. "과적합", "일반화", "데이터 누수", "불균형" 같은 용어를 정확히 넣어 쓰세요.')])
 
 L.choice('이 시험(인공지능프로그래밍 2차)의 문항 형태에 대한 설명으로 가장 알맞은 것은?',
@@ -145,7 +146,7 @@ L.practice('[기출유사] 회귀 모델 채점기 — MSE 와 R²',
 - 첫째 줄: `MSE = (1/n) * Σ (y - ŷ)²` 를 **소수 둘째 자리**까지 반올림해 `MSE: 값` 으로 출력
 - 둘째 줄: `R² = 1 - Σ(y - ŷ)² / Σ(y - ȳ)²` (ȳ 는 실제값의 평균)를 **소수 셋째 자리**까지 반올림해 `R2: 값` 으로 출력
 - 반올림은 `round()` 를 써요. 실제값이 모두 같은 경우는 주어지지 않아요.
-- numpy·sklearn 없이 계산하세요.
+- 공식을 익히는 연습이라 numpy·sklearn 없이 직접 계산하세요. (sklearn 으로 하는 실습은 뒤에 있어요.)
 
 {ex}
 
@@ -483,7 +484,7 @@ L.practice('[기출유사] 혼동행렬과 지표 계산',
 - 첫째 줄에 `TP=? FP=? FN=? TN=?` 형식으로 출력
 - 다음 네 줄에 정확도, 정밀도, 재현율, F1 을 `이름 값` 형식으로 출력. 값은 `f"{v:.2f}"`
 - 분모가 0 이 되는 지표는 0 으로 해요. (예: 1 로 예측한 것이 없으면 정밀도 0)
-- sklearn 없이 직접 세어 계산하세요.
+- 원리를 익히는 연습이라 sklearn 없이 직접 세어 계산하세요. (sklearn 판은 바로 다음 실습!)
 
 {ex}
 
@@ -1013,7 +1014,7 @@ L.practice('[기출유사] KNN 직접 구현하기',
 - 거리가 가까운 순으로 k 개를 골라요. 거리가 같으면 **먼저 입력된 점**이 앞이에요.
 - 첫째 줄: `이웃:` 뒤에 고른 k 개의 클래스를 가까운 순서로 공백으로 출력
 - 둘째 줄: `예측:` 뒤에 k 개 중 가장 많은 클래스 출력 (클래스는 2종류, k 는 홀수라 동점은 없어요)
-- sklearn 없이 구현하세요.
+- 원리를 익히는 연습이라 sklearn 없이 구현하세요. (sklearn 판은 다음 실습!)
 
 {ex}
 
@@ -1612,7 +1613,7 @@ L.practice('[기출유사] 원-핫 인코딩 직접 하기',
 - 범주(열) 순서는 서로 다른 값을 **사전순** 정렬한 순서예요.
 - 첫째 줄: `열:` 뒤에 범주들을 공백으로 이어 출력
 - 다음 줄부터 응답마다 `응답 -> 0 1 0` 처럼 출력 (해당 범주 자리만 1)
-- pandas 없이 만드세요.
+- 원리를 익히는 연습이라 pandas·sklearn 없이 만드세요. (OneHotEncoder 판은 뒤에 있어요.)
 
 {ex}
 
@@ -1865,6 +1866,538 @@ print("추천 깊이:", best_d)''',
 L.essay('편향-분산 트레이드오프를 설명하고, 결정트리의 max_depth 를 예로 들어 서술하세요.',
     '편향은 모델이 너무 단순해 데이터의 패턴을 제대로 잡지 못해 생기는 오차이고, 분산은 모델이 학습 데이터의 작은 변화나 잡음에 너무 민감해 생기는 오차이다. 모델을 복잡하게 하면 편향은 줄지만 분산이 커지고, 단순하게 하면 그 반대가 되어 둘을 동시에 줄이기 어렵다. 결정트리에서 max_depth 가 너무 작으면 편향이 커 과소적합되고, 너무 크면 분산이 커 과적합된다. 따라서 교차검증으로 테스트(검증) 성능이 가장 좋은 깊이를 고른다.',
     ['편향 = 너무 단순해서 생기는 오차', '분산 = 데이터에 너무 민감해서 생기는 오차', '복잡도 ↑ → 편향 ↓ 분산 ↑', 'max_depth 작음 → 과소적합, 큼 → 과적합', '교차검증으로 적절한 값 선택'])
+
+# =====================================================================
+# V5.10.1: 사이트에서 sklearn 이 실행되므로, 레슨마다 실제 sklearn 을 쓰는 [기출유사] 실습 추가
+# (after_last_practice=True → 그 레슨의 마지막 실습 바로 뒤, essay 앞에 들어감)
+
+L = C.find('π-01')
+L.practice('[기출유사] StandardScaler 로 표준화하기 (sklearn)',
+'''코랩에서 하던 그대로 `StandardScaler` 를 써 봐요. 첫째 줄에 **학습 데이터**, 둘째 줄에 **테스트 데이터**의 공부 시간(분)이 공백으로 주어져요.
+
+**[조건]**
+- `from sklearn.preprocessing import StandardScaler` 를 써요. sklearn 은 입력을 **2차원**(행 = 데이터, 열 = 특성)으로 받으니 `[[30], [60], …]` 모양으로 만들어요.
+- 스케일러는 **학습 데이터로만 `fit`** 하고, 테스트 데이터는 `transform` 만 해요.
+- 첫째 줄: `평균 값 표준편차 값` — `sc.mean_[0]`, `sc.scale_[0]` 을 `round(float(값), 2)` 로
+- 둘째 줄: 변환한 테스트 값들을 `f"{v:.2f}"` 로 공백으로 이어 출력
+- 학습 데이터는 2개 이상이고 값이 모두 같지는 않아요.
+
+{ex}
+
+{ex2}''',
+'''from sklearn.preprocessing import StandardScaler
+train = [[float(v)] for v in input().split()]   # 2차원 모양으로
+test = [[float(v)] for v in input().split()]
+# 학습 데이터로만 fit 하고, 테스트는 transform 하세요
+''',
+'''from sklearn.preprocessing import StandardScaler
+train = [[float(v)] for v in input().split()]   # 2차원 모양으로
+test = [[float(v)] for v in input().split()]
+sc = StandardScaler()
+sc.fit(train)                     # 학습 데이터로만 평균·표준편차 구하기
+print("평균", round(float(sc.mean_[0]), 2), "표준편차", round(float(sc.scale_[0]), 2))
+z = sc.transform(test)            # 테스트는 transform 만!
+print(" ".join(f"{v:.2f}" for v in z[:, 0]))   # 0번 열(유일한 특성)''',
+    ['30 60 90 120\n45 120', '10 20 30\n40 0 25'],
+    ['1 3\n2', '5 5 5 9\n5 9 13', '-10 0 10 20 30\n-20 100'],
+    ['`sc = StandardScaler()` 를 만들고 `sc.fit(train)`',
+     '`z = sc.transform(test)` — 결과는 2차원 배열이라 `z[:, 0]` 이 변환된 값들이에요.',
+     '평균·표준편차는 `sc.mean_[0]`, `sc.scale_[0]`. 출력은 `round(float(...), 2)`'],
+    'sklearn 의 표준편차는 **n 으로 나누는**(모표준편차) 방식이에요. 테스트 값이 학습 범위 밖이면 z 가 1 보다 훨씬 커질 수도 있어요. 테스트로 fit 하지 않았기 때문에 생기는 **정상적인** 결과예요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-02')
+L.practice('[기출유사] LogisticRegression 학습하고 임계값 정하기 (sklearn)',
+'''공부 시간으로 합격 여부를 예측하는 로지스틱 회귀를 **직접 학습**시켜요. 첫째 줄에 학습 데이터 수 n, 다음 n 줄에 `공부시간 합격(0/1)`, 그다음 줄에 예측할 공부 시간들, 마지막 줄에 임계값이 주어져요.
+
+**[조건]**
+- `LogisticRegression()` (기본 설정)으로 `fit` 해요. X 는 `[[시간], …]` 2차원이에요.
+- 첫째 줄: `predict: ` 뒤에 `model.predict(...)` 결과를 `.tolist()` 로 출력 (기본 임계값 0.5)
+- 다음 줄부터 시간마다 `시간 확률 판정` — 시간은 `f"{q:g}"`, 확률은 `predict_proba(...)[:, 1]` 을 `f"{p:.3f}"`, 판정은 **입력한 임계값 이상**이면 `합격`, 아니면 `불합격`
+- 학습 데이터에는 0 과 1 이 모두 있어요.
+
+{ex}
+
+{ex2}''',
+'''from sklearn.linear_model import LogisticRegression
+n = int(input())
+X, y = [], []
+for _ in range(n):
+    h, c = input().split()
+    X.append([float(h)])
+    y.append(int(c))
+qs = list(map(float, input().split()))
+t = float(input())
+# 모델을 학습하고 확률과 판정을 출력하세요
+''',
+'''from sklearn.linear_model import LogisticRegression
+n = int(input())
+X, y = [], []
+for _ in range(n):
+    h, c = input().split()
+    X.append([float(h)])
+    y.append(int(c))
+qs = list(map(float, input().split()))
+t = float(input())
+model = LogisticRegression()
+model.fit(X, y)                              # 학습
+Q = [[q] for q in qs]                        # 예측할 데이터도 2차원
+print("predict:", model.predict(Q).tolist()) # 기본 임계값 0.5
+proba = model.predict_proba(Q)[:, 1]         # 클래스 1 일 확률
+for q, p in zip(qs, proba):
+    print(f"{q:g}", f"{p:.3f}", "합격" if p >= t else "불합격")''',
+    ['6\n1 0\n2 0\n3 0\n4 1\n5 1\n6 1\n2.5 3.5 5\n0.5', '6\n1 0\n2 0\n3 0\n4 1\n5 1\n6 1\n2.5 3.5 5\n0.3'],
+    ['2\n0 0\n10 1\n5\n0.5', '8\n1 0\n2 0\n3 1\n4 0\n5 1\n6 0\n7 1\n8 1\n0 4.5 9\n0.7', '4\n10 1\n20 1\n30 0\n40 0\n15 35\n0.5'],
+    ['`model = LogisticRegression()` → `model.fit(X, y)`',
+     '예측할 시간도 `[[q] for q in qs]` 로 2차원으로 만들어요. `predict_proba(Q)[:, 1]` 이 클래스 1 확률이에요.',
+     '판정은 `"합격" if p >= t else "불합격"`'],
+    '두 예시는 같은 모델이에요. 임계값을 0.3 으로 낮추면 확률 0.3 대인 2.5시간도 합격이 돼요. `predict` 는 언제나 0.5 기준이라 임계값을 바꾸려면 **`predict_proba` 로 직접 판정**해야 해요. 마지막 숨은 테스트처럼 시간이 많을수록 불합격인 데이터면 기울기가 음수로 학습돼요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-03')
+L.practice('[기출유사] sklearn 지표 함수로 채점하기',
+'''앞 실습과 같은 입력을 **sklearn 지표 함수**로 계산해 봐요. 첫째 줄에 실제 정답, 둘째 줄에 예측값(0/1)이 공백으로 주어져요.
+
+**[조건]**
+- `confusion_matrix`, `accuracy_score`, `precision_score`, `recall_score`, `f1_score` 를 `sklearn.metrics` 에서 불러와요. 인자 순서는 **(실제, 예측)**.
+- 혼동행렬은 `labels=[0, 1]` 을 줘서 항상 2×2 로 만들고, 첫째 줄에 `.tolist()` 로 출력
+- 둘째 줄: `TN=? FP=? FN=? TP=?`
+- 다음 네 줄: `정확도`, `정밀도`, `재현율`, `F1` 과 값(`f"{v:.2f}"`). 정밀도·재현율·F1 은 `zero_division=0` 을 줘요.
+
+{ex}
+
+{ex2}''',
+'''from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+y = list(map(int, input().split()))
+p = list(map(int, input().split()))
+# 혼동행렬과 지표를 출력하세요
+''',
+'''from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+y = list(map(int, input().split()))
+p = list(map(int, input().split()))
+cm = confusion_matrix(y, p, labels=[0, 1])    # 행 = 실제, 열 = 예측
+print(cm.tolist())
+(tn, fp), (fn, tp) = cm.tolist()               # [[TN, FP], [FN, TP]]
+print(f"TN={tn} FP={fp} FN={fn} TP={tp}")
+print("정확도", f"{accuracy_score(y, p):.2f}")
+print("정밀도", f"{precision_score(y, p, zero_division=0):.2f}")
+print("재현율", f"{recall_score(y, p, zero_division=0):.2f}")
+print("F1", f"{f1_score(y, p, zero_division=0):.2f}")''',
+    ['1 0 1 1 0 0 1 0 1 0\n1 0 0 1 1 0 1 0 0 0', '0 0 0 0 1\n0 0 0 0 0'],
+    ['1 1 1\n1 1 1', '0 1 0 1\n1 0 1 0', '0 0 0\n0 0 0'],
+    ['`cm = confusion_matrix(y, p, labels=[0, 1])` — 순서는 (실제, 예측)!',
+     '`(tn, fp), (fn, tp) = cm.tolist()` 로 네 칸을 한 번에 풀어요.',
+     '`precision_score(y, p, zero_division=0)` 처럼 분모가 0 일 때의 값을 정해 줘요.'],
+    '`labels=[0, 1]` 이 없으면 숨은 테스트 `1 1 1 / 1 1 1` 처럼 한 클래스만 있을 때 혼동행렬이 1×1 로 나와 네 칸으로 풀 수 없어요. `zero_division=0` 이 없으면 경고가 나와요. 결과는 앞의 직접 계산 실습과 똑같아요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-04')
+L.practice('[기출유사] roc_auc_score 와 임계값 표 (sklearn + numpy)',
+'''모델이 낸 양성 확률로 AUC 를 구하고, 임계값 몇 개에서 재현율·정밀도가 어떻게 바뀌는지 표로 만들어요. 첫째 줄에 실제(0/1), 둘째 줄에 확률, 셋째 줄에 임계값 후보들이 주어져요.
+
+**[조건]**
+- 첫째 줄: `AUC 값` — `roc_auc_score(실제, 확률)` 을 `f"{v:.3f}"`
+- 임계값 t 마다 numpy 로 `pred = (s >= t).astype(int)` 를 만들고 한 줄에 출력:
+  `t=값 양성예측=개수 재현율 값 정밀도 값` (재현율·정밀도는 `f"{v:.2f}"`, 정밀도는 `zero_division=0`)
+- 양성 개수는 `int(pred.sum())`. 실제 0 과 1 은 각각 1개 이상 있어요.
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+from sklearn.metrics import roc_auc_score, precision_score, recall_score
+y = np.array(list(map(int, input().split())))
+s = np.array(list(map(float, input().split())))
+ts = list(map(float, input().split()))
+# AUC 와 임계값별 재현율·정밀도를 출력하세요
+''',
+'''import numpy as np
+from sklearn.metrics import roc_auc_score, precision_score, recall_score
+y = np.array(list(map(int, input().split())))
+s = np.array(list(map(float, input().split())))
+ts = list(map(float, input().split()))
+print("AUC", f"{roc_auc_score(y, s):.3f}")        # 확률(점수)을 넣어요
+for t in ts:
+    pred = (s >= t).astype(int)                     # 임계값 이상이면 1
+    rec = recall_score(y, pred)
+    prec = precision_score(y, pred, zero_division=0)
+    print(f"t={t} 양성예측={int(pred.sum())} 재현율 {rec:.2f} 정밀도 {prec:.2f}")''',
+    ['1 0 1 0 1 0\n0.9 0.8 0.7 0.4 0.35 0.1\n0.3 0.5 0.75', '0 0 1 1\n0.1 0.4 0.35 0.8\n0.5'],
+    ['1 0\n0.6 0.4\n0.5 0.9', '1 1 0 0\n0.2 0.3 0.7 0.9\n0.1 0.5', '0 1 0 1 1 0 1 0\n0.05 0.95 0.5 0.6 0.55 0.45 0.3 0.2\n0.25 0.5 0.58'],
+    ['`roc_auc_score(y, s)` — 두 번째 인자는 0/1 이 아니라 **확률**이에요.',
+     '`(s >= t)` 는 True/False 배열이고 `.astype(int)` 로 0/1 이 돼요.',
+     '`recall_score(y, pred)`, `precision_score(y, pred, zero_division=0)`'],
+    '임계값이 커질수록 `양성예측` 개수가 줄고 재현율은 절대 늘지 않아요. AUC 는 임계값 표와 상관없이 **한 값**이에요. 숨은 테스트 `1 1 0 0 / 0.2 0.3 0.7 0.9` 는 순위가 완전히 거꾸로라 AUC 가 0 이에요.',
+    libs=['sklearn', 'numpy'], after_last_practice=True)
+
+L = C.find('π-05')
+L.practice('[기출유사] sklearn KFold 로 인덱스 나누기',
+'''앞에서 직접 만든 K-Fold 를 이번엔 `KFold` 로 해 봐요. 한 줄에 `n k s` 가 주어져요. s 가 1 이면 섞어서, 0 이면 섞지 않고 나눠요.
+
+**[조건]**
+- `X = np.arange(n)` 을 나눠요.
+- s 가 0 이면 `KFold(n_splits=k)`, 1 이면 `KFold(n_splits=k, shuffle=True, random_state=0)`
+- 조각마다 `fold 번호: 검증=[인덱스 리스트] 학습개수=값` — 검증 인덱스는 `.tolist()` 로 출력
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+from sklearn.model_selection import KFold
+n, k, s = map(int, input().split())
+X = np.arange(n)
+# KFold 로 나눠서 출력하세요
+''',
+'''import numpy as np
+from sklearn.model_selection import KFold
+n, k, s = map(int, input().split())
+X = np.arange(n)
+if s == 1:
+    kf = KFold(n_splits=k, shuffle=True, random_state=0)   # 섞기 + 결과 고정
+else:
+    kf = KFold(n_splits=k)                                  # 앞에서부터 순서대로
+for i, (tr, te) in enumerate(kf.split(X), 1):              # (학습 인덱스, 검증 인덱스)
+    print(f"fold {i}: 검증={te.tolist()} 학습개수={len(tr)}")''',
+    ['10 3 0', '10 3 1'], ['5 5 0', '6 2 1', '7 3 0'],
+    ['`kf.split(X)` 는 조각마다 `(train_idx, test_idx)` 를 돌려줘요.',
+     '`enumerate(kf.split(X), 1)` 로 번호를 1부터 매겨요.',
+     '`te.tolist()` 로 numpy 배열을 리스트 모양으로 출력해요.'],
+    '섞지 않으면 앞 실습의 직접 구현과 결과가 똑같아요. 섞으면 인덱스가 뒤섞이지만 **조각 크기(4, 3, 3)** 는 그대로이고, `random_state=0` 덕분에 몇 번을 실행해도 같은 결과가 나와요.',
+    libs=['sklearn', 'numpy'], after_last_practice=True)
+
+L.practice('[기출유사] Pipeline + cross_val_score 로 k 고르기 (붓꽃)',
+'''붓꽃 데이터(`load_iris`)에서 KNN 의 k 를 교차검증으로 골라요. 첫째 줄에 k 후보들, 둘째 줄에 cv(조각 수)가 주어져요.
+
+**[조건]**
+- 모델은 `make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k))` — 스케일링을 파이프라인 안에 넣어 **데이터 누수**를 막아요.
+- `cross_val_score(pipe, X, y, cv=cv)` 의 평균을 후보마다 `k=값 평균 값` 으로 출력 (`f"{m:.3f}"`)
+- 마지막 줄: `최적 k: 값` — 평균이 가장 높은 k, 같으면 **먼저 나온** k
+
+{ex}
+
+{ex2}''',
+'''from sklearn.datasets import load_iris
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+X, y = load_iris(return_X_y=True)
+ks = list(map(int, input().split()))
+cv = int(input())
+# k 마다 교차검증 평균을 구하세요
+''',
+'''from sklearn.datasets import load_iris
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+X, y = load_iris(return_X_y=True)
+ks = list(map(int, input().split()))
+cv = int(input())
+best_k, best = None, -1
+for k in ks:
+    pipe = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k))
+    scores = cross_val_score(pipe, X, y, cv=cv)   # 조각마다 정확도
+    m = scores.mean()
+    print(f"k={k} 평균 {m:.3f}")
+    if m > best:                                  # 동점이면 먼저 나온 k 유지
+        best_k, best = k, m
+print("최적 k:", best_k)''',
+    ['1 5 15\n5', '3 7\n3'], ['9\n5', '1 3 5 7 9\n10', '50 100\n5'],
+    ['후보마다 `make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=k))` 를 새로 만들어요.',
+     '`cross_val_score(pipe, X, y, cv=cv)` 는 점수 배열이고 `.mean()` 이 평균이에요.',
+     '최댓값 찾기는 `if m > best:` — 동점이면 먼저 나온 k 가 남아요.'],
+    '이게 GridSearchCV 가 속에서 하는 일이에요. 분류 모델에 `cv=숫자` 를 주면 StratifiedKFold 로 나눠요. k 를 50, 100 처럼 크게 잡으면(숨은 테스트) 이웃이 다른 품종까지 섞여 점수가 뚝 떨어져요 — 과소적합이에요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-06')
+L.practice('[기출유사] KNeighborsClassifier 로 동아리 분류 (sklearn)',
+'''앞 실습의 KNN 을 `KNeighborsClassifier` 로 해 봐요. 첫째 줄에 학습 데이터 수 n, 다음 n 줄에 `x y 클래스`, 그다음 줄에 k, 그다음 줄에 새 점 수 m, 다음 m 줄에 새 점 `x y` 가 주어져요.
+
+**[조건]**
+- `KNeighborsClassifier(n_neighbors=k)` 로 `fit` 하고 새 점들을 한꺼번에 `predict`, `predict_proba` 해요.
+- 새 점마다 `(x, y) -> 클래스 (득표율 값)` 형식으로 출력. 좌표는 `f"{v:g}"`, 득표율은 그 점의 `predict_proba` 행의 **최댓값**을 `f"{v:.2f}"`
+- 거리가 같은 이웃이 생기는 입력은 주어지지 않아요.
+
+{ex}
+
+{ex2}''',
+'''from sklearn.neighbors import KNeighborsClassifier
+n = int(input())
+X, y = [], []
+for _ in range(n):
+    a, b, c = input().split()
+    X.append([float(a), float(b)])
+    y.append(c)
+k = int(input())
+m = int(input())
+Q = [list(map(float, input().split())) for _ in range(m)]
+# 학습하고 새 점들을 분류하세요
+''',
+'''from sklearn.neighbors import KNeighborsClassifier
+n = int(input())
+X, y = [], []
+for _ in range(n):
+    a, b, c = input().split()
+    X.append([float(a), float(b)])
+    y.append(c)
+k = int(input())
+m = int(input())
+Q = [list(map(float, input().split())) for _ in range(m)]
+knn = KNeighborsClassifier(n_neighbors=k)
+knn.fit(X, y)                       # KNN 의 fit 은 저장만
+pred = knn.predict(Q)               # 다수결 결과
+proba = knn.predict_proba(Q)        # 클래스별 득표 비율
+for q, c, pr in zip(Q, pred, proba):
+    print(f"({q[0]:g}, {q[1]:g}) -> {c} (득표율 {pr.max():.2f})")''',
+    ['6\n1 1 A\n2 1 A\n1 2 A\n6 6 B\n7 6 B\n6 7 B\n3\n2\n2 2\n5.5 5', '5\n0 0 X\n4 0 O\n0 4 O\n3 3 X\n5 5 O\n3\n1\n2.2 1.9'],
+    ['3\n0 0 A\n10 10 B\n1 1 A\n1\n1\n9 9', '5\n1 1 A\n2 2 A\n8 8 B\n9 9 B\n10 10 B\n5\n2\n0 0\n9.5 9',
+     '7\n0 0 R\n1 0 R\n0 1 G\n5 5 G\n6 5 B\n5 6 B\n9 9 B\n3\n3\n0.2 0.1\n5.4 5.3\n8 8.5'],
+    ['`knn = KNeighborsClassifier(n_neighbors=k)` → `knn.fit(X, y)`',
+     '`knn.predict(Q)` 는 클래스, `knn.predict_proba(Q)` 는 행마다 클래스별 비율이에요.',
+     '`zip(Q, pred, proba)` 로 함께 돌고 `pr.max()` 가 이긴 클래스의 득표율이에요.'],
+    'k = 3 이면 득표율은 0.33·0.67·1.00 중 하나예요. 숨은 테스트처럼 k 를 전체 개수(5)로 두면 어디든 다수 클래스(B, 0.60)가 나와요. 클래스 이름이 문자열이어도 sklearn 이 알아서 처리해요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-07')
+L.practice('[기출유사] GaussianNB 로 과일 분류하기 (sklearn)',
+'''무게(g)와 당도로 과일을 분류하는 나이브 베이즈를 학습해요. 첫째 줄에 학습 데이터 수 n, 다음 n 줄에 `무게 당도 과일`, 그다음 줄에 새 과일 수 m, 다음 m 줄에 `무게 당도` 가 주어져요.
+
+**[조건]**
+- 특성이 연속값이라 `GaussianNB()` 를 써요.
+- 첫째 줄: `사전확률:` 뒤에 `과일=값` 들을 공백으로 출력 — `model.classes_` 순서(사전순), 값은 `model.class_prior_` 를 `f"{v:.2f}"`
+- 새 과일마다 `무게 당도 -> 과일 (확률 값)` — 무게·당도는 `f"{v:g}"`, 확률은 `predict_proba` 행의 최댓값 `f"{v:.3f}"`
+- 과일마다 학습 데이터가 2개 이상이에요.
+
+{ex}
+
+{ex2}''',
+'''from sklearn.naive_bayes import GaussianNB
+n = int(input())
+X, y = [], []
+for _ in range(n):
+    w, s, c = input().split()
+    X.append([float(w), float(s)])
+    y.append(c)
+m = int(input())
+Q = [list(map(float, input().split())) for _ in range(m)]
+# 학습하고 사전확률과 예측을 출력하세요
+''',
+'''from sklearn.naive_bayes import GaussianNB
+n = int(input())
+X, y = [], []
+for _ in range(n):
+    w, s, c = input().split()
+    X.append([float(w), float(s)])
+    y.append(c)
+m = int(input())
+Q = [list(map(float, input().split())) for _ in range(m)]
+model = GaussianNB()
+model.fit(X, y)                                   # 클래스별 평균·분산 + 사전확률 계산
+pri = [f"{c}={p:.2f}" for c, p in zip(model.classes_, model.class_prior_)]
+print("사전확률:", " ".join(pri))
+for q, c, pr in zip(Q, model.predict(Q), model.predict_proba(Q)):
+    print(f"{q[0]:g} {q[1]:g} -> {c} (확률 {pr.max():.3f})")''',
+    ['6\n150 10 사과\n160 11 사과\n170 12 사과\n110 14 귤\n100 13 귤\n90 15 귤\n2\n155 11\n120 13',
+     '5\n300 8 배\n320 9 배\n100 14 귤\n110 13 귤\n90 15 귤\n1\n200 11'],
+    ['4\n1 1 A\n2 2 A\n9 9 B\n10 10 B\n1\n5.5 5.5', '6\n10 5 X\n12 6 X\n11 5 X\n30 6 Y\n31 5 Y\n50 20 Z\n2\n11 5\n40 12',
+     '7\n150 10 사과\n165 11 사과\n110 14 귤\n100 13 귤\n95 15 귤\n105 14 귤\n115 12 귤\n2\n140 12\n100 14'],
+    ['`model = GaussianNB()` → `model.fit(X, y)`',
+     '`zip(model.classes_, model.class_prior_)` 로 클래스와 사전확률을 짝지어요.',
+     '`model.predict(Q)` 와 `model.predict_proba(Q)` 를 `zip` 으로 함께 돌아요.'],
+    '`class_prior_` 는 학습 데이터의 클래스 비율 = 사전확률 P(C) 예요. GaussianNB 는 클래스마다 특성의 평균·분산으로 정규분포를 만들어 P(x|C) 를 계산하고, 사전확률과 곱해 가장 큰 클래스를 골라요. 숨은 테스트 `5.5 5.5` 처럼 두 클래스의 딱 중간이면 확률이 0.5 가 돼요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-08')
+L.practice('[기출유사] DecisionTreeClassifier 깊이별 정확도 (유방암 데이터)',
+'''유방암 데이터(`load_breast_cancer`)로 결정트리의 깊이를 바꿔 가며 과적합을 확인해요. 한 줄에 시험할 `max_depth` 값들이 공백으로 주어져요(`None` 은 제한 없음).
+
+**[조건]**
+- `train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)` 로 나눠요.
+- 깊이마다 `DecisionTreeClassifier(max_depth=d, random_state=0)` 를 학습하고
+  `깊이 값: 학습 정확도 테스트 정확도 실제깊이 값` 형식으로 출력 (정확도는 `score` 를 `f"{v:.3f}"`, 실제깊이는 `get_depth()`)
+- 마지막 줄: `추천 깊이: 값` — 테스트 정확도가 가장 높은 깊이, 같으면 **먼저 나온** 값
+
+{ex}
+
+{ex2}''',
+'''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+depths = input().split()
+# 깊이마다 학습/테스트 정확도를 출력하세요
+''',
+'''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+depths = input().split()
+best_d, best = None, -1
+for tok in depths:
+    d = None if tok == "None" else int(tok)      # "None" 은 깊이 제한 없음
+    tree = DecisionTreeClassifier(max_depth=d, random_state=0)
+    tree.fit(X_tr, y_tr)
+    tr = tree.score(X_tr, y_tr)                   # 학습 정확도
+    te = tree.score(X_te, y_te)                   # 테스트 정확도
+    print(f"깊이 {tok}: 학습 {tr:.3f} 테스트 {te:.3f} 실제깊이 {tree.get_depth()}")
+    if te > best:
+        best_d, best = tok, te
+print("추천 깊이:", best_d)''',
+    ['1 3 None', '2 4 6 8'], ['5', '1 2', '3 None 10'],
+    ['`d = None if tok == "None" else int(tok)` 로 바꿔요.',
+     '`tree.score(X_tr, y_tr)` 가 학습 정확도, `tree.score(X_te, y_te)` 가 테스트 정확도예요.',
+     '`tree.get_depth()` 는 실제로 자란 깊이예요. 최댓값은 `if te > best:` 로 찾아요.'],
+    '`None` 이나 큰 깊이에서는 학습 정확도가 1.000 이 되지만 테스트는 오히려 낮아요(과적합). `max_depth=10` 을 줘도 실제깊이가 그보다 작을 수 있어요 — 리프가 모두 순수해지면 더 나눌 게 없거든요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-09')
+L.practice('[기출유사] 모델 비교표: 트리·랜덤포레스트·SVM·보팅 (sklearn)',
+'''유방암 데이터로 여러 분류 모델의 테스트 정확도를 비교해요. 한 줄에 비교할 모델 이름이 공백으로 주어져요.
+
+**[조건]** 이름과 모델은 아래와 같아요(모두 `random_state=0` 이 있는 건 그대로).
+- `tree`: `DecisionTreeClassifier(random_state=0)`
+- `rf`: `RandomForestClassifier(n_estimators=100, random_state=0)`
+- `svm`: `make_pipeline(StandardScaler(), SVC())`
+- `knn`: `make_pipeline(StandardScaler(), KNeighborsClassifier())`
+- `vote`: `VotingClassifier([("tree", 트리), ("svm", SVM 파이프라인), ("knn", KNN 파이프라인)], voting="hard")`
+- 나누기는 `train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)`
+- 모델마다 `이름 정확도` (`f"{v:.3f}"`), 마지막 줄에 `최고: 이름` (같으면 먼저 나온 것)
+
+{ex}
+
+{ex2}''',
+'''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+names = input().split()
+# 이름에 맞는 모델을 만들어 비교하세요
+''',
+'''from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)
+names = input().split()
+
+def make(name):                       # 이름 → 새 모델
+    if name == "tree":
+        return DecisionTreeClassifier(random_state=0)
+    if name == "rf":
+        return RandomForestClassifier(n_estimators=100, random_state=0)
+    if name == "svm":
+        return make_pipeline(StandardScaler(), SVC())       # SVM 은 스케일링 필수
+    if name == "knn":
+        return make_pipeline(StandardScaler(), KNeighborsClassifier())
+    if name == "vote":                                       # 하드 보팅 앙상블
+        return VotingClassifier([("tree", make("tree")), ("svm", make("svm")), ("knn", make("knn"))], voting="hard")
+
+best_name, best = "", -1
+for name in names:
+    model = make(name)
+    model.fit(X_tr, y_tr)
+    acc = model.score(X_te, y_te)
+    print(name, f"{acc:.3f}")
+    if acc > best:
+        best_name, best = name, acc
+print("최고:", best_name)''',
+    ['tree rf', 'svm knn vote'], ['tree', 'vote tree', 'rf svm knn tree'],
+    ['이름을 받아 모델을 돌려주는 함수 `make(name)` 을 만들면 깔끔해요.',
+     'SVM·KNN 은 `make_pipeline(StandardScaler(), 모델)` 로 스케일링을 묶어요.',
+     '`VotingClassifier([("이름", 모델), …], voting="hard")` — 리스트 안에 (이름, 모델) 튜플을 넣어요.'],
+    '트리 한 그루보다 랜덤포레스트가 높게 나와요(배깅으로 분산 ↓). 보팅은 서로 다른 모델의 다수결이라 가장 약한 트리를 보완해요. 단, 앙상블이 **항상** 최고인 건 아니라는 점도 결과에서 확인해 보세요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-10')
+L.practice('[기출유사] OneHotEncoder 로 원-핫 인코딩 (sklearn)',
+'''앞 실습의 원-핫을 sklearn `OneHotEncoder` 로 해 봐요. 첫째 줄에 **학습 데이터**의 범주, 둘째 줄에 **테스트 데이터**의 범주가 공백으로 주어져요. 테스트에는 학습 때 못 본 범주가 있을 수도 있어요.
+
+**[조건]**
+- `OneHotEncoder(handle_unknown="ignore", sparse_output=False)` 를 **학습 데이터로만 fit** 해요. 입력은 `[["red"], ["blue"], …]` 2차원이에요.
+- 첫째 줄: `열:` 뒤에 `enc.categories_[0]` 의 범주들을 공백으로 출력
+- 다음 줄부터 테스트 값마다 `값 -> 0 1 0` (변환 결과를 `astype(int)` 로 정수로)
+
+{ex}
+
+{ex2}''',
+'''from sklearn.preprocessing import OneHotEncoder
+train = [[v] for v in input().split()]
+test = [[v] for v in input().split()]
+# 학습 데이터로 fit 하고 테스트를 변환하세요
+''',
+'''from sklearn.preprocessing import OneHotEncoder
+train = [[v] for v in input().split()]
+test = [[v] for v in input().split()]
+enc = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+enc.fit(train)                                    # 범주 목록은 학습 데이터에서만
+print("열:", " ".join(enc.categories_[0].tolist()))
+rows = enc.transform(test).astype(int).tolist()   # 처음 보는 범주 → 모두 0
+for v, row in zip(test, rows):
+    print(v[0], "->", " ".join(map(str, row)))''',
+    ['red blue green blue\ngreen red', '광주 서울 부산\n서울 대구'],
+    ['A\nA', 'cat dog\nbird bird cat', 'S M L XL M\nXL S XXL'],
+    ['`enc = OneHotEncoder(handle_unknown="ignore", sparse_output=False)` → `enc.fit(train)`',
+     '범주 목록은 `enc.categories_[0]` (사전순). `.tolist()` 로 리스트로 바꿔요.',
+     '`enc.transform(test).astype(int).tolist()` 를 테스트 값과 `zip` 해요.'],
+    '`handle_unknown="ignore"` 가 없으면 학습 때 없던 범주(대구, bird, XXL)에서 오류가 나요. 이 설정을 주면 그 행은 **모두 0** 이 돼요. 스케일러처럼 인코더도 학습 데이터로만 fit 해야 테스트 정보가 새지 않아요.',
+    libs=['sklearn'], after_last_practice=True)
+
+L = C.find('π-11')
+L.practice('[기출유사] OneVsRestClassifier 로 붓꽃 품종 고르기 (sklearn)',
+'''붓꽃 데이터 전체로 One-vs-Rest 로지스틱 회귀를 학습하고, 몇 개의 꽃에 대해 분류기 3개의 확률을 확인해요. 첫째 줄에 C 값, 둘째 줄에 확인할 꽃 번호(0~149)들이 주어져요.
+
+**[조건]**
+- `OneVsRestClassifier(LogisticRegression(C=C, max_iter=1000))` 를 전체 X, y 로 `fit`
+- 꽃마다 `번호번: 확률1 확률2 확률3 -> 예측품종 (실제 품종)` 형식으로 출력
+  - 확률 i 는 `ovr.estimators_[i].predict_proba(X[[번호]])[0, 1]` 을 `f"{p:.2f}"` (i 번 품종 vs 나머지)
+  - 품종 이름은 `load_iris().target_names`
+
+{ex}
+
+{ex2}''',
+'''from sklearn.datasets import load_iris
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.linear_model import LogisticRegression
+iris = load_iris()
+X, y = iris.data, iris.target
+C = float(input())
+ids = list(map(int, input().split()))
+# OvR 모델을 학습하고 꽃마다 확률을 출력하세요
+''',
+'''from sklearn.datasets import load_iris
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.linear_model import LogisticRegression
+iris = load_iris()
+X, y = iris.data, iris.target
+C = float(input())
+ids = list(map(int, input().split()))
+ovr = OneVsRestClassifier(LogisticRegression(C=C, max_iter=1000))
+ovr.fit(X, y)                                         # 이진 분류기 3개 학습
+for i in ids:
+    x = X[[i]]                                        # 2차원 (1행)
+    ps = [est.predict_proba(x)[0, 1] for est in ovr.estimators_]   # 품종마다 "이 품종일 확률"
+    pred = ovr.predict(x)[0]                          # 점수가 가장 큰 품종
+    print(f"{i}번:", " ".join(f"{p:.2f}" for p in ps), "->", iris.target_names[pred], f"(실제 {iris.target_names[y[i]]})")''',
+    ['1\n0 50 100', '0.01\n0 50 100'], ['1\n70', '100\n70 83 133', '0.1\n25 75 125'],
+    ['`ovr = OneVsRestClassifier(LogisticRegression(C=C, max_iter=1000))` → `ovr.fit(X, y)`',
+     '`ovr.estimators_` 에 이진 분류기 3개가 들어 있어요. 각각의 `predict_proba(x)[0, 1]` 이 "그 품종일 확률"이에요.',
+     '품종 이름은 `iris.target_names[번호]`'],
+    'OvR 확률 세 개는 **합이 1 이 아니에요** — 분류기가 따로따로 계산하니까요. C 를 0.01 로 줄이면(규제 강함 = 단순한 모델) 확률이 0.5 근처로 뭉개지고 versicolor 를 못 맞히기도 해요. C 를 키우면 확률이 0 과 1 쪽으로 또렷해져요.',
+    libs=['sklearn'], after_last_practice=True)
 
 if __name__ == '__main__':
     C.save(sys.argv[1] if len(sys.argv) > 1 else '/tmp/pi.json')

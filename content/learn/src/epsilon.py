@@ -42,10 +42,10 @@ L.explain('이 과목 시험은 이렇게 나와요',
           ['전처리', 'train_test_split, StandardScaler·MinMaxScaler·RobustScaler'],
           ['선형회귀', '가설 y = wx + b, MSE, 경사하강법, 정규방정식, R²']),
      WARN('정확한 시험 범위는 **선생님 공지**가 기준이에요. 공지와 다르면 공지를 따르세요.')],
-    [T('이 사이트의 ▶ 실행은 브라우저 안 파이썬이라 **pandas·sklearn·numpy 가 없어요**.\n'
-       '그래서 그런 코드는 **읽기 전용**으로 보여 주고(결과는 미리 실행해 확인한 값), \n'
-       '실습은 같은 계산을 **순수 파이썬(리스트·딕셔너리)** 으로 직접 짜요.'),
-     TIP('공식을 직접 코드로 짜 보면 서술형에서 식을 쓸 때 훨씬 덜 헷갈려요. "StandardScaler 가 하는 일" 을 리스트로 계산해 본 학생은 식을 잊지 않아요.')])
+    [T('이 사이트의 ▶ 실행에서 **numpy·pandas·sklearn·matplotlib 이 그대로 돌아가요**. 코랩에서 쓰던 코드를 직접 실행해 결과를 확인해 보세요.\n'
+       '(처음 import 할 때는 패키지를 불러오느라 몇 초 걸려요. **seaborn 만은 실행되지 않고**, 그래프 그림은 화면에 뜨지 않아요.)\n'
+       '실습은 두 가지예요: 공식을 **순수 파이썬**으로 직접 계산해 보는 실습 + 실제 **라이브러리 코드**를 쓰는 [기출유사] 실습.'),
+     TIP('공식을 직접 코드로 짜 보면 서술형에서 식을 쓸 때 훨씬 덜 헷갈려요. "StandardScaler 가 하는 일" 을 리스트로 계산해 본 뒤 sklearn 결과와 맞춰 보면 식을 잊지 않아요.')])
 
 L.choice('이 과목 시험 문항 모양으로 **가장 알맞은** 설명은?',
     ['객관식 25문항 OMR', '코랩 코드의 빈칸 채우기 + 개념·수식 서술', '컴퓨터로 직접 코드를 실행하는 실기만', '영어 독해 문항'], 2,
@@ -117,10 +117,10 @@ L.explain('1학년 점검 ④ numpy 배열 연산',
     [T('2차원 배열은 `shape` 으로 (행, 열) 크기를 봐요.\n'
        '`sum(axis=0)` 은 **세로(열마다)**, `sum(axis=1)` 은 **가로(행마다)** 로 더해요.'),
      CODE('import numpy as np\nm = np.array([[1, 2, 3],\n              [4, 5, 6]])\nprint(m.shape)\nprint(m.sum(axis=0))\nprint(m.sum(axis=1))\nprint(m.mean())',
-          'shape 와 axis (읽기 전용)', run_=False),
+          'shape 와 axis', run_=False),
      KEY('axis=0 → 행 방향으로 쭉 내려가며 **열마다** 계산, axis=1 → **행마다** 계산. 결과 길이가 열 수(3) 인지 행 수(2) 인지로 확인해요.')])
 
-L.output('numpy 코드의 출력은? (이 사이트에서는 실행되지 않으니 손으로 예측해요)', '''\
+L.output('numpy 코드의 출력은? (먼저 손으로 예측한 뒤, 위 예제처럼 ▶ 실행으로 확인해 보세요)', '''\
 import numpy as np
 a = np.array([[2, 4], [6, 8], [1, 3]])
 print(a.shape)
@@ -134,8 +134,8 @@ L.match('코드와 결과를 이어 보세요.',
      ['[1, 2] * 2', '[1, 2, 1, 2]'], ['np.array([1, 2]) * 2', '[2 4]']],
     '리스트는 이어 붙이고 반복하고, numpy 배열은 원소끼리 계산해요. 배열은 출력할 때 쉼표 없이 `[4 6]` 처럼 보여요.')
 
-L.practice('[기출유사] numpy 없이 벡터 연산',
-'''numpy 의 원소별 연산을 **리스트와 반복문으로 직접** 구현해요. 같은 길이의 정수 두 줄이 주어져요.
+L.practice('[기출유사] 반복문으로 벡터 연산 (공식 이해용)',
+'''numpy 의 원소별 연산이 속에서 하는 일을 **리스트와 반복문으로 직접** 구현해요. 같은 길이의 정수 두 줄이 주어져요.
 
 **[조건]**
 - 첫째 줄: 원소끼리 더한 값 (공백으로 구분)
@@ -160,7 +160,38 @@ print(sum(mul))                       # 내적 (np: a @ b)''',
     ['1 2 3\n4 5 6', '2 -1\n3 7'], ['5\n5', '0 0 0\n1 2 3', '-2 3 -4 5\n1 1 1 1'],
     ['`zip(a, b)` 는 같은 위치의 원소를 짝지어 줘요.', '`[x + y for x, y in zip(a, b)]` 처럼 컴프리헨션으로 한 줄에 만들 수 있어요.',
      '내적은 원소별 곱 리스트의 `sum()` 이에요. `print(*리스트)` 는 공백으로 띄워 출력해요.'],
-    'numpy 로는 `a + b`, `a * b`, `a @ b`(또는 `np.dot(a, b)`) 한 줄씩이에요. 리스트로 직접 짜 보면 numpy 가 "원소끼리" 계산한다는 뜻이 분명해져요.')
+    'numpy 로는 `a + b`, `a * b`, `a @ b`(또는 `np.dot(a, b)`) 한 줄씩이에요. 리스트로 직접 짜 보면 numpy 가 "원소끼리" 계산한다는 뜻이 분명해져요. 다음 실습에서 numpy 로 똑같이 풀어 봐요.')
+
+L.practice('[기출유사] numpy 로 벡터 연산',
+'''이번에는 **numpy 배열**로 같은 계산을 해요. 같은 길이의 정수 두 줄이 주어져요.
+
+**[조건]**
+- 두 줄을 `np.array` 로 만들어 `a`, `b` 에 저장해요.
+- 첫째 줄: `a + b`, 둘째 줄: `a * b` — 배열 연산으로 구하고 `print(*배열.tolist())` 처럼 공백 구분으로 출력
+- 셋째 줄: 내적 `a @ b` (정수로)
+- 넷째 줄: `a` 의 평균 `a.mean()` 을 `f"{값:.2f}"` 로
+- 반복문 없이 배열 연산만 쓰세요.
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+a = np.array(list(map(int, input().split())))
+b = np.array(list(map(int, input().split())))
+# 배열 연산으로 합, 곱, 내적, 평균을 출력하세요
+''',
+'''import numpy as np
+a = np.array(list(map(int, input().split())))
+b = np.array(list(map(int, input().split())))
+print(*(a + b).tolist())          # 원소끼리 더하기
+print(*(a * b).tolist())          # 원소끼리 곱하기
+print(int(a @ b))                 # 내적 (np.dot(a, b) 와 같음)
+print(f"{a.mean():.2f}")          # 평균''',
+    ['1 2 3\n4 5 6', '2 -1\n3 7'], ['5\n5', '0 0 0\n1 2 3', '-2 3 -4 5\n1 1 1 1'],
+    ['`np.array(리스트)` 로 배열을 만들면 `+`·`*` 가 원소끼리 계산돼요.', '`(a + b).tolist()` 로 파이썬 리스트로 바꿔 `print(*...)` 하면 공백 구분으로 찍혀요.',
+     '내적은 `a @ b`. numpy 정수라서 `int(...)` 로 감싸 출력해요. 평균은 `a.mean()`.'],
+    '앞 실습에서 반복문으로 짠 것과 결과가 똑같죠? numpy 는 `a + b` 한 줄로 원소끼리 계산해요. `tolist()` 로 바꿔 출력하면 배열 표시(`[5 7 9]`) 대신 깔끔한 숫자로 찍을 수 있어요.',
+    libs=['numpy'])
 
 L.essay('`[1, 2, 3] + [1, 2, 3]` 과 `np.array([1, 2, 3]) + np.array([1, 2, 3])` 의 결과가 어떻게 다른지, **이유와 함께** 서술하세요.',
     '리스트의 + 는 두 리스트를 이어 붙여 [1, 2, 3, 1, 2, 3] 이 되고, numpy 배열의 + 는 같은 위치의 원소끼리 더해 [2 4 6] 이 된다. 같은 + 기호라도 자료형(list 와 ndarray)마다 연산의 정의가 다르기 때문이다.',
@@ -1033,7 +1064,7 @@ L.explain('DataFrame 과 Series',
     [T('pandas 는 **표 모양 데이터**를 다루는 라이브러리예요. 보통 `import pandas as pd` 로 불러요.\n'
        '코랩에서는 `pd.read_csv("파일.csv")` 로 읽는 경우가 많지만, 여기서는 딕셔너리로 작은 표를 만들어 볼게요.\n'
        '이 레슨 내내 쓰는 예제 표예요(학생 6명).'),
-     CODE(DF_SRC + '\nprint(df.head(3))\nprint(df.shape)', '예제 DataFrame (읽기 전용)', run_=False)],
+     CODE(DF_SRC + '\nprint(df.head(3))\nprint(df.shape)', '예제 DataFrame', run_=False)],
     [T('`df.shape` 은 **(행 수, 열 수)** 튜플이에요. 괄호 없이 쓰는 **속성**이에요.\n'
        '`df["score"]` 처럼 대괄호에 열 이름 하나를 넣으면 **Series**(열 하나)가 나와요.\n'
        '대괄호를 두 겹 `df[["score"]]` 으로 쓰면 열 하나짜리 **DataFrame** 이에요.'),
@@ -1041,7 +1072,7 @@ L.explain('DataFrame 과 Series',
          side('df[["name", "score"]]', 'DataFrame — 표, 열 여러 개 고르기')),
      WARN('`df.shape()` 처럼 괄호를 붙이면 오류예요. `shape`·`columns`·`dtypes` 는 속성, `head()`·`describe()`·`info()` 는 메서드예요.')])
 
-L.output('예제 표에서 다음 코드의 출력은? (pandas 는 이 사이트에서 실행되지 않으니 예측해요)', DF_SRC + '''
+L.output('예제 표에서 다음 코드의 출력은? (먼저 예측하고, 위 예제 코드에 이어 써서 ▶ 실행으로 확인해 보세요)', DF_SRC + '''
 print(df.shape)
 print(len(df.columns))
 print(df["hours"].sum())''',
@@ -1087,7 +1118,7 @@ L.explain('value_counts 와 조건으로 고르기',
        '`df[조건]` 은 조건이 True 인 **행만** 골라요. 조건은 `df["열"] >= 값` 처럼 써요.'),
      REVEAL_RUN('`df["club"].value_counts()` 의 결과는?', DF_SRC + '\nprint(df["club"].value_counts())')],
     [T('조건을 두 개 이상 묶을 때는 `and` 대신 `&`(그리고), `|`(또는) 를 쓰고 **각 조건에 괄호**를 쳐요.'),
-     CODE(DF_SRC + '\nhigh = df[df["score"] >= 80]\nprint(len(high))\nboth = df[(df["grade"] == 2) & (df["hours"] >= 4)]\nprint(both["name"].tolist())', '조건 필터 (읽기 전용)', run_=False),
+     CODE(DF_SRC + '\nhigh = df[df["score"] >= 80]\nprint(len(high))\nboth = df[(df["grade"] == 2) & (df["hours"] >= 4)]\nprint(both["name"].tolist())', '조건 필터', run_=False),
      TIP('그룹별 평균은 `df.groupby("club")["score"].mean()` 처럼 구해요. "동아리별 평균 점수" 같은 문항에 써요.')])
 
 L.fill('2학년 학생만 골라 평균 점수를 출력하는 코드의 빈칸을 채우세요.', DF_SRC + '''
@@ -1102,7 +1133,7 @@ print(df["club"].value_counts()["코딩"])''',
     'hours 가 3 이상인 학생은 민준·서연·유나·도윤 4명. 동아리 종류는 로봇·코딩·AI 3개. 코딩은 3명.\n\n```\n{out}\n```')
 
 L.practice('[기출유사] describe() 직접 만들기',
-'''pandas 없이 `describe()` 의 일부를 직접 계산해요. 한 줄에 정수 점수들이 주어져요(2개 이상).
+'''`describe()` 가 속에서 하는 계산 일부를 반복문으로 직접 해 봐요(공식 이해용). 한 줄에 정수 점수들이 주어져요(2개 이상).
 
 **[조건]**
 - `count`, `mean`, `std`, `min`, `max` 를 한 줄씩 `이름 값` 으로 출력해요.
@@ -1132,7 +1163,7 @@ print("max", max(data))''',
     ['70 92 81 60 88 75', '3 7'], ['5 5 5', '100 0', '1 2 3 4 5 6 7 8 9 10'],
     ['평균 `mean = sum(data) / n`.', '편차 제곱 `(x - mean) ** 2` 를 모두 더해 `n - 1` 로 나누고 `** 0.5` 로 제곱근.',
      '`print("mean", f"{mean:.2f}")` 처럼 이름과 값을 공백으로 출력해요.'],
-    'pandas 의 `std()` 는 기본이 n-1 로 나누는 표본 표준편차예요. 첫 예시(예제 표의 score)의 std 가 describe() 결과 11.84 와 같은지 확인해 보세요.')
+    'pandas 의 `std()` 는 기본이 n-1 로 나누는 표본 표준편차예요. 첫 예시(예제 표의 score)의 std 가 위 `describe()` 결과 11.84 와 같은지 확인해 보세요. 다음 실습에서는 pandas 로 직접 구해요.')
 
 L.practice('[기출유사] value_counts() 직접 만들기',
 '''학생들이 고른 동아리 이름이 한 줄에 공백으로 주어져요. pandas 의 `value_counts()` 처럼 동아리별 인원을 출력하세요.
@@ -1161,6 +1192,47 @@ print(len(cnt))''',
     ['`cnt[c] = cnt.get(c, 0) + 1` 로 세요.', '`sorted(cnt.items(), key=lambda p: (-p[1], p[0]))` — 개수에 마이너스를 붙이면 큰 개수가 앞으로 와요.',
      '서로 다른 값의 수는 딕셔너리 키 개수 `len(cnt)` 예요.'],
     '`value_counts()` 는 내부적으로 이렇게 **값 → 개수** 를 세고 많은 순서로 정렬해 보여 주는 기능이에요.')
+
+L.practice('[기출유사] pandas 로 성적표 EDA',
+'''학급 성적표를 **pandas DataFrame** 으로 만들어 EDA 결과를 출력해요.
+첫째 줄에 학생 수 n(2 이상), 다음 n줄에 `이름 동아리 점수` 가 주어져요.
+
+**[조건]**
+- 열 이름이 `name`, `club`, `score` 인 DataFrame `df` 를 만들어요 (score 는 정수).
+- 첫째 줄: `df.shape`
+- 둘째 줄: `df["score"].describe()` 의 `mean`, `std`, `50%` 를 `f"{값:.2f}"` 로 공백 구분 출력
+- 다음 줄들: `df["club"].value_counts()` 결과를 **동아리 이름 순서**(`sort_index()`)로 한 줄에 `이름 개수`
+- 마지막 줄: 점수가 80 이상인 학생 수 (조건 필터)
+
+{ex}
+
+{ex2}''',
+'''import pandas as pd
+n = int(input())
+rows = [input().split() for _ in range(n)]
+df = pd.DataFrame(rows, columns=["name", "club", "score"])
+df["score"] = df["score"].astype(int)
+# shape, describe 값, value_counts, 80점 이상 학생 수를 출력하세요
+''',
+'''import pandas as pd
+n = int(input())
+rows = [input().split() for _ in range(n)]
+df = pd.DataFrame(rows, columns=["name", "club", "score"])
+df["score"] = df["score"].astype(int)        # 글자 → 정수
+print(df.shape)                              # (행, 열)
+d = df["score"].describe()                   # count mean std min 25% 50% 75% max
+print(f"{d['mean']:.2f} {d['std']:.2f} {d['50%']:.2f}")
+vc = df["club"].value_counts().sort_index()  # 동아리별 인원, 이름 순
+for club, k in vc.items():
+    print(club, k)
+print(len(df[df["score"] >= 80]))            # 조건 필터''',
+    ['6\n지우 로봇 70\n민준 코딩 92\n서연 코딩 81\n하준 로봇 60\n유나 AI 88\n도윤 코딩 75', '3\nA 수학 80\nB 수학 79\nC 과학 100'],
+    ['2\n가 독서 50\n나 독서 50', '4\nP x 0\nQ y 100\nR x 80\nS z 79', '5\na c 81 \nb b 82\nc a 83\nd b 84\ne c 85'],
+    ['`describe()` 결과는 Series 라서 `d["mean"]`, `d["std"]`, `d["50%"]` 처럼 이름으로 꺼내요.',
+     '`df["club"].value_counts().sort_index()` 를 `for 이름, 개수 in vc.items():` 로 돌려요.',
+     '80점 이상은 `df[df["score"] >= 80]` 로 고른 뒤 `len(...)`.'],
+    '첫 예시는 레슨의 예제 표 그대로라 mean 77.67, std 11.84, 50%(중앙값) 78.00 이 나와요. 앞 실습에서 반복문으로 구한 std 와 같죠? 입력으로 받은 값은 글자(str)라서 `astype(int)` 로 바꾸지 않으면 describe 가 숫자 통계를 내지 못해요.',
+    libs=['pandas'])
 
 L.essay('`df.describe()` 결과에서 어떤 열의 `count` 가 전체 행 수(`len(df)`)보다 작게 나왔어요. 그 **이유**와, 이 경우 **확인해야 할 코드**를 서술하세요.',
     'describe 의 count 는 결측치(NaN)를 제외한 값의 개수이므로, count 가 행 수보다 작다는 것은 그 열에 결측치가 있다는 뜻이다. df.isna().sum() 으로 열마다 결측치 개수를 확인하고, 이후 결측치를 삭제(dropna)하거나 채우는(fillna) 처리를 해야 한다.',
@@ -1192,7 +1264,7 @@ L.choice('복습: pandas `describe()` 의 `std` 는 무엇으로 나눈 표준�
 L.explain('결측치 찾기',
     [T('**결측치**는 값이 비어 있는 칸이에요. pandas 에서는 보통 `NaN`(Not a Number) 으로 보여요.\n'
        '`df.isna()` 는 칸마다 결측이면 True 인 표를 만들고, `.sum()` 을 붙이면 True 를 1 로 세서 **열마다 결측 개수**가 돼요.'),
-     CODE(DF_NA + '\nprint(df.isna().sum())\nprint(df.isna().sum().sum())', '결측치가 있는 예제 (읽기 전용)', run_=False)],
+     CODE(DF_NA + '\nprint(df.isna().sum())\nprint(df.isna().sum().sum())', '결측치가 있는 예제', run_=False)],
     [T('위 예제는 age 에 2개, height 에 1개, city 에 0개가 비어 있어요. 전체 합은 3이에요.\n'
        '평균 같은 통계 함수는 결측치를 **빼고** 계산해요.'),
      REVEAL_RUN('`df["age"].mean()` 과 `df["age"].count()` 는?', DF_NA + '\nprint(df["age"].mean())\nprint(df["age"].count())',
@@ -1216,8 +1288,8 @@ L.explain('처리 ① 삭제 dropna, ② 채우기 fillna',
 df["age"] = df["age"].fillna(df["age"].mean())          # 평균으로
 df["height"] = df["height"].fillna(df["height"].median()) # 중앙값으로
 print(df["age"].tolist())
-print(df.isna().sum().sum())''', '평균·중앙값으로 채우기 (읽기 전용)', run_=False),
-     WARN('`df["age"].fillna(값, inplace=True)` 처럼 열을 꺼내서 inplace 로 바꾸는 코드는 최신 pandas(3.x)에서 **원본 df 를 바꾸지 않아요**. `df["age"] = df["age"].fillna(값)` 으로 쓰세요.')],
+print(df.isna().sum().sum())''', '평균·중앙값으로 채우기', run_=False),
+     WARN('`df["age"].fillna(값, inplace=True)` 처럼 열을 꺼내서 inplace 로 바꾸는 코드는 사이트의 pandas 2.2 에서는 경고(FutureWarning)와 함께 바뀌지만, pandas 3.x 부터는 **원본 df 를 바꾸지 않아요**. 항상 `df["age"] = df["age"].fillna(값)` 으로 쓰세요.')],
     [T('이상치가 있는 열은 평균이 크게 흔들리니 **중앙값**으로 채우는 게 더 안전할 때가 많아요.\n'
        '범주형 열은 평균을 낼 수 없으니 **최빈값** `df["city"].mode()[0]` 으로 채워요.'),
      KEY('수치형 → 평균/중앙값, 범주형 → 최빈값. 결측이 너무 많은 열은 열 자체를 지우기도 해요(`df.drop(columns=["열"])`).')])
@@ -1256,7 +1328,7 @@ L.bucket('각 열을 수치형 / 범주형으로 분류하세요.', ['수치형 
     '크기 비교와 평균이 의미 있으면 수치형, 이름표 역할이면 범주형이에요.')
 
 L.practice('[기출유사] 결측치를 평균으로 채우기',
-'''센서 기록이 한 줄에 공백으로 주어져요. 측정 실패한 칸은 `NA` 로 적혀 있어요. pandas 의 `fillna(평균)` 을 직접 구현하세요.
+'''센서 기록이 한 줄에 공백으로 주어져요. 측정 실패한 칸은 `NA` 로 적혀 있어요. pandas 의 `fillna(평균)` 이 하는 일을 반복문으로 직접 구현하세요(공식 이해용).
 
 **[조건]**
 - 첫째 줄: 결측(`NA`) 개수
@@ -1309,6 +1381,49 @@ print(len(cols))''',
     ['광주 서울 광주 부산', 'B A C A'], ['X', '서울 서울', 'c b a d c'],
     ['열 이름은 `sorted(set(regions))`.', '학생마다 `[1 if c == r else 0 for c in cols]`.', '열 개수는 `len(cols)`.'],
     '원-핫 표에서는 한 행에 1 이 **딱 하나** 있어요. 값의 종류가 많아지면 열도 그만큼 늘어나요.')
+
+L.practice('[기출유사] pandas 로 결측치 채우고 원-핫 인코딩',
+'''학생 기록을 DataFrame 으로 만들어 전처리해요. 첫째 줄은 나이들(측정 못 한 칸은 `NA`), 둘째 줄은 같은 개수의 지역 이름이에요.
+
+**[조건]**
+- 스타터처럼 `pd.to_numeric(..., errors="coerce")` 로 `NA` 를 결측치(NaN)로 바꿔요.
+- 첫째 줄: 전체 결측치 개수 `df.isna().sum().sum()`
+- 둘째 줄: 결측을 뺀 age 평균 (`f"{값:.2f}"`)
+- 셋째 줄: age 결측을 **평균**으로 채운 뒤(`fillna`, 다시 대입!) `df["age"].round(2).tolist()`
+- 넷째 줄: `pd.get_dummies(df, columns=["city"], dtype=int)` 의 열 이름 리스트 `list(...columns)`
+- 다섯째 줄: 원-핫 결과의 `shape`
+- `NA` 가 아닌 나이가 최소 1개 있어요.
+
+{ex}
+
+{ex2}''',
+'''import pandas as pd
+ages = input().split()
+cities = input().split()
+df = pd.DataFrame({"age": ages, "city": cities})
+df["age"] = pd.to_numeric(df["age"], errors="coerce")   # "NA" → NaN
+# 결측 개수, 평균, 채운 결과, 원-핫 열 이름과 shape 를 출력하세요
+''',
+'''import pandas as pd
+ages = input().split()
+cities = input().split()
+df = pd.DataFrame({"age": ages, "city": cities})
+df["age"] = pd.to_numeric(df["age"], errors="coerce")   # "NA" → NaN
+print(df.isna().sum().sum())                  # 전체 결측 개수
+m = df["age"].mean()                          # 결측은 건너뛰고 평균
+print(f"{m:.2f}")
+df["age"] = df["age"].fillna(m)               # 다시 대입해야 바뀜
+print(df["age"].round(2).tolist())
+d = pd.get_dummies(df, columns=["city"], dtype=int)   # 원-핫
+print(list(d.columns))
+print(d.shape)''',
+    ['16 NA 17 16 NA 18\n광주 서울 광주 부산 서울 광주', '15 NA 17\nA B A'],
+    ['NA 20\n서울 서울', '10 11 12 13\nx y z w', 'NA NA 3 NA\n가 나 가 나'],
+    ['`df.isna().sum()` 은 열마다, 한 번 더 `.sum()` 하면 전체 개수예요.',
+     '`m = df["age"].mean()` 후 `df["age"] = df["age"].fillna(m)` — 다시 대입을 잊지 마세요.',
+     '`d = pd.get_dummies(df, columns=["city"], dtype=int)` 다음 `list(d.columns)`, `d.shape`.'],
+    '첫 예시는 레슨의 DF_NA 예제와 같은 나이·지역이라 평균 16.75 로 채워져요. 원-핫 열은 원래 열(age) 뒤에 `city_값` 열이 **값 이름 순서**로 붙고, city 열 자체는 사라져서 열 수가 1 + (지역 종류 수) 예요.',
+    libs=['pandas'])
 
 L.essay('범주형 열 `city`(광주·서울·부산)를 0, 1, 2 로 바꾸지 않고 **원-핫 인코딩**하는 이유를 서술하세요.',
     '0, 1, 2 처럼 번호를 매기면 모델이 숫자의 크기와 순서를 의미 있는 것으로 받아들여, 부산(2)이 광주(0)보다 크다거나 서울이 둘의 중간이라는 실제로 없는 관계를 학습할 수 있다. 원-핫 인코딩은 값마다 별도의 0/1 열을 만들어 모든 범주를 대등하게 표현하므로 이런 잘못된 순서 관계가 생기지 않는다.',
@@ -1411,7 +1526,7 @@ sns.___(data=df, x="club")
 plt.show()
 sns.___(data=df, x="score")
 plt.show()''', [['countplot'], ['histplot']],
-    '범주의 **개수**는 countplot, 수치의 **분포**는 histplot. (seaborn 은 사이트에서 실행되지 않아요.)', expect=True)
+    '범주의 **개수**는 countplot, 수치의 **분포**는 histplot. (seaborn 은 사이트에서 실행되지 않는 유일한 라이브러리라 이 코드는 읽기만 해요. pandas·matplotlib 코드는 ▶ 실행돼요.)', expect=True)
 
 L.practice('[기출유사] 텍스트 히스토그램',
 '''`histplot` 이 하는 일을 글자로 흉내 내요. 0~100 사이 정수 점수들이 한 줄에 주어져요. 10점 단위 구간별 개수를 `*` 로 그리세요.
@@ -1488,6 +1603,46 @@ else:
      '`r = sxy / (sxx * syy) ** 0.5` 후 조건문으로 해석을 출력해요.'],
     '첫 예시는 예제 표의 hours·score 라서 0.979 가 나와요. 히든 테스트 중 `-2 -1 0 1 2 / 4 1 0 1 4` 는 U 자 모양이라 관계가 분명한데도 r = 0 이에요. 상관계수는 **직선** 관계만 잰다는 증거예요.')
 
+L.practice('[기출유사] pandas 로 상관계수·이상치 찾기',
+'''그래프를 그리기 전에 숫자로 먼저 확인해요. 첫째 줄은 공부시간(hours), 둘째 줄은 같은 개수의 점수(score)예요(4개 이상, 정수).
+
+**[조건]**
+- 열 이름이 `hours`, `score` 인 DataFrame 을 만들어요.
+- 첫째 줄: `df.corr()` 에서 hours 와 score 의 상관계수, `f"{값:.3f}"`
+- 둘째 줄: score 의 Q1, Q3, IQR — `df["score"].quantile(0.25)`, `quantile(0.75)` 를 써서 `f"{값:.2f}"` 공백 구분
+- 셋째 줄: score 이상치(`Q1 - 1.5×IQR` 미만 또는 `Q3 + 1.5×IQR` 초과) 값 리스트 `tolist()` — 없으면 `[]`
+- hours 끼리, score 끼리 모두 같은 값만 있지는 않아요.
+
+{ex}
+
+{ex2}''',
+'''import pandas as pd
+hours = list(map(int, input().split()))
+score = list(map(int, input().split()))
+df = pd.DataFrame({"hours": hours, "score": score})
+# 상관계수, Q1 Q3 IQR, 이상치 목록을 출력하세요
+''',
+'''import pandas as pd
+hours = list(map(int, input().split()))
+score = list(map(int, input().split()))
+df = pd.DataFrame({"hours": hours, "score": score})
+r = df.corr().loc["hours", "score"]           # 상관행렬에서 한 칸
+print(f"{r:.3f}")
+q1 = df["score"].quantile(0.25)
+q3 = df["score"].quantile(0.75)
+iqr = q3 - q1
+print(f"{q1:.2f} {q3:.2f} {iqr:.2f}")
+low, high = q1 - 1.5 * iqr, q3 + 1.5 * iqr    # 상자 그림 경계
+out = df[(df["score"] < low) | (df["score"] > high)]
+print(out["score"].tolist())''',
+    ['2 5 3 1 4 3\n70 92 81 60 88 75', '1 2 3 4 5\n50 55 60 65 10'],
+    ['1 2 3 4\n4 3 2 1', '1 1 2 2\n10 20 10 20', '0 1 2 3 4 5 6 7\n60 61 62 63 64 65 66 200'],
+    ['`df.corr()` 는 상관행렬(표)이라 `.loc["hours", "score"]` 로 한 칸을 꺼내요.',
+     '`quantile(0.25)` 가 Q1, `quantile(0.75)` 가 Q3, IQR = Q3 - Q1.',
+     '두 조건을 `|` 로 묶고 각각 괄호: `df[(df["score"] < low) | (df["score"] > high)]`.'],
+    '첫 예시는 예제 표라 r = 0.979, 이상치는 없어요. 둘째 예시는 마지막 점수 10 이 이상치로 잡히고, 그 한 점 때문에 상관계수가 음수로 뒤집혀요. 이상치가 통계값을 크게 흔들 수 있다는 걸 보여 줘요. (`sns.boxplot`·`sns.heatmap` 은 이 숫자들을 그림으로 그린 거예요.)',
+    libs=['pandas'])
+
 L.essay('상자 그림에서 이상치를 판단하는 기준을 **Q1, Q3, IQR** 을 사용해 서술하고, 이상치를 발견했을 때 바로 지우면 안 되는 이유를 쓰세요.',
     'IQR = Q3 - Q1 이고, Q1 - 1.5×IQR 보다 작거나 Q3 + 1.5×IQR 보다 큰 값을 이상치로 본다. 이상치는 측정·입력 오류일 수도 있지만 실제로 존재하는 드문 값일 수도 있으므로, 원인을 확인한 뒤 삭제·대체·유지를 결정해야 한다.',
     ['IQR = Q3 - Q1', 'Q1 - 1.5×IQR 미만 또는 Q3 + 1.5×IQR 초과', '오류일 수도, 실제 값일 수도 있다', '원인을 확인하고 처리를 결정'])
@@ -1522,7 +1677,7 @@ X = df[["hours"]]          # 2차원 (대괄호 두 겹)
 y = df["score"]            # 1차원
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5, random_state=42)
 print(X_train.shape, X_test.shape)
-print(y_train.shape, y_test.shape)''', 'train_test_split (읽기 전용)', run_=False),
+print(y_train.shape, y_test.shape)''', 'train_test_split', run_=False),
      KEY('반환 순서: **X_train, X_test, y_train, y_test** — X 둘 먼저, 그다음 y 둘.')])
 
 L.fill('반환 순서에 맞게 빈칸을 채우세요.', '''\
@@ -1673,6 +1828,92 @@ print(sum(1 for v in t if v < 0 or v > 1))''',
     ['fit = `lo, hi = min(train), max(train)`. test 의 min·max 는 **쓰지 않아요**.',
      '`transform(v)` 함수를 만들어 train 과 test 모두에 적용해요.', '범위를 벗어난 값: `v < 0 or v > 1`.'],
     'test 에 train 범위 밖의 값이 있으면 0 보다 작거나 1 보다 커져요. 이게 정상이에요. test 로 다시 fit 하면 이 차이가 사라져 마치 0~1 에 딱 맞는 것처럼 보이지만, 실제 새 데이터를 다룰 때와 다른 조건으로 평가하게 돼요.')
+
+L.practice('[기출유사] sklearn 스케일러 3종 비교',
+'''한 특성의 값들이 한 줄에 주어져요(2개 이상, 모두 같지는 않은 정수). 세 스케일러로 `fit_transform` 한 결과를 비교하세요.
+
+**[조건]**
+- 값들을 **2차원 배열**(n행 1열)로 만들어요: `np.array(값들).reshape(-1, 1)`
+- 첫째 줄: `StandardScaler().fit_transform(X)` 결과
+- 둘째 줄: `MinMaxScaler().fit_transform(X)` 결과
+- 셋째 줄: `RobustScaler().fit_transform(X)` 결과
+- 각 줄은 `.ravel()` 로 1차원으로 편 뒤 값마다 `f"{값:.2f}"`, 공백 구분
+- 넷째 줄: StandardScaler 가 기억한 평균 `mean_[0]` 과 표준편차 `scale_[0]` (`f"{값:.2f}"`)
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+vals = list(map(int, input().split()))
+X = np.array(vals).reshape(-1, 1)
+# 세 스케일러의 fit_transform 결과를 출력하세요
+''',
+'''import numpy as np
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+vals = list(map(int, input().split()))
+X = np.array(vals).reshape(-1, 1)             # n행 1열 (스케일러는 2차원을 받음)
+
+def show(arr):
+    print(*[f"{v:.2f}" for v in arr.ravel()])
+
+sc = StandardScaler()
+show(sc.fit_transform(X))                     # (x - 평균) / 표준편차(n)
+show(MinMaxScaler().fit_transform(X))         # (x - min) / (max - min)
+show(RobustScaler().fit_transform(X))         # (x - 중앙값) / IQR
+print(f"{sc.mean_[0]:.2f} {sc.scale_[0]:.2f}")''',
+    ['1 2 3 4', '-3 0 3 6 9 100'], ['0 10', '5 5 5 20', '160 170 180 150 190'],
+    ['`X = np.array(vals).reshape(-1, 1)` — `-1` 은 "행 수는 알아서" 라는 뜻이에요.',
+     '`StandardScaler().fit_transform(X)` 처럼 만들고 바로 fit_transform. 결과는 2차원이라 `.ravel()` 로 펴요.',
+     'fit 한 스케일러는 `mean_`, `scale_` 에 기준을 기억해요. 그래서 StandardScaler 는 변수 `sc` 에 담아 두세요.'],
+    '둘째 예시를 보세요. 이상치 100 때문에 MinMax 값은 0 근처로 몰리고, Robust 는 중앙값·IQR 기준이라 나머지 값들이 고르게 퍼져 있어요. 앞 실습에서 반복문으로 계산한 표준화·MinMax 값과 sklearn 결과가 같은지도 비교해 보세요.',
+    libs=['numpy', 'sklearn'])
+
+L.practice('[기출유사] split 후 train 으로만 fit',
+'''시험 코드의 순서 그대로 **나누기 → train 으로 fit → train·test transform** 을 해요.
+첫째 줄에 특성 값들(정수, 4개 이상), 둘째 줄에 test 비율 `test_size` 가 주어져요.
+
+**[조건]**
+- `X = np.array(값들).reshape(-1, 1)`
+- `X_train, X_test = train_test_split(X, test_size=test_size, random_state=42)`
+- 첫째 줄: `len(X_train) len(X_test)`
+- 둘째 줄: test 원래 값들 (`X_test.ravel().tolist()` 를 공백 구분)
+- `MinMaxScaler` 를 **X_train 으로만 fit** 하고, 셋째 줄: 변환한 test 값들 (`f"{값:.2f}"`, 공백 구분)
+- 넷째 줄: 변환한 test 중 0~1 범위를 벗어난 값의 개수
+- train 에 서로 다른 값이 2개 이상 들어가도록 입력이 주어져요.
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+vals = list(map(int, input().split()))
+ts = float(input())
+X = np.array(vals).reshape(-1, 1)
+# 나누고, train 으로만 fit 한 뒤 test 를 transform 하세요
+''',
+'''import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+vals = list(map(int, input().split()))
+ts = float(input())
+X = np.array(vals).reshape(-1, 1)
+X_train, X_test = train_test_split(X, test_size=ts, random_state=42)   # ① 나누기
+print(len(X_train), len(X_test))
+print(*X_test.ravel().tolist())
+scaler = MinMaxScaler()
+scaler.fit(X_train)                       # ② train 으로만 fit (min·max 기억)
+t = scaler.transform(X_test).ravel()      # ③ test 는 transform 만
+print(*[f"{v:.2f}" for v in t])
+print(int(((t < 0) | (t > 1)).sum()))''',
+    ['10 20 30 40 50 60 70 80 90 100\n0.2', '5 1 9 3 7 2\n0.5'],
+    ['1 2 3 4\n0.25', '0 100 50 25 75 10 90 200\n0.25', '3 8 1 9 4 7 2 6 5 10 11 0\n0.3'],
+    ['`train_test_split(X, ...)` 에 X 만 주면 `X_train, X_test` 두 개가 나와요. y 까지 주면 네 개예요.',
+     '`scaler.fit(X_train)` 다음 `scaler.transform(X_test)`. test 로 다시 fit 하면 안 돼요!',
+     '범위 밖 개수는 배열 조건 `(t < 0) | (t > 1)` 의 `.sum()` 을 `int()` 로 감싸요.'],
+    '`random_state=42` 를 고정했기 때문에 누가 실행해도 같은 행이 test 로 뽑혀요. test 값이 train 의 최솟값보다 작거나 최댓값보다 크면 0~1 밖으로 나가는데, 이건 train 기준을 지켰다는 증거라 정상이에요.',
+    libs=['numpy', 'sklearn'])
 
 L.essay('StandardScaler 를 **train 데이터로만 fit** 하고 test 데이터에는 transform 만 하는 이유를 서술하세요.',
     'test 데이터는 학습에 쓰지 않은 새로운 데이터로 모델의 일반화 성능을 평가하는 역할이다. test 로 fit 하면 test 의 평균과 표준편차라는 정보가 전처리에 들어가 데이터 누수가 생기고 평가 결과가 실제보다 좋게 나올 수 있다. 또 train 과 test 가 서로 다른 기준으로 변환되면 같은 값이 다른 숫자가 되어 모델이 학습한 기준과 맞지 않는다. 따라서 train 으로 구한 평균·표준편차로 train 과 test 를 모두 변환해야 한다.',
@@ -1831,6 +2072,48 @@ print("최적:", best[0], best[1])''',
      '`if best is None or m < best[2]:` 로 **더 작을 때만** 바꾸면 동점일 때 먼저 나온 후보가 남아요.'],
     'MSE 는 "직선이 데이터에서 얼마나 벗어났나" 를 하나의 숫자로 만든 것이라, 직선끼리 비교할 수 있게 해 줘요. 실제 학습은 후보를 사람이 주지 않고 경사하강법으로 w, b 를 찾아가요.')
 
+L.practice('[기출유사] numpy·sklearn 으로 MSE·RMSE·MAE',
+'''가설 `ŷ = wx + b` 로 예측하고, 오차 지표를 **numpy 와 sklearn.metrics** 로 구해요.
+
+**[조건]**
+- 첫째 줄: x 값들, 둘째 줄: 같은 개수의 y 값들 (정수), 셋째 줄: `w b` (실수)
+- x, y 를 `np.array` 로 만들고 `y_hat = w * x + b` 를 **배열 연산 한 줄**로 구해요.
+- 첫째 줄: 예측값들 `f"{값:.2f}"` 공백 구분
+- 둘째 줄: numpy 로 구한 MSE `np.mean((y - y_hat) ** 2)`
+- 셋째 줄: `mean_squared_error(y, y_hat)` (sklearn)
+- 넷째 줄: RMSE `np.sqrt(MSE)`, 다섯째 줄: `mean_absolute_error(y, y_hat)`
+- 둘째~다섯째 줄의 값은 모두 `f"{값:.3f}"`
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+x = np.array(list(map(int, input().split())))
+y = np.array(list(map(int, input().split())))
+w, b = map(float, input().split())
+# y_hat 과 MSE, RMSE, MAE 를 출력하세요
+''',
+'''import numpy as np
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+x = np.array(list(map(int, input().split())))
+y = np.array(list(map(int, input().split())))
+w, b = map(float, input().split())
+y_hat = w * x + b                          # 가설: 배열 연산으로 한 번에
+print(*[f"{v:.2f}" for v in y_hat])
+mse = np.mean((y - y_hat) ** 2)            # (1/n) Σ (y - ŷ)²
+print(f"{mse:.3f}")
+print(f"{mean_squared_error(y, y_hat):.3f}")   # sklearn 도 같은 값
+print(f"{np.sqrt(mse):.3f}")               # RMSE
+print(f"{mean_absolute_error(y, y_hat):.3f}")  # MAE = 평균 |y - ŷ|''',
+    ['1 2 3 4\n60 70 75 85\n8 53', '1 2 3\n3 5 9\n2 1'],
+    ['5\n7\n0 7', '1 2 3\n2 4 6\n0 0', '2 5 3 1 4 3\n70 92 81 60 88 75\n8.2 53.067'],
+    ['`np.array(...)` 로 만든 x 에 `w * x + b` 를 하면 모든 x 의 예측이 한 번에 나와요.',
+     '`np.mean((y - y_hat) ** 2)` 가 MSE. sklearn 은 `mean_squared_error(y, y_hat)` — 정답(y)을 먼저 넣어요.',
+     'RMSE 는 `np.sqrt(mse)`, MAE 는 `mean_absolute_error(y, y_hat)`.'],
+    'numpy 로 직접 쓴 MSE 와 sklearn 의 `mean_squared_error` 는 항상 같은 값이에요. 앞 실습의 반복문 MSE 와도 같죠. RMSE 는 단위가 점수와 같아져서 "평균적으로 몇 점쯤 틀리나" 로 읽을 수 있어요.',
+    libs=['numpy', 'sklearn'])
+
 L.essay('선형회귀의 손실 함수로 오차의 합 대신 **MSE(오차 제곱의 평균)** 를 쓰는 이유를 두 가지 이상 서술하세요.',
     '오차를 그냥 더하면 양수 오차와 음수 오차가 서로 상쇄되어 예측이 크게 틀려도 합이 0에 가까울 수 있다. 제곱하면 모든 값이 0 이상이 되어 상쇄가 일어나지 않는다. 또 제곱은 큰 오차에 더 큰 벌점을 주어 크게 틀린 예측을 줄이도록 하고, 매끄러운 2차식이 되어 미분으로 기울기를 구해 경사하강법으로 최솟값을 찾기 좋다.',
     ['그냥 더하면 부호가 상쇄된다', '제곱하면 모두 0 이상', '큰 오차에 큰 벌점', '미분 가능한 매끄러운 식(경사하강법에 유리)'])
@@ -1925,7 +2208,7 @@ x = np.array([2, 5, 3, 1, 4, 3])
 y = np.array([70, 92, 81, 60, 88, 75])
 X = np.column_stack([np.ones(len(x)), x])     # [1, x] 열
 theta = np.linalg.inv(X.T @ X) @ X.T @ y       # (XᵀX)⁻¹ Xᵀ y
-print(theta.round(3))                          # [b, w]''', '정규방정식 numpy (읽기 전용)', run_=False),
+print(theta.round(3))                          # [b, w]''', '정규방정식 numpy', run_=False),
      CMP(side('경사하강법', '반복해서 조금씩 · 학습률·반복 횟수 정해야 함 · 데이터·특성이 많아도 사용 가능'),
          side('정규방정식', '한 번에 정확한 해 · 학습률 필요 없음 · 특성이 아주 많으면 역행렬 계산이 무거움'))])
 
@@ -1945,7 +2228,7 @@ model = LinearRegression()
 model.fit(X, y)
 print(model.coef_, round(model.intercept_, 3))
 print(model.predict(pd.DataFrame({"hours": [6]})).round(2))
-print(round(model.score(X, y), 3))      # R²''', 'LinearRegression (읽기 전용)', run_=False),
+print(round(model.score(X, y), 3))      # R²''', 'LinearRegression', run_=False),
      WARN('`X` 는 2차원(`df[["hours"]]`) 이어야 해요. `df["hours"]` 처럼 1차원을 넣으면 오류가 나요.')])
 
 L.output('출력은? (위 공식 코드와 같은 데이터)', DF_SRC + '''
@@ -2054,6 +2337,52 @@ print("설명력 높음" if r2 >= 0.8 else "설명력 낮음")''',
      '`b = my - w * mx`. 예측 `pred = [w * a + b for a in x]`.',
      'R² 는 `1 - ss_res / ss_tot`. ss_tot 은 y 와 평균의 차이 제곱합이에요.'],
     '첫 예시는 예제 표 데이터라 sklearn `LinearRegression` 결과(w = 8.2, b ≈ 53.067, R² ≈ 0.959)와 같아요. 두 번째 예시는 점이 정확히 직선 위에 있어 R² = 1 이에요.')
+
+L.practice('[기출유사] LinearRegression 으로 학습·평가',
+'''sklearn `LinearRegression` 으로 회귀선을 학습하고 평가해요.
+
+**[조건]**
+- 첫째 줄: x 값들, 둘째 줄: 같은 개수의 y 값들 (x 끼리 모두 같지는 않아요), 셋째 줄: 예측할 새 x 하나
+- `X = x배열.reshape(-1, 1)` 로 **2차원**으로 만들어 `model.fit(X, y)`
+- 첫째 줄: `coef_[0]`, 둘째 줄: `intercept_` — `f"{값:.3f}"`
+- 셋째 줄: `r2_score(y, model.predict(X))` — `f"{값:.3f}"`
+- 넷째 줄: 새 x 의 예측값 — `f"{값:.2f}"`
+- 다섯째 줄: R² ≥ 0.8 이면 `설명력 높음`, 아니면 `설명력 낮음`
+
+{ex}
+
+{ex2}''',
+'''import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+x = np.array(list(map(float, input().split())))
+y = np.array(list(map(float, input().split())))
+new_x = float(input())
+X = x.reshape(-1, 1)
+# 모델을 학습하고 coef_, intercept_, R², 예측값을 출력하세요
+''',
+'''import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+x = np.array(list(map(float, input().split())))
+y = np.array(list(map(float, input().split())))
+new_x = float(input())
+X = x.reshape(-1, 1)                       # sklearn 의 X 는 2차원 (n행 1열)
+model = LinearRegression()
+model.fit(X, y)                            # 학습: w, b 를 구함
+print(f"{model.coef_[0]:.3f}")             # w (기울기)
+print(f"{model.intercept_:.3f}")           # b (절편)
+r2 = r2_score(y, model.predict(X))         # model.score(X, y) 와 같음
+print(f"{r2:.3f}")
+print(f"{model.predict([[new_x]])[0]:.2f}")   # 새 입력도 2차원으로
+print("설명력 높음" if r2 >= 0.8 else "설명력 낮음")''',
+    ['2 5 3 1 4 3\n70 92 81 60 88 75\n6', '1 2 3 4 5\n3 5 7 9 11\n10'],
+    ['1 2\n5 1\n3', '1 2 3 4\n2 1 4 3\n0', '10 20 30 40 50\n15 11 40 22 30\n35'],
+    ['`X = x.reshape(-1, 1)` 로 2차원을 만들고 `model = LinearRegression()`, `model.fit(X, y)`.',
+     '기울기는 `model.coef_[0]`(배열이라 [0]), 절편은 `model.intercept_`.',
+     'R² 는 `r2_score(y, model.predict(X))`. 새 값 예측은 `model.predict([[new_x]])[0]` — 대괄호 두 겹!'],
+    '첫 예시는 예제 표 데이터라 w = 8.2, b ≈ 53.067, R² ≈ 0.959 로 앞 실습의 공식 계산과 같아요. `LinearRegression` 이 속에서 최소제곱 해(정규방정식과 같은 답)를 구하기 때문이에요. 셋째 히든 테스트처럼 점이 흩어져 있으면 R² 가 낮게 나와요.',
+    libs=['numpy', 'sklearn'])
 
 L.essay('선형회귀에서 **경사하강법**과 **정규방정식**으로 w, b 를 구하는 방식의 차이를 서술하세요. (계산 방식, 학습률 필요 여부, 장단점 포함)',
     '경사하강법은 손실 함수의 기울기를 구해 기울기의 반대 방향으로 w 와 b 를 학습률만큼 조금씩 반복해서 갱신하며 최솟값에 다가간다. 학습률과 반복 횟수를 정해야 하고 학습률이 크면 발산, 작으면 느리지만 특성과 데이터가 많아도 쓸 수 있다. 정규방정식은 손실의 미분이 0 이 되는 해를 (XᵀX)⁻¹Xᵀy 로 한 번에 계산하므로 반복과 학습률이 필요 없고 정확한 해를 얻지만, 특성이 매우 많으면 역행렬 계산 비용이 커진다.',
