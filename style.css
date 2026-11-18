@@ -1338,3 +1338,11 @@ details.fold > .sets { margin: 12px 0 4px; }
 .lx-rb { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; cursor: pointer; }
 .lx-essay-after[hidden] { display: none; }
 .lx-tr-ctl[hidden] { display: none; } .lx-tr-start { margin: 6px 0; }
+
+/* 사이드바 스크롤바: 기본 흰색 스크롤바 대신 테마 색상의 얇은 스크롤바 */
+nav.menu { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+nav.menu::-webkit-scrollbar { width: 8px; }
+nav.menu::-webkit-scrollbar-track { background: transparent; margin: 18px 0; }
+nav.menu::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+nav.menu::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: padding-box; }
+[data-theme="dark"] nav.menu { color-scheme: dark; }
